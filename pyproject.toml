@@ -1,7 +1,7 @@
 [project]
 name = "taqsim"
 version = "0.1.4"
-description = "Event-sourced framework for simulating and optimizing water allocation across directed network models"
+description = "Water-modelling and rule-authoring layer over the incidence engine"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
     "pyzmq>=27.1.0",
     "ipykernel>=7.1.0",
     "ctrl-freak>=0.1.0",
+    "incidence",
 ]
 
 [build-system]
@@ -78,4 +79,5 @@ addopts = ["--strict-markers", "--strict-config", "-ra"]
 cache-dir = ".uv-cache"
 
 [tool.uv.sources]
+incidence = { git = "https://github.com/CooperBigFoot/incidence.git", subdirectory = "bindings/python", rev = "3a64a54c433ff79346f686f7f4d6fe569c18ed9b" }
 # ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "main" } # example of how to add a git dependency
