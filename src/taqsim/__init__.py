@@ -76,6 +76,20 @@ from .objective import (
 from .optimization import OptimizeResult, Solution, make_repair, optimize
 from .system import WaterSystem
 from .time import Frequency, Timestep, time_index
+from .vocabulary import (
+    CanalLosses,
+    CanalLossRule,
+    EFlowSplit,
+    EFlowSplitPolicy,
+    EvaporationLossRule,
+    MonthlyDistribution,
+    Parameter,
+    PriorityDistribution,
+    ReservoirEvaporation,
+    ZoneRelease,
+    ZoneReleasePolicy,
+    monthly_parameters,
+)
 
 __all__ = [
     # Basin authoring
@@ -88,6 +102,19 @@ __all__ = [
     "WaterSeries",
     "WaterValues",
     "WaterValue",
+    # Rule vocabulary
+    "Parameter",
+    "monthly_parameters",
+    "ZoneRelease",
+    "ZoneReleasePolicy",
+    "MonthlyDistribution",
+    "PriorityDistribution",
+    "EFlowSplit",
+    "EFlowSplitPolicy",
+    "ReservoirEvaporation",
+    "EvaporationLossRule",
+    "CanalLosses",
+    "CanalLossRule",
     # Common
     "LossReason",
     "EVAPORATION",

@@ -12,6 +12,8 @@ from uuid import UUID
 
 import incidence
 
+from .vocabulary import RuleContext, RulePlan, WaterRule, subtract
+
 
 class Presence(StrEnum):
     """The three possible states of a time-indexed water reading."""
@@ -83,6 +85,7 @@ class Reach:
     capacity: float | None
     overflow_destination: str | None
     initial_water: float
+    rule: WaterRule | None
 
     def __init__(
         self,
@@ -97,6 +100,7 @@ class Reach:
         initial_water: float = 0.0,
         capacity_m3: float | None = None,
         capacity_m3_per_timestep: float | None = None,
+        rule: WaterRule | None = None,
     ) -> None:
         if source is not None and upstream is not None:
             raise ValueError(f"reach {name!r} declares both source and upstream")
@@ -122,6 +126,7 @@ class Reach:
         object.__setattr__(self, "capacity", resolved_capacity)
         object.__setattr__(self, "overflow_destination", overflow_destination)
         object.__setattr__(self, "initial_water", initial_water)
+        object.__setattr__(self, "rule", rule)
 
 
 @dataclass(frozen=True)
@@ -488,6 +493,29 @@ class BasinRun:
         """Explicit alias for flow."""
         return self.flow(reach, **interval)
 
+    def arrivals(
+        self,
+        endpoint: str,
+        *,
+        start: date | datetime | str | None = None,
+        end: date | datetime | str | None = None,
+    ) -> WaterSeries:
+        """Read all water arriving at one named endpoint."""
+        first = 0 if start is None else self.time.timestep_at(start)
+        last = self.time.steps - 1 if end is None else self.time.timestep_at(end)
+        if first < 0 or last >= self.time.steps:
+            raise ValueError("arrival reads must lie inside the modelled horizon")
+        if last < first:
+            raise ValueError("arrival end precedes arrival start")
+        series: incidence.PresenceSeries = self._completed.transfer_series(
+            endpoint, "water", direction="incoming", first=first, last=last
+        )
+        return WaterSeries(
+            tuple(self.time.datetime_at(step) for step in range(first, last + 1)),
+            tuple(series.values),
+            tuple(Presence(state) for state in series.presence),
+        )
+
 
 def _parse_start(value: date | datetime | str) -> datetime:
     if isinstance(value, str):
@@ -528,28 +556,6 @@ def _model_document(
     reach_names = {reach.name for reach in reaches}
     source_names = {source.name for source in sources}
     finite_names = reach_names | source_names
-    boundaries = sorted(
-        {sink.name for sink in sinks}
-        | {
-            endpoint
-            for reach in reaches
-            for endpoint in (reach.source, reach.destination)
-            if endpoint not in finite_names
-        }
-        | {
-            reach.overflow_destination
-            for reach in reaches
-            if reach.overflow_destination and reach.overflow_destination not in finite_names
-        }
-    )
-    connections: list[dict[str, str]] = []
-    for reach in reaches:
-        connections.extend(
-            ({"source": reach.source, "target": reach.name}, {"source": reach.name, "target": reach.destination})
-        )
-        if reach.overflow_destination is not None:
-            connections.append({"source": reach.name, "target": reach.overflow_destination})
-
     outgoing_by_source = {
         source.name: [reach.name for reach in reaches if reach.source == source.name] for source in sources
     }
@@ -557,7 +563,39 @@ def _model_document(
         if len(destinations) != 1:
             raise ValueError(f"source {source_name!r} must feed exactly one reach; found {len(destinations)}")
 
-    projection_specs = [_incoming_projection(reach) for reach in reaches]
+    contexts: dict[str, RuleContext] = {}
+    plans: dict[str, RulePlan] = {}
+    for reach in reaches:
+        context = RuleContext(reach.name, time.start, time.steps, time.timestep)
+        contexts[reach.name] = context
+        if reach.rule is not None:
+            if reach.capacity is not None:
+                raise ValueError(f"reach {reach.name!r} cannot combine a capacity with a custom water rule")
+            plans[reach.name] = reach.rule.compile(context, reach.destination)
+        elif reach.capacity is not None:
+            available = context.available
+            normal = incidence.min(available, incidence.literal(reach.capacity))
+            overflow = incidence.max(incidence.literal(0.0), subtract(available, normal))
+            plans[reach.name] = RulePlan(
+                (
+                    ("out", reach.destination, normal),
+                    ("overflow", reach.overflow_destination or "", overflow),
+                )
+            )
+        else:
+            plans[reach.name] = RulePlan((("out", reach.destination, context.available),))
+
+    rule_destinations = {destination for plan in plans.values() for _, destination, _ in plan.branches}
+    declared_endpoints = {reach.source for reach in reaches} | rule_destinations
+    boundaries = sorted(
+        {sink.name for sink in sinks} | {endpoint for endpoint in declared_endpoints if endpoint not in finite_names}
+    )
+    connections = [{"source": reach.source, "target": reach.name} for reach in reaches] + [
+        {"source": reach.name, "target": destination}
+        for reach in reaches
+        for _, destination, _ in plans[reach.name].branches
+    ]
+
     source_rules = [
         incidence.rule(
             source.name,
@@ -567,15 +605,31 @@ def _model_document(
         )
         for source in sources
     ]
-    reach_rules = [
-        incidence.rule(
-            reach.name,
-            "water",
-            incidence.projection(f"{reach.name}-incoming", "extensive"),
-            incidence.release_all(f"{reach.name}-out"),
+    reach_rules = []
+    for reach in reaches:
+        plan = plans[reach.name]
+        disposition = {
+            "rule_ir_version": "v1",
+            "numerical_semantics_version": "v1",
+            "partition": {
+                "kind": "expression_partition",
+                "branches": [{"branch": branch, "expression": expression} for branch, _, expression in plan.branches],
+            },
+        }
+        reach_rules.append(
+            incidence.rule(
+                reach.name,
+                "water",
+                incidence.literal(0.0),
+                disposition,
+                contexts[reach.name].parameters,
+            )
         )
-        for reach in reaches
-    ]
+
+    forcing_values = {
+        identifier: values for context in contexts.values() for identifier, values in context.forcings.items()
+    }
+    tables = [table for context in contexts.values() for table in context.tables]
     return incidence.model_document(
         finite_compartments=sorted(finite_names),
         boundary_accounts=boundaries,
@@ -598,8 +652,14 @@ def _model_document(
         },
         horizon={"first": 0, "last": time.steps - 1},
         projections={
-            "specifications": projection_specs,
-            "initial_states": [{"projection": f"{reach.name}-incoming", "values": []} for reach in reaches],
+            "specifications": [_available_projection(reach) for reach in reaches],
+            "initial_states": [
+                {
+                    "projection": f"{reach.name}-available",
+                    "values": [{"kind": "extensive", "value": reach.initial_water}],
+                }
+                for reach in reaches
+            ],
         },
         forcings=[
             {
@@ -608,8 +668,16 @@ def _model_document(
                 "values": list(source.flow),
             }
             for source in sources
+        ]
+        + [
+            {
+                "id": identifier,
+                "horizon": {"first": 0, "last": time.steps - 1},
+                "values": values,
+            }
+            for identifier, values in sorted(forcing_values.items())
         ],
-        interpolation_tables=[],
+        interpolation_tables=tables,
         rules=source_rules + reach_rules,
         transfer_bindings=[
             {
@@ -624,34 +692,61 @@ def _model_document(
             {
                 "compartment": reach.name,
                 "substance": "water",
-                "branch": f"{reach.name}-out",
-                "destination": reach.destination,
+                "branch": branch,
+                "destination": destination,
             }
             for reach in reaches
+            for branch, destination, _ in plans[reach.name].branches
         ],
         input_bindings=[],
         units=[{"substance": "water", "unit": _stock_unit(flow_unit)}],
     )
 
 
-def _incoming_projection(reach: Reach) -> dict[str, Any]:
+def _available_projection(reach: Reach) -> dict[str, Any]:
+    previous = incidence.input(f"{reach.name}-previous-stock")
+    incoming = incidence.input(f"{reach.name}-current-incoming")
+    outgoing = incidence.input(f"{reach.name}-current-outgoing")
+    update = incidence.add(previous, subtract(incoming, outgoing))
     return {
         "rule_ir_version": "v1",
         "numerical_semantics_version": "v1",
-        "id": f"{reach.name}-incoming",
+        "id": f"{reach.name}-available",
         "value_kind": "extensive",
         "spec": {
-            "kind": "ordered_rolling_aggregate",
-            "source": {
-                "kind": "authoritative_fact",
-                "selector": {
-                    "kind": "incoming_transfer_amount",
-                    "compartment": reach.name,
-                    "substance": "water",
+            "kind": "finite_recurrence",
+            "state_kinds": ["extensive"],
+            "inputs": [
+                {
+                    "reference": {"id": f"{reach.name}-previous-stock", "value_kind": "scalar"},
+                    "source": {"kind": "previous_state", "index": 0, "value_kind": "extensive"},
                 },
-            },
-            "window": 1,
-            "aggregate": "sum_oldest_to_newest",
+                {
+                    "reference": {"id": f"{reach.name}-current-incoming", "value_kind": "scalar"},
+                    "source": {
+                        "kind": "authoritative_fact",
+                        "selector": {
+                            "kind": "incoming_transfer_amount",
+                            "compartment": reach.name,
+                            "substance": "water",
+                        },
+                    },
+                },
+                {
+                    "reference": {"id": f"{reach.name}-current-outgoing", "value_kind": "scalar"},
+                    "source": {
+                        "kind": "authoritative_fact",
+                        "selector": {
+                            "kind": "outgoing_transfer_amount",
+                            "compartment": reach.name,
+                            "substance": "water",
+                        },
+                    },
+                },
+            ],
+            "parameters": [],
+            "updates": [update],
+            "output_index": 0,
         },
     }
 
