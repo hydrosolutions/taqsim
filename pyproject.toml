@@ -16,6 +16,7 @@ dependencies = [
     "pyzmq>=27.1.0",
     "ipykernel>=7.1.0",
     "ctrl-freak>=0.1.0",
+    "incidence",
 ]
 
 [build-system]
@@ -78,4 +79,5 @@ addopts = ["--strict-markers", "--strict-config", "-ra"]
 cache-dir = ".uv-cache"
 
 [tool.uv.sources]
+incidence = { git = "https://github.com/CooperBigFoot/incidence.git", subdirectory = "bindings/python", rev = "3eef8c8877dd98e464d640bee05a894a3855767c" }
 # ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "main" } # example of how to add a git dependency
