@@ -1,4 +1,53 @@
-# water_system/__init__.py
+"""
+water_system
+
+This package provides a framework for simulating and optimizing water flow in a network system.
+
+The package includes classes for representing different types of nodes in a water system
+(such as supply sources, storage facilities, and demand points), as well as edges
+representing connections between these nodes.
+
+Classes:
+    WaterSystem: The main class for creating and managing a water system simulation.
+    Node: Base class for all types of nodes in the water system.
+    SupplyNode: Represents a water supply source.
+    SinkNode: Represents a point where water exits the system.
+    DemandNode: Represents a point of water demand (e.g., agricultural, domestic, or industrial use).
+    StorageNode: Represents a water storage facility (e.g., a reservoir).
+    DiversionNode: Represents a point where water can be diverted from one path to another.
+    ConfluenceNode: Represents a point where multiple water flows combine.
+    Edge: Represents a connection between two nodes in the water system.
+
+Usage:
+    from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, Edge
+
+    # Create a water system
+    system = WaterSystem()
+
+    # Add nodes and edges to the system
+    supply = SupplyNode("Supply1", supply_rate=10)
+    storage = StorageNode("Reservoir1", capacity=1000)
+    demand = DemandNode("Demand1", demand_rate=5)
+
+    system.add_node(supply)
+    system.add_node(storage)
+    system.add_node(demand)
+
+    system.add_edge(Edge(supply, storage, capacity=15))
+    system.add_edge(Edge(storage, demand, capacity=10))
+
+    # Run simulation and visualize results
+    system.simulate(num_time_steps=12)
+    system.visualize()
+"""
+
 from .water_system import WaterSystem
 from .structure import Node, SupplyNode, SinkNode, DemandNode, StorageNode, DiversionNode, ConfluenceNode
 from .edge import Edge
+
+# Define what should be imported with "from water_system import *"
+__all__ = ['WaterSystem', 'Node', 'SupplyNode', 'SinkNode', 'DemandNode', 
+           'StorageNode', 'DiversionNode', 'ConfluenceNode', 'Edge']
+
+# You can also define the version of your package here
+__version__ = '0.1.0'
