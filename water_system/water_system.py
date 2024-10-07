@@ -9,6 +9,7 @@ and visualize the results.
 import networkx as nx
 import matplotlib.pyplot as plt
 from .structure import SupplyNode, StorageNode, DemandNode
+from .edge import Edge
 
 class WaterSystem:
     """

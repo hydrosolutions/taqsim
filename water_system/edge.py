@@ -1,23 +1,18 @@
-"""
-This module defines the Edge class, which represents a connection between two nodes in a water system.
-
-The Edge class is responsible for managing the flow of water between nodes, respecting capacity
-constraints and updating flow values at each time step of the simulation.
-"""
+from .structure import Node
 
 class Edge:
     """
     Represents a connection (e.g., river, canal) between two nodes in a water system.
 
     The Edge class manages the flow of water between a source node and a target node,
-    respecting the capacity constraints of the connection.
+    respecting the capacity constraints of the connection and the specific behaviors
+    of different node types.
 
     Attributes:
         source (Node): The node from which water flows.
         target (Node): The node to which water flows.
         capacity (float): The maximum amount of water that can flow through this edge per time step.
         flow (list of float): The amount of water flowing through this edge at each time step.
-
     """
 
     def __init__(self, source, target, capacity):
@@ -43,24 +38,23 @@ class Edge:
         Update the flow through this edge for the given time step.
 
         This method calculates and appends the flow value for the current time step
-        based on the source node's type and the edge's capacity.
+        based on the source node's type and the edge's capacity. It handles SupplyNodes,
+        StorageNodes, and other node types differently to ensure proper water balance.
 
         Args:
             time_step (int): The current time step of the simulation.
-
-        If the source is a SupplyNode, the flow is set to the minimum of the supply rate
-        and the edge's capacity. For other node types, the flow is calculated based on
-        the inflow to the source node, limited by the edge's capacity.
         """
-        if time_step >= len(self.flow):
-            if hasattr(self.source, 'supply_rate'):
-                # This is a SupplyNode
-                self.flow.append(min(self.source.supply_rate, self.capacity))
-            else:
+        if hasattr(self.source, 'supply_rate'):
+            # This is a SupplyNode
+            self.flow.append(min(self.source.supply_rate, self.capacity))
+        elif not hasattr(self.source, 'storage'):
+            # For non-supply and non-storage nodes, calculate flow based on inflows
+            if time_step >= len(self.flow):
                 inflow = sum(edge.flow[-1] for edge in self.source.inflows.values())
                 outflow = min(inflow, self.capacity)
                 self.flow.append(outflow)
-        
+        # StorageNodes will update the flow themselves in their own update method
+
     def get_flow(self, time_step):
         """
         Get the flow value for a specific time step.

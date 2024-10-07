@@ -6,6 +6,8 @@ SupplyNode, SinkNode, DemandNode, StorageNode, DiversionNode, and ConfluenceNode
 Each node type has its own behavior for handling water inflows and outflows.
 """
 
+from .edge import Edge
+
 class Node:
     """
     Base class for all types of nodes in the water system.
@@ -141,7 +143,10 @@ class DemandNode(Node):
 
 class StorageNode(Node):
     """
-    Represents a water storage facility in the system.
+    Represents a water storage facility in the system, such as a reservoir or lake.
+
+    This class ensures proper water balance and prevents negative storage. It manages
+    inflows, outflows, and storage capacity constraints.
 
     Attributes:
         capacity (float): The maximum amount of water that can be stored.
@@ -158,28 +163,44 @@ class StorageNode(Node):
         """
         super().__init__(id)
         self.capacity = capacity
-        self.storage = [0]
+        self.storage = [0]  # Initialize with zero storage
 
     def update(self, time_step):
         """
         Update the StorageNode's state for the given time step.
 
         This method calculates the new storage level based on inflows, outflows,
-        and storage capacity.
+        and storage capacity. It ensures water balance is maintained and prevents
+        negative storage.
 
         Args:
             time_step (int): The current time step of the simulation.
         """
+        # Calculate total inflow and available water
         inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         previous_storage = self.storage[-1]
         available_water = previous_storage + inflow
-        
+
+        # Calculate potential outflows based on edge capacities and available water
+        potential_outflows = {}
         for edge in self.outflows.values():
-            edge.update(time_step)
-        
-        outflow = sum(edge.get_flow(time_step) for edge in self.outflows.values())
-        new_storage = min(available_water - outflow, self.capacity)
-        self.storage.append(max(new_storage, 0))
+            potential_outflows[edge] = min(edge.capacity, available_water)
+
+        # Adjust outflows if total potential outflow exceeds available water
+        total_potential_outflow = sum(potential_outflows.values())
+        if total_potential_outflow > available_water:
+            scale_factor = available_water / total_potential_outflow
+            for edge, flow in potential_outflows.items():
+                potential_outflows[edge] = flow * scale_factor
+
+        # Update outflow edges with calculated flows
+        for edge, flow in potential_outflows.items():
+            edge.flow.append(flow)
+
+        # Calculate actual outflow and new storage
+        actual_outflow = sum(potential_outflows.values())
+        new_storage = min(available_water - actual_outflow, self.capacity)
+        self.storage.append(max(new_storage, 0))  # Ensure non-negative storage
 
 class DiversionNode(Node):
     """
