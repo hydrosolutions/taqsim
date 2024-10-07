@@ -1,5 +1,8 @@
 # Water System Simulation
 
+## Version
+Version 0.0.1
+
 ## Overview
 
 This project implements an object-oriented water system simulation and optimization tool using Python. It models water systems as networks of nodes and edges in a directed acyclic graph, allowing for the simulation and optimization of water flow over multiple time steps.
@@ -36,8 +39,8 @@ water_system/
 1. Ensure you have Python 3.7+ installed.
 2. Clone this repository:
    ```
-   git clone https://github.com/yourusername/water-system-simulation.git
-   cd water-system-simulation
+   git clone https://github.com/hydrosolutions/water_system_simulation_optimization.git
+   cd water_system_simulation_optimization
    ```
 3. Install required packages:
    ```
