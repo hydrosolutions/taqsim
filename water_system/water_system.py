@@ -1,3 +1,15 @@
+"""
+This module defines the WaterSystem class, which is the main class for creating and managing
+a water system simulation. It uses NetworkX for graph representation and matplotlib for visualization.
+
+The WaterSystem class allows users to add nodes and edges to the system, run simulations,
+and visualize the results.
+"""
+
+import networkx as nx
+import matplotlib.pyplot as plt
+from .structure import SupplyNode, StorageNode, DemandNode
+
 class WaterSystem:
     """
     Represents a water system as a directed graph and provides methods for simulation and visualization.
@@ -5,7 +17,6 @@ class WaterSystem:
     Attributes:
         graph (nx.DiGraph): A NetworkX directed graph representing the water system.
         time_steps (int): The number of time steps in the most recent simulation.
-        flow_data (dict): A dictionary to store flow data for each node across time steps.
     """
 
     def __init__(self):
@@ -14,7 +25,6 @@ class WaterSystem:
         """
         self.graph = nx.DiGraph()
         self.time_steps = 0
-        self.flow_data = {}
 
     def add_node(self, node):
         """
@@ -49,31 +59,14 @@ class WaterSystem:
         Args:
             time_steps (int): The number of time steps to simulate.
 
-        This method updates each node and edge in the system for each time step and collects flow data.
+        This method updates each node and edge in the system for each time step.
         """
         self.time_steps = time_steps
-        self.flow_data = {node: [] for node in self.graph.nodes()}
-        
         for t in range(time_steps):
             for node_id in self.graph.nodes():
-                node = self.graph.nodes[node_id]['node']
-                node.update(t)
-                if isinstance(node, SupplyNode):
-                    self.flow_data[node_id].append(node.get_outflow(t))
+                self.graph.nodes[node_id]['node'].update(t)
             for _, _, edge_data in self.graph.edges(data=True):
                 edge_data['edge'].update(t)
-
-    def print_flow_data(self):
-        """
-        Print the flow data for all supply nodes in the system.
-        """
-        for node_id, flows in self.flow_data.items():
-            node = self.graph.nodes[node_id]['node']
-            if isinstance(node, SupplyNode):
-                print(f"Flow data for SupplyNode {node_id}:")
-                for t, flow in enumerate(flows):
-                    print(f"  Time step {t}: {flow:.2f}")
-                print()
 
     def visualize(self):
         """
