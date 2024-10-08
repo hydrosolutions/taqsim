@@ -55,20 +55,18 @@ class WaterSystem:
         self.graph.add_edge(edge.source.id, edge.target.id, edge=edge)
 
     def simulate(self, time_steps):
-        """
-        Run a simulation of the water system for a specified number of time steps.
-
-        Args:
-            time_steps (int): The number of time steps to simulate.
-
-        This method updates each node and edge in the system for each time step.
-        """
         self.time_steps = time_steps
         for t in range(time_steps):
-            for node_id in self.graph.nodes():
-                self.graph.nodes[node_id]['node'].update(t)
+            # Update nodes in order: SupplyNode, StorageNode, DemandNode, SinkNode
+            for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode]:
+                for node_id, node_data in self.graph.nodes(data=True):
+                    if isinstance(node_data['node'], node_type):
+                        node_data['node'].update(t)
+            
+            # Update edges after all nodes have been updated
             for _, _, edge_data in self.graph.edges(data=True):
-                edge_data['edge'].update(t)
+                if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, DemandNode)):
+                    edge_data['edge'].update(t)
 
     def visualize(self):
         """
