@@ -73,27 +73,22 @@ class WaterSystem:
         Visualize the water system using matplotlib.
 
         This method creates a multipartite layout of the system, with nodes color-coded by type
-        and edges labeled with their final flow values.
+        and edges labeled with their final flow values. The SinkNode is positioned on the left side.
         """
         # Determine node layers for multipartite layout
-        layers = {'SupplyNode': 0, 'StorageNode': 1, 'DemandNode': 2}
+        layers = {'SinkNode': 0, 'DemandNode': 1, 'StorageNode': 2, 'SupplyNode': 3}
+        node_colors = {'SinkNode': 'lightgray', 'SupplyNode': 'skyblue', 'StorageNode': 'lightgreen', 'DemandNode': 'lightcoral'}
+        
+        # Assign positions and colors
+        pos = {}
         colors = []
         for node_id, node_data in self.graph.nodes(data=True):
             node_type = node_data['node_type']
             if node_type not in layers:
-                layers[node_type] = 1  # Default to middle layer for unknown types
-            
-            if node_type == 'SupplyNode':
-                colors.append('skyblue')
-            elif node_type == 'StorageNode':
-                colors.append('lightgreen')
-            elif node_type == 'DemandNode':
-                colors.append('lightcoral')
-            else:
-                colors.append('lightgray')
-
-        # Create multipartite layout
-        pos = nx.multipartite_layout(self.graph, subset_key='node_type')
+                layers[node_type] = 0  # Default to middle layer for unknown types
+            layer = layers[node_type]
+            pos[node_id] = (layer, len([n for n in pos if pos[n][0] == layer]))
+            colors.append(node_colors.get(node_type, 'lightgray'))
 
         plt.figure(figsize=(12, 8))
         
