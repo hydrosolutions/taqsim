@@ -8,7 +8,8 @@ and visualize the results.
 
 import networkx as nx
 import matplotlib.pyplot as plt
-from .structure import SupplyNode, StorageNode, DemandNode
+import pandas as pd
+from .structure import SupplyNode, StorageNode, DemandNode, SinkNode
 from .edge import Edge
 
 class WaterSystem:
@@ -139,3 +140,72 @@ class WaterSystem:
                     balance = inflow - outflow
                     print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
                         f"Balance = {balance:.2f}")
+                    
+    def get_water_balance_table(self):
+        """
+        Generate a table with water balance data for all nodes across all time steps.
+
+        Returns:
+            pd.DataFrame: A pandas DataFrame containing the water balance data.
+                        Columns represent different aspects of each node's water balance.
+                        Rows represent time steps.
+        """
+        data = []
+        node_columns = []
+
+        for node_id, node_data in self.graph.nodes(data=True):
+            node = node_data['node']
+            node_type = type(node).__name__
+
+            # Common columns for all node types
+            base_columns = [
+                f"{node_id}_Inflow",
+                f"{node_id}_Outflow",
+            ]
+
+            # Add type-specific columns
+            if isinstance(node, SupplyNode):
+                type_columns = [f"{node_id}_SupplyRate"]
+            elif isinstance(node, StorageNode):
+                type_columns = [f"{node_id}_Storage", f"{node_id}_StorageChange"]
+            elif isinstance(node, DemandNode):
+                type_columns = [f"{node_id}_Demand", f"{node_id}_SatisfiedDemand", f"{node_id}_Deficit"]
+            elif isinstance(node, SinkNode):
+                type_columns = []  # SinkNodes don't have additional columns
+            else:
+                type_columns = []  # For any other node types
+
+            node_columns.extend(base_columns + type_columns)
+
+        # Initialize the data list with the correct number of time steps
+        data = [dict.fromkeys(node_columns, 0) for _ in range(self.time_steps)]
+
+        # Populate the data
+        for time_step in range(self.time_steps):
+            for node_id, node_data in self.graph.nodes(data=True):
+                node = node_data['node']
+                inflow = sum(edge.get_flow(time_step) for edge in node.inflows.values())
+                outflow = sum(edge.get_flow(time_step) for edge in node.outflows.values())
+
+                data[time_step][f"{node_id}_Inflow"] = inflow
+                data[time_step][f"{node_id}_Outflow"] = outflow
+
+                if isinstance(node, SupplyNode):
+                    data[time_step][f"{node_id}_SupplyRate"] = node.get_supply_rate(time_step)
+                elif isinstance(node, StorageNode):
+                    data[time_step][f"{node_id}_Storage"] = node.storage[time_step]
+                    storage_change = node.storage[time_step] - node.storage[time_step - 1] if time_step > 0 else node.storage[0]
+                    data[time_step][f"{node_id}_StorageChange"] = storage_change
+                elif isinstance(node, DemandNode):
+                    data[time_step][f"{node_id}_Demand"] = node.demand_rate
+                    data[time_step][f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
+                    data[time_step][f"{node_id}_Deficit"] = node.demand_rate - node.satisfied_demand[time_step]
+                # No additional data needed for SinkNode
+
+        # Create a DataFrame from the collected data
+        df = pd.DataFrame(data)
+        
+        # Add a 'TimeStep' column
+        df.insert(0, 'TimeStep', range(self.time_steps))
+
+        return df
