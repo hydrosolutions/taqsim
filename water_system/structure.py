@@ -114,6 +114,18 @@ class SupplyNode(Node):
         if remaining_supply > 0:
             print(f"Warning: Excess supply of {remaining_supply} at node {self.id} for time step {time_step}")
 
+    def get_outflow(self, time_step):
+        """
+        Get the total outflow from this supply node for a specific time step.
+
+        Args:
+            time_step (int): The time step for which to retrieve the outflow.
+
+        Returns:
+            float: The total outflow from this supply node for the specified time step.
+        """
+        return sum(edge.get_flow(time_step) for edge in self.outflows.values())
+
 class SinkNode(Node):
     """
     Represents a point where water exits the system.
