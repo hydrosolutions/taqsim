@@ -8,7 +8,7 @@ and visualize the results.
 
 import networkx as nx
 import matplotlib.pyplot as plt
-from .structure import SupplyNode, StorageNode, DemandNode, Sink
+from .structure import SupplyNode, StorageNode, DemandNode
 
 class WaterSystem:
     """
@@ -72,67 +72,47 @@ class WaterSystem:
         """
         Visualize the water system using matplotlib.
 
-        This method creates a custom layout of the system, with nodes color-coded by type
+        This method creates a multipartite layout of the system, with nodes color-coded by type
         and edges labeled with their final flow values.
         """
-        plt.figure(figsize=(15, 10))
-        
-        # Create a custom layout
-        pos = {
-            'Supply1': (0, 0.5),
-            'Reservoir': (0.3, 0.5),
-            'Agriculture': (0.6, 0.75),
-            'Domestic': (0.6, 0.25),
-            'Sink': (0.9, 0.5)
-        }
-        
-        # Define node colors and sizes
-        node_colors = {
-            'SupplyNode': 'skyblue',
-            'StorageNode': 'lightgreen',
-            'DemandNode': 'lightcoral',
-            'SinkNode': 'lightgray'
-        }
-        node_sizes = {
-            'SupplyNode': 3000,
-            'StorageNode': 5000,
-            'DemandNode': 3000,
-            'SinkNode': 3000
-        }
-        
-        # Draw nodes
+        # Determine node layers for multipartite layout
+        layers = {'SupplyNode': 0, 'StorageNode': 1, 'DemandNode': 2}
+        colors = []
         for node_id, node_data in self.graph.nodes(data=True):
             node_type = node_data['node_type']
-            nx.draw_networkx_nodes(self.graph, pos, nodelist=[node_id],
-                                node_color=node_colors.get(node_type, 'lightgray'),
-                                node_size=node_sizes.get(node_type, 3000))
+            if node_type not in layers:
+                layers[node_type] = 1  # Default to middle layer for unknown types
+            
+            if node_type == 'SupplyNode':
+                colors.append('skyblue')
+            elif node_type == 'StorageNode':
+                colors.append('lightgreen')
+            elif node_type == 'DemandNode':
+                colors.append('lightcoral')
+            else:
+                colors.append('lightgray')
+
+        # Create multipartite layout
+        pos = nx.multipartite_layout(self.graph, subset_key='node_type')
+
+        plt.figure(figsize=(12, 8))
+        
+        # Draw nodes
+        nx.draw_networkx_nodes(self.graph, pos, node_color=colors, node_size=500)
         
         # Draw edges
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=20)
+        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True)
         
         # Draw labels
-        nx.draw_networkx_labels(self.graph, pos, font_size=10, font_weight='bold')
-        
+        nx.draw_networkx_labels(self.graph, pos, font_size=10)
+
         # Draw edge labels (flow values)
         edge_labels = {}
         for (u, v, data) in self.graph.edges(data=True):
             if data['edge'].flow:
                 edge_labels[(u, v)] = f"{data['edge'].flow[-1]:.2f}"
         nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=8)
-        
-        # Add node information
-        for node_id, node_data in self.graph.nodes(data=True):
-            node = node_data['node']
-            x, y = pos[node_id]
-            if isinstance(node, SupplyNode):
-                plt.text(x, y-0.1, f"Supply: {node.supply_history[-1]:.2f}", ha='center', va='center')
-            elif isinstance(node, StorageNode):
-                plt.text(x, y-0.1, f"Storage: {node.storage[-1]:.2f}/{node.capacity}", ha='center', va='center')
-            elif isinstance(node, DemandNode):
-                plt.text(x, y-0.1, f"Demand: {node.demand_rate:.2f}", ha='center', va='center')
-            elif isinstance(node, SinkNode):
-                plt.text(x, y-0.1, f"Outflow: {node.outflow_history[-1]:.2f}", ha='center', va='center')
-        
+
         plt.title(f"Water System - Time Step: {self.time_steps}")
         plt.axis('off')
         plt.tight_layout()

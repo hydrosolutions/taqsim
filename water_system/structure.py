@@ -124,51 +124,20 @@ class SupplyNode(Node):
 class SinkNode(Node):
     """
     Represents a point where water exits the system.
-
-    Attributes:
-        id (str): A unique identifier for the node.
-        outflow_history (list of float): The total outflow at each time step.
     """
-
-    def __init__(self, id):
-        """
-        Initialize a SinkNode object.
-
-        Args:
-            id (str): A unique identifier for the node.
-        """
-        super().__init__(id)
-        self.outflow_history = []
 
     def update(self, time_step):
         """
         Update the SinkNode's state for the given time step.
 
-        This method calculates the total inflow to the sink node,
-        which represents the water exiting the system, and adds it to the outflow_history.
+        This method calculates the total inflow to the sink node.
+        Sink nodes remove all incoming water from the system.
 
         Args:
             time_step (int): The current time step of the simulation.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
-        self.outflow_history.append(total_inflow)
-
-    def get_formatted_history(self):
-        """
-        Get a formatted string representation of the sink's outflow history.
-
-        Returns:
-            str: A formatted table showing outflow at each time step.
-        """
-        header = f"{'Time Step':^10}{'Outflow':^15}"
-        separator = "-" * 25
-        rows = [header, separator]
-        
-        for t, outflow in enumerate(self.outflow_history):
-            row = f"{t:^10}{outflow:^15.2f}"
-            rows.append(row)
-        
-        return "\n".join(rows)
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
+        # Sink nodes remove all incoming water from the system
 
 class DemandNode(Node):
     """
