@@ -9,6 +9,7 @@ and visualize the results.
 import networkx as nx
 import matplotlib.pyplot as plt
 from .structure import SupplyNode, StorageNode, DemandNode
+from .edge import Edge
 
 class WaterSystem:
     """
@@ -112,3 +113,29 @@ class WaterSystem:
         plt.axis('off')
         plt.tight_layout()
         plt.show()
+    
+    def print_water_balances(self):
+        """
+        Print water balances for each node at each time step.
+        """
+        for time_step in range(self.time_steps):
+            print(f"\nTime Step {time_step}:")
+            for node_id, node_data in self.graph.nodes(data=True):
+                node = node_data['node']
+                inflow = sum(edge.get_flow(time_step) for edge in node.inflows.values())
+                outflow = sum(edge.get_flow(time_step) for edge in node.outflows.values())
+                
+                if isinstance(node, DemandNode):
+                    balance = inflow - outflow - node.satisfied_demand[time_step]
+                    print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
+                        f"Satisfied Demand = {node.satisfied_demand[time_step]:.2f}, "
+                        f"Balance = {balance:.2f}")
+                elif isinstance(node, StorageNode):
+                    storage_change = node.storage[time_step + 1] - node.storage[time_step] if time_step + 1 < len(node.storage) else 0
+                    balance = inflow - outflow - storage_change
+                    print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
+                        f"Storage Change = {storage_change:.2f}, Balance = {balance:.2f}")
+                else:
+                    balance = inflow - outflow
+                    print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
+                        f"Balance = {balance:.2f}")

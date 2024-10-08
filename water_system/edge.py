@@ -1,3 +1,5 @@
+from .structure import SupplyNode, DemandNode
+
 """
 This module defines the Edge class, which represents a connection between two nodes in a water system.
 
@@ -17,7 +19,6 @@ class Edge:
         target (Node): The node to which water flows.
         capacity (float): The maximum amount of water that can flow through this edge per time step.
         flow (list of float): The amount of water flowing through this edge at each time step.
-
     """
 
     def __init__(self, source, target, capacity):
@@ -34,7 +35,7 @@ class Edge:
         self.source = source
         self.target = target
         self.capacity = capacity
-        self.flow = [0]  # Initialize with zero flow
+        self.flow = []
         self.source.add_outflow(self)
         self.target.add_inflow(self)
 
@@ -47,17 +48,19 @@ class Edge:
             flow (float, optional): The flow value to set for this time step.
                                     If not provided, it will be calculated based on the source node.
         """
-        if time_step >= len(self.flow):
-            if flow is not None:
-                self.flow.append(min(flow, self.capacity))
-            elif hasattr(self.source, 'get_supply_rate'):
-                # This is a SupplyNode
-                self.flow.append(min(self.source.get_supply_rate(time_step), self.capacity))
+        if flow is not None:
+            self.flow.append(min(flow, self.capacity))
+        elif isinstance(self.source, SupplyNode):
+            self.flow.append(min(self.source.get_supply_rate(time_step), self.capacity))
+        elif isinstance(self.source, DemandNode):
+            if time_step < len(self.source.excess_flow):
+                self.flow.append(min(self.source.excess_flow[time_step], self.capacity))
             else:
-                inflow = sum(edge.flow[-1] for edge in self.source.inflows.values())
-                outflow = min(inflow, self.capacity)
-                self.flow.append(outflow)
-        
+                self.flow.append(0)  # No excess flow if we don't have data for this time step
+        else:
+            inflow = sum(edge.get_flow(time_step) for edge in self.source.inflows.values())
+            self.flow.append(min(inflow, self.capacity))
+
     def get_flow(self, time_step):
         """
         Get the flow value for a specific time step.
@@ -73,4 +76,4 @@ class Edge:
         """
         if time_step < len(self.flow):
             return self.flow[time_step]
-        return self.flow[-1]  # Return the last known flow if time_step is out of range
+        return self.flow[-1] if self.flow else 0  # Return the last known flow if time_step is out of range, or 0 if no flow recorded

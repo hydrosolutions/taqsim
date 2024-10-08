@@ -145,6 +145,8 @@ class DemandNode(Node):
 
     Attributes:
         demand_rate (float): The rate at which this node demands water from the system.
+        satisfied_demand (list of float): The amount of demand satisfied at each time step.
+        excess_flow (list of float): The amount of excess water at each time step.
     """
 
     def __init__(self, id, demand_rate):
@@ -157,20 +159,35 @@ class DemandNode(Node):
         """
         super().__init__(id)
         self.demand_rate = demand_rate
+        self.satisfied_demand = []
+        self.excess_flow = []
 
     def update(self, time_step):
         """
         Update the DemandNode's state for the given time step.
 
-        This method calculates the total inflow and determines how much of the
-        demand is satisfied. Any excess water continues downstream.
+        This method calculates the total inflow, determines how much of the
+        demand is satisfied, and calculates any excess flow.
 
         Args:
             time_step (int): The current time step of the simulation.
         """
         total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
-        satisfied_demand = min(total_inflow, self.demand_rate)
-        # Remaining water continues downstream
+        satisfied = min(total_inflow, self.demand_rate)
+        excess = max(0, total_inflow - self.demand_rate)
+        
+        self.satisfied_demand.append(satisfied)
+        self.excess_flow.append(excess)
+
+        # Update outflows
+        remaining_outflow = excess
+        for edge in self.outflows.values():
+            flow = min(remaining_outflow, edge.capacity)
+            edge.update(time_step, flow)
+            remaining_outflow -= flow
+
+        if remaining_outflow > 0:
+            print(f"Warning: Excess flow of {remaining_outflow} at node {self.id} for time step {time_step}")
 
 class StorageNode(Node):
     """
