@@ -12,8 +12,8 @@ class Node:
 
     Attributes:
         id (str): A unique identifier for the node.
-        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
-        outflow_edges (dict): A dictionary of outflow edges, keyed by the target node's id.
+        inflows (dict): A dictionary of inflow edges, keyed by the source node's id.
+        outflows (dict): A dictionary of outflow edges, keyed by the target node's id.
     """
 
     def __init__(self, id):
@@ -24,8 +24,8 @@ class Node:
             id (str): A unique identifier for the node.
         """
         self.id = id
-        self.inflow_edges = {}  # Dictionary of inflow edges
-        self.outflow_edges = {}  # Dictionary of outflow edges
+        self.inflows = {}  # Dictionary of inflow edges
+        self.outflows = {}  # Dictionary of outflow edges
 
     def add_inflow(self, edge):
         """
@@ -34,7 +34,7 @@ class Node:
         Args:
             edge (Edge): The edge to be added as an inflow.
         """
-        self.inflow_edges[edge.source.id] = edge
+        self.inflows[edge.source.id] = edge
 
     def add_outflow(self, edge):
         """
@@ -43,7 +43,7 @@ class Node:
         Args:
             edge (Edge): The edge to be added as an outflow.
         """
-        self.outflow_edges[edge.target.id] = edge
+        self.outflows[edge.target.id] = edge
 
     def update(self, time_step):
         """
@@ -110,7 +110,7 @@ class SupplyNode(Node):
         remaining_supply = current_supply_rate
         total_supplied = 0
 
-        for edge in self.outflow_edges.values():
+        for edge in self.outflows.values():
             flow = min(remaining_supply, edge.capacity)
             edge.update(time_step, flow)
             remaining_supply -= flow
@@ -136,7 +136,7 @@ class SinkNode(Node):
         Args:
             time_step (int): The current time step of the simulation.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         # Sink nodes remove all incoming water from the system
 
 class DemandNode(Node):
@@ -168,7 +168,7 @@ class DemandNode(Node):
         Args:
             time_step (int): The current time step of the simulation.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         satisfied_demand = min(total_inflow, self.demand_rate)
         # Remaining water continues downstream
 
@@ -179,8 +179,6 @@ class StorageNode(Node):
     Attributes:
         capacity (float): The maximum amount of water that can be stored.
         storage (list of float): The amount of water stored at each time step.
-        inflow_edges (list of float): The total inflow at each time step.
-        outflow_edges (list of float): The total outflow at each time step.
     """
 
     def __init__(self, id, capacity):
@@ -194,51 +192,27 @@ class StorageNode(Node):
         super().__init__(id)
         self.capacity = capacity
         self.storage = [0]
-        self.inflow_edges = [0]
-        self.outflow_edges = [0]
 
     def update(self, time_step):
         """
         Update the StorageNode's state for the given time step.
 
-        This method calculates the new storage level based on inflow_edges, outflows,
+        This method calculates the new storage level based on inflows, outflows,
         and storage capacity.
 
         Args:
             time_step (int): The current time step of the simulation.
         """
-        inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
-        self.inflow_edges.append(inflow)
-        
+        inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         previous_storage = self.storage[-1]
         available_water = previous_storage + inflow
         
-        for edge in self.outflow_edges.values():
+        for edge in self.outflows.values():
             edge.update(time_step)
         
-        outflow = sum(edge.get_flow(time_step) for edge in self.outflow_edges.values())
-        #self.outflows.append(outflow)
-        self.outflow_edges.append(outflow)
-        
+        outflow = sum(edge.get_flow(time_step) for edge in self.outflows.values())
         new_storage = min(available_water - outflow, self.capacity)
         self.storage.append(max(new_storage, 0))
-
-    def get_formatted_history(self):
-        """
-        Get a formatted string representation of the storage history.
-
-        Returns:
-            str: A formatted table showing inflow, outflow, and volume at each time step.
-        """
-        header = f"{'Time Step':^10}{'Inflow':^15}{'Outflow':^15}{'Volume':^15}"
-        separator = "-" * 55
-        rows = [header, separator]
-        
-        for t in range(len(self.storage)):
-            row = f"{t:^10}{self.inflow_edges[t]:^15.2f}{self.outflow_edges[t]:^15.2f}{self.storage[t]:^15.2f}"
-            rows.append(row)
-        
-        return "\n".join(rows)
 
 class DiversionNode(Node):
     """
@@ -255,9 +229,9 @@ class DiversionNode(Node):
         Args:
             time_step (int): The current time step of the simulation.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         # Implement diversion logic here
-        for edge in self.outflow_edges.values():
+        for edge in self.outflows.values():
             edge.update(time_step)
 
 class ConfluenceNode(Node):
@@ -275,7 +249,7 @@ class ConfluenceNode(Node):
         Args:
             time_step (int): The current time step of the simulation.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         # Distribute total inflow among outflow edges
-        for edge in self.outflow_edges.values():
+        for edge in self.outflows.values():
             edge.update(time_step)
