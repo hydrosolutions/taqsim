@@ -36,7 +36,10 @@ class WaterSystem:
         This method adds the node to the graph and stores its type as an attribute.
         """
         node_type = type(node).__name__
-        self.graph.add_node(node.id, node=node, node_type=node_type)
+        if node_type == 'SupplyNode':
+            self.graph.add_node(node.id, node=node, node_type=node_type, supply_rates=node.supply_rates)
+        else:
+            self.graph.add_node(node.id, node=node, node_type=node_type)
 
     def add_edge(self, edge):
         """

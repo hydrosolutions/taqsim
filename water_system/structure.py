@@ -59,34 +59,60 @@ class Node:
 
 class SupplyNode(Node):
     """
-    Represents a water supply source in the system.
+    Represents a water supply source in the system with time-varying supply rates.
 
     Attributes:
-        supply_rate (float): The rate at which this node supplies water to the system.
+        id (str): A unique identifier for the node.
+        supply_rates (list of float): The rates at which this node supplies water to the system at each time step.
+        default_supply_rate (float): The default supply rate to use if no specific rate is provided for a time step.
     """
 
-    def __init__(self, id, supply_rate):
+    def __init__(self, id, supply_rates=None, default_supply_rate=0):
         """
         Initialize a SupplyNode object.
 
         Args:
             id (str): A unique identifier for the node.
-            supply_rate (float): The rate at which this node supplies water.
+            supply_rates (list of float, optional): A list of supply rates for each time step.
+            default_supply_rate (float, optional): The default supply rate to use if no specific rate is provided.
         """
         super().__init__(id)
-        self.supply_rate = supply_rate
+        self.supply_rates = supply_rates if supply_rates is not None else []
+        self.default_supply_rate = default_supply_rate
+
+    def get_supply_rate(self, time_step):
+        """
+        Get the supply rate for a specific time step.
+
+        Args:
+            time_step (int): The current time step of the simulation.
+
+        Returns:
+            float: The supply rate for the specified time step.
+        """
+        if time_step < len(self.supply_rates):
+            return self.supply_rates[time_step]
+        return self.default_supply_rate
 
     def update(self, time_step):
         """
         Update the SupplyNode's state for the given time step.
 
-        This method updates all outflow edges with the supply rate.
+        This method updates all outflow edges with the current supply rate.
 
         Args:
             time_step (int): The current time step of the simulation.
         """
+        current_supply_rate = self.get_supply_rate(time_step)
+        remaining_supply = current_supply_rate
+
         for edge in self.outflows.values():
-            edge.update(time_step)
+            flow = min(remaining_supply, edge.capacity)
+            edge.update(time_step, flow)
+            remaining_supply -= flow
+
+        if remaining_supply > 0:
+            print(f"Warning: Excess supply of {remaining_supply} at node {self.id} for time step {time_step}")
 
 class SinkNode(Node):
     """

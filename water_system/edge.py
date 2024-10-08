@@ -38,24 +38,21 @@ class Edge:
         self.source.add_outflow(self)
         self.target.add_inflow(self)
 
-    def update(self, time_step):
+    def update(self, time_step, flow=None):
         """
         Update the flow through this edge for the given time step.
 
-        This method calculates and appends the flow value for the current time step
-        based on the source node's type and the edge's capacity.
-
         Args:
             time_step (int): The current time step of the simulation.
-
-        If the source is a SupplyNode, the flow is set to the minimum of the supply rate
-        and the edge's capacity. For other node types, the flow is calculated based on
-        the inflow to the source node, limited by the edge's capacity.
+            flow (float, optional): The flow value to set for this time step.
+                                    If not provided, it will be calculated based on the source node.
         """
         if time_step >= len(self.flow):
-            if hasattr(self.source, 'supply_rate'):
+            if flow is not None:
+                self.flow.append(min(flow, self.capacity))
+            elif hasattr(self.source, 'get_supply_rate'):
                 # This is a SupplyNode
-                self.flow.append(min(self.source.supply_rate, self.capacity))
+                self.flow.append(min(self.source.get_supply_rate(time_step), self.capacity))
             else:
                 inflow = sum(edge.flow[-1] for edge in self.source.inflows.values())
                 outflow = min(inflow, self.capacity)
