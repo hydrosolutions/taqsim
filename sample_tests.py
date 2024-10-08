@@ -175,7 +175,7 @@ def plot_network_layout(water_system, filename):
     
     for node_type, color in node_colors.items():
         node_list = [node for node, data in G.nodes(data=True) if isinstance(data['node'], node_type)]
-        nx.draw_networkx_nodes(G, pos, nodelist=node_list, node_color=color, node_size=3000, alpha=0.8)
+        nx.draw_networkx_nodes(G, pos, nodelist=node_list, node_color=color, node_size=300, alpha=0.8)
     
     nx.draw_networkx_edges(G, pos, edge_color='gray', arrows=True, arrowsize=20)
     
