@@ -226,3 +226,32 @@ class ConfluenceNode(Node):
             # If there's no outflow capacity, set all outflows to 0
             for edge in self.outflows.values():
                 edge.update(time_step, 0)
+
+class HydroWorks(Node):
+    """
+    Represents a point where water can be redistributed, combining the functionality
+    of diversion and confluence points.
+    """
+
+    def update(self, time_step):
+        """
+        Update the HydroWorks node's state for the given time step.
+
+        This method calculates the total inflow and distributes it among outflow edges
+        based on their capacities.
+
+        Args:
+            time_step (int): The current time step of the simulation.
+        """
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
+        total_outflow_capacity = sum(edge.capacity for edge in self.outflows.values())
+
+        if total_outflow_capacity > 0:
+            for edge in self.outflows.values():
+                # Distribute water proportionally based on edge capacity
+                edge_flow = (edge.capacity / total_outflow_capacity) * total_inflow
+                edge.update(time_step, edge_flow)
+        else:
+            # If there's no outflow capacity, set all outflows to 0
+            for edge in self.outflows.values():
+                edge.update(time_step, 0)
