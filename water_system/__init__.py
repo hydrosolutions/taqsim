@@ -42,12 +42,12 @@ Usage:
 """
 
 from .water_system import WaterSystem
-from .structure import Node, SupplyNode, SinkNode, DemandNode, StorageNode, DiversionNode, ConfluenceNode
+from .structure import Node, SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks
 from .edge import Edge
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'Node', 'SupplyNode', 'SinkNode', 'DemandNode', 
-           'StorageNode', 'DiversionNode', 'ConfluenceNode', 'Edge']
+           'StorageNode', 'HydroWorks', 'Edge']
 
 # You can also define the version of your package here
-__version__ = '0.1.0'
+__version__ = '0.2.0'

@@ -10,7 +10,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import pandas as pd
-from .structure import SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode, SinkNode
+from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode
 from .edge import Edge
 
 class WaterSystem:
@@ -59,14 +59,14 @@ class WaterSystem:
         self.time_steps = time_steps
         for t in range(time_steps):
             # Update nodes in order: SupplyNode, StorageNode, DemandNode, SinkNode
-            for node_type in [SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode, SinkNode]:
+            for node_type in [SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode]:
                 for node_id, node_data in self.graph.nodes(data=True):
                     if isinstance(node_data['node'], node_type):
                         node_data['node'].update(t)
             
             # Update edges after all nodes have been updated
             for _, _, edge_data in self.graph.edges(data=True):
-                if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode)):
+                if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, HydroWorks, DemandNode)):
                     edge_data['edge'].update(t)
 
     def visualize(self, filename='water_system_layout.png', display=True):
@@ -93,20 +93,18 @@ class WaterSystem:
             StorageNode: 'lightgreen',
             DemandNode: 'salmon',
             SinkNode: 'lightgray',
-            DiversionNode: 'orange',
-            ConfluenceNode: 'gold'
+            HydroWorks: 'orange'
         }
         
         node_shapes = {
-            SupplyNode: 's',  # square
-            StorageNode: 's',  # square
-            DemandNode: 's',  # square
-            SinkNode: 's',  # square
-            DiversionNode: 'o',  # circle
-            ConfluenceNode: 'o'  # circle
+            SupplyNode: 's',    # square
+            StorageNode: 's',   # square
+            DemandNode: 'o',    # circle
+            SinkNode: 's',      # square
+            HydroWorks: 'o',    # circle
         }
         
-        node_size = 3000
+        node_size = 5000
         
         for node_type in node_colors.keys():
             node_list = [node for node, data in self.graph.nodes(data=True) if isinstance(data['node'], node_type)]
@@ -117,7 +115,7 @@ class WaterSystem:
                                 node_size=node_size, 
                                 alpha=0.8)
         
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=20)
+        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=75)
         
         # Update node labels
         labels = {}
@@ -135,16 +133,13 @@ class WaterSystem:
             elif isinstance(node_instance, StorageNode):
                 actual_storage = node_instance.storage[-1] if node_instance.storage else 0
                 labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
-            elif isinstance(node_instance, DiversionNode):
+            elif isinstance(node_instance, HydroWorks):
                 total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
-                labels[node] = f"{node}\nDiversion Node\nInflow: {total_inflow:.1f}"
-            elif isinstance(node_instance, ConfluenceNode):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
-                labels[node] = f"{node}\nConfluence Node\nInflow: {total_inflow:.1f}"
+                labels[node] = f"{node}\nHydroWorks\nInflow: {total_inflow:.1f}"
             else:
                 labels[node] = f"{node}\n{node_instance.__class__.__name__}"
         
-        nx.draw_networkx_labels(self.graph, pos, labels, font_size=8)
+        nx.draw_networkx_labels(self.graph, pos, labels, font_size=12)
         
         # Update edge labels to show actual flow and capacity
         edge_labels = {}
@@ -154,7 +149,7 @@ class WaterSystem:
             capacity = edge.capacity
             edge_labels[(u, v)] = f'{actual_flow:.1f} ({capacity})'
         
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=8)
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=14)
         
         plt.axis('off')
         plt.tight_layout()

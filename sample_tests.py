@@ -2,7 +2,7 @@ import csv
 import networkx as nx 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, DiversionNode, ConfluenceNode, Edge
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge
 
 def create_most_simple_system():
     """
@@ -19,39 +19,40 @@ def create_most_simple_system():
     system.add_node(outflow)
 
     system.add_edge(Edge(supply, agriculture, capacity=100))
-    system.add_edge(Edge(agriculture,outflow,capacity=50))
+    system.add_edge(Edge(agriculture, outflow, capacity=50))
 
     return system
 
-def create_diversion_node_system():
+def create_hydroworks_system():
     """
-    Creates the most simple system with one supply, one diversion, one confluence, and one sink node
+    Creates a system with one supply, three HydroWorks nodes, and one sink node
     """
     system = WaterSystem()
 
     supply = SupplyNode("Inflow", default_supply_rate=100)
-    diversion1 = DiversionNode("Diversion1")
-    diversion2 = DiversionNode("Diversion2")
-    diversion3 = DiversionNode("Diversion3")
-    confluence = ConfluenceNode("Confluence")
+    hydroworks1 = HydroWorks("HydroWorks1")
+    hydroworks2 = HydroWorks("HydroWorks2")
+    demandsite = DemandNode("Agriculture", demand_rate=60)
+    #hydroworks3 = HydroWorks("HydroWorks3")
+    hydroworks4 = HydroWorks("HydroWorks4")
     outflow = SinkNode("Outflow")
 
     system.add_node(supply)
-    system.add_node(diversion1)
-    system.add_node(diversion2)
-    system.add_node(diversion3)
-    system.add_node(confluence)
+    system.add_node(hydroworks1)
+    system.add_node(hydroworks2)
+    system.add_node(demandsite)
+    #system.add_node(hydroworks3)
+    system.add_node(hydroworks4)
     system.add_node(outflow)
 
-    system.add_edge(Edge(supply, diversion1, capacity=100))
-    system.add_edge(Edge(diversion1, diversion2, capacity=50))
-    system.add_edge(Edge(diversion2, confluence, capacity=50))
-    system.add_edge(Edge(diversion1, diversion3, capacity=50))
-    system.add_edge(Edge(diversion3, confluence, capacity=50))
-    system.add_edge(Edge(confluence, outflow, capacity=100))
+    system.add_edge(Edge(supply, hydroworks1, capacity=100))
+    system.add_edge(Edge(hydroworks1, hydroworks2, capacity=50))
+    system.add_edge(Edge(hydroworks2, hydroworks4, capacity=50))
+    system.add_edge(Edge(hydroworks1, demandsite, capacity=50))
+    system.add_edge(Edge(demandsite, hydroworks4, capacity=50))
+    system.add_edge(Edge(hydroworks4, outflow, capacity=100))
 
     return system
-
 
 def create_simple_system():
     """
@@ -239,13 +240,13 @@ def run_sample_tests():
     save_water_balance_to_csv(drought_system, "drought_system_balance.csv")
     drought_system.visualize(display=False)
 
-    # Test Diversion node system
-    diversion_system = create_diversion_node_system()
-    print("Diversion Node System Test:")
+    # Test HydroWorks system
+    hydroworks_system = create_hydroworks_system()
+    print("HydroWorks System Test:")
     num_time_steps = 12
-    diversion_system.simulate(num_time_steps)
-    save_water_balance_to_csv(diversion_system, "diversion_system_balance.csv")
-    diversion_system.visualize("diversion_system_network.png", display=False)
+    hydroworks_system.simulate(num_time_steps)
+    save_water_balance_to_csv(hydroworks_system, "hydroworks_system_balance.csv")
+    hydroworks_system.visualize("hydroworks_system_balance.png",display=False)
 
 
 # Run the sample tests
