@@ -47,15 +47,18 @@ Several sample test systems have been implemented:
 1. Further stress testing of the system under various conditions
 2. Proper flow volume conversion for reservoir node water balance
 3. Implement node location characteristics (lat/lon)
-4. Each edge has a length computed from the connecting node coordinates.
-5. Each edge has a loss factor upon which flow losses depend
+4. Each edge has a length computed from the connecting node coordinates and thus has a length attribute
+5. Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
 6. Implement water level volume relationship for reservoir nodes
 7. Implement evaporative losses at reservoir nodes
-8. Implementing data import/export features to load supply and demand nodes data from csv sources.
-9. Implementing more complex node behaviors
-10. Incorporating optimization algorithms
-11. Developing a user interface
-12. Adding support for stochastic simulations
+8. Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.
+9. Same as 8., but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
+10. Same as 8. and 9. but for industrial water demand where you enter the total industrial water demand over time.
+11. Implementing data import/export features to load supply and demand nodes data from .csv sources.
+12. Implementing more complex node behaviors
+13. Incorporating optimization algorithms
+14. Developing a user interface
+15. Adding support for stochastic simulations
 
 ## Dependencies
 - NetworkX

@@ -56,6 +56,14 @@ class WaterSystem:
         self.graph.add_edge(edge.source.id, edge.target.id, edge=edge)
 
     def simulate(self, time_steps):
+        """
+        Run the water system simulation for a specified number of time steps.
+
+        Args:
+            time_steps (int): The number of time steps to simulate.
+
+        This method updates all nodes and edges in the system for each time step.
+        """
         self.time_steps = time_steps
         for t in range(time_steps):
             # Update nodes in order: SupplyNode, StorageNode, DemandNode, SinkNode
@@ -77,11 +85,11 @@ class WaterSystem:
         - Actual supply on supply nodes
         - Total inflow on sink nodes
         - Actual storage and capacity on storage nodes
-        - Diversion and confluence nodes as ocre circles
+        - Diversion and confluence nodes as orange circles
         
         Args:
-        filename (str): The name of the PNG file to save to.
-        display (bool): Whether to display the plot or not.
+            filename (str): The name of the PNG file to save to. Defaults to 'water_system_layout.png'.
+            display (bool): Whether to display the plot or not. Defaults to True.
         """
         pos = nx.spring_layout(self.graph, k=0.9, iterations=50)
         
@@ -176,17 +184,17 @@ class WaterSystem:
                 if isinstance(node, DemandNode):
                     balance = inflow - outflow - node.satisfied_demand[time_step]
                     print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
-                        f"Satisfied Demand = {node.satisfied_demand[time_step]:.2f}, "
-                        f"Balance = {balance:.2f}")
+                          f"Satisfied Demand = {node.satisfied_demand[time_step]:.2f}, "
+                          f"Balance = {balance:.2f}")
                 elif isinstance(node, StorageNode):
                     storage_change = node.storage[time_step + 1] - node.storage[time_step] if time_step + 1 < len(node.storage) else 0
                     balance = inflow - outflow - storage_change
                     print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
-                        f"Storage Change = {storage_change:.2f}, Balance = {balance:.2f}")
+                          f"Storage Change = {storage_change:.2f}, Balance = {balance:.2f}")
                 else:
                     balance = inflow - outflow
                     print(f"  {node_id}: Inflow = {inflow:.2f}, Outflow = {outflow:.2f}, "
-                        f"Balance = {balance:.2f}")
+                          f"Balance = {balance:.2f}")
                     
     def get_water_balance_table(self):
         """
@@ -194,8 +202,8 @@ class WaterSystem:
 
         Returns:
             pd.DataFrame: A pandas DataFrame containing the water balance data.
-                        Columns represent different aspects of each node's water balance.
-                        Rows represent time steps.
+                          Columns represent different aspects of each node's water balance.
+                          Rows represent time steps.
         """
         data = []
         node_columns = []

@@ -14,8 +14,7 @@ Classes:
     SinkNode: Represents a point where water exits the system.
     DemandNode: Represents a point of water demand (e.g., agricultural, domestic, or industrial use).
     StorageNode: Represents a water storage facility (e.g., a reservoir).
-    DiversionNode: Represents a point where water can be diverted from one path to another.
-    ConfluenceNode: Represents a point where multiple water flows combine.
+    HydroWorks: Represents a point where water can be redistributed, combining diversion and confluence functionality.
     Edge: Represents a connection between two nodes in the water system.
 
 Usage:
@@ -25,7 +24,7 @@ Usage:
     system = WaterSystem()
 
     # Add nodes and edges to the system
-    supply = SupplyNode("Supply1", supply_rate=10)
+    supply = SupplyNode("Supply1", default_supply_rate=10)
     storage = StorageNode("Reservoir1", capacity=1000)
     demand = DemandNode("Demand1", demand_rate=5)
 
@@ -49,5 +48,5 @@ from .edge import Edge
 __all__ = ['WaterSystem', 'Node', 'SupplyNode', 'SinkNode', 'DemandNode', 
            'StorageNode', 'HydroWorks', 'Edge']
 
-# You can also define the version of your package here
+# Package version
 __version__ = '0.2.0'
