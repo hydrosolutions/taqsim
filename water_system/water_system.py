@@ -8,6 +8,7 @@ and visualize the results.
 
 import networkx as nx
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import pandas as pd
 from .structure import SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode, SinkNode
 from .edge import Edge
@@ -76,29 +77,47 @@ class WaterSystem:
         - Actual supply on supply nodes
         - Total inflow on sink nodes
         - Actual storage and capacity on storage nodes
+        - Diversion and confluence nodes as ocre circles
         
         Args:
         filename (str): The name of the PNG file to save to.
+        display (bool): Whether to display the plot or not.
         """
         pos = nx.spring_layout(self.graph, k=0.9, iterations=50)
         
-        plt.figure(figsize=(10, 9))
+        plt.figure(figsize=(12, 10))
         plt.title('Water System Network Layout and Flows', fontsize=20)
         
         node_colors = {
             SupplyNode: 'skyblue',
             StorageNode: 'lightgreen',
             DemandNode: 'salmon',
-            SinkNode: 'lightgray'
+            SinkNode: 'lightgray',
+            DiversionNode: 'orange',
+            ConfluenceNode: 'gold'
         }
         
-        node_size = 5000
+        node_shapes = {
+            SupplyNode: 's',  # square
+            StorageNode: 's',  # square
+            DemandNode: 's',  # square
+            SinkNode: 's',  # square
+            DiversionNode: 'o',  # circle
+            ConfluenceNode: 'o'  # circle
+        }
         
-        for node_type, color in node_colors.items():
+        node_size = 3000
+        
+        for node_type in node_colors.keys():
             node_list = [node for node, data in self.graph.nodes(data=True) if isinstance(data['node'], node_type)]
-            nx.draw_networkx_nodes(self.graph, pos, nodelist=node_list, node_color=color, node_size=node_size, alpha=0.8)
+            nx.draw_networkx_nodes(self.graph, pos, 
+                                nodelist=node_list, 
+                                node_color=node_colors[node_type], 
+                                node_shape=node_shapes[node_type],
+                                node_size=node_size, 
+                                alpha=0.8)
         
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=75)
+        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=20)
         
         # Update node labels
         labels = {}
@@ -116,10 +135,16 @@ class WaterSystem:
             elif isinstance(node_instance, StorageNode):
                 actual_storage = node_instance.storage[-1] if node_instance.storage else 0
                 labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
+            elif isinstance(node_instance, DiversionNode):
+                total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
+                labels[node] = f"{node}\nDiversion Node\nInflow: {total_inflow:.1f}"
+            elif isinstance(node_instance, ConfluenceNode):
+                total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
+                labels[node] = f"{node}\nConfluence Node\nInflow: {total_inflow:.1f}"
             else:
                 labels[node] = f"{node}\n{node_instance.__class__.__name__}"
         
-        nx.draw_networkx_labels(self.graph, pos, labels, font_size=9)
+        nx.draw_networkx_labels(self.graph, pos, labels, font_size=8)
         
         # Update edge labels to show actual flow and capacity
         edge_labels = {}
@@ -129,7 +154,7 @@ class WaterSystem:
             capacity = edge.capacity
             edge_labels[(u, v)] = f'{actual_flow:.1f} ({capacity})'
         
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=14)
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=8)
         
         plt.axis('off')
         plt.tight_layout()
