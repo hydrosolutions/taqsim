@@ -9,7 +9,7 @@ and visualize the results.
 import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
-from .structure import SupplyNode, StorageNode, DemandNode, SinkNode
+from .structure import SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode, SinkNode
 from .edge import Edge
 
 class WaterSystem:
@@ -58,14 +58,14 @@ class WaterSystem:
         self.time_steps = time_steps
         for t in range(time_steps):
             # Update nodes in order: SupplyNode, StorageNode, DemandNode, SinkNode
-            for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode]:
+            for node_type in [SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode, SinkNode]:
                 for node_id, node_data in self.graph.nodes(data=True):
                     if isinstance(node_data['node'], node_type):
                         node_data['node'].update(t)
             
             # Update edges after all nodes have been updated
             for _, _, edge_data in self.graph.edges(data=True):
-                if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, DemandNode)):
+                if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, DiversionNode, ConfluenceNode, DemandNode)):
                     edge_data['edge'].update(t)
 
     def visualize(self, filename='water_system_layout.png', display=True):
