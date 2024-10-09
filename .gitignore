@@ -153,3 +153,4 @@ cython_debug/
 
 # Images
 .png
+*.png
