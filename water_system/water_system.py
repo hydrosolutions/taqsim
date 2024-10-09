@@ -68,50 +68,79 @@ class WaterSystem:
                 if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, DemandNode)):
                     edge_data['edge'].update(t)
 
-    def visualize(self):
+    def visualize(self, filename='water_system_layout.png', display=True):
         """
-        Visualize the water system using matplotlib.
-
-        This method creates a multipartite layout of the system, with nodes color-coded by type
-        and edges labeled with their final flow values. The SinkNode is positioned on the left side.
+        Create and save a network layout plot for the water system, showing:
+        - Actual flows and capacities on edges
+        - Demand satisfaction on demand nodes
+        - Actual supply on supply nodes
+        - Total inflow on sink nodes
+        - Actual storage and capacity on storage nodes
+        
+        Args:
+        filename (str): The name of the PNG file to save to.
         """
-        # Determine node layers for multipartite layout
-        layers = {'SinkNode': 0, 'DemandNode': 1, 'StorageNode': 2, 'SupplyNode': 3}
-        node_colors = {'SinkNode': 'lightgray', 'SupplyNode': 'skyblue', 'StorageNode': 'lightgreen', 'DemandNode': 'lightcoral'}
+        pos = nx.spring_layout(self.graph, k=0.9, iterations=50)
         
-        # Assign positions and colors
-        pos = {}
-        colors = []
-        for node_id, node_data in self.graph.nodes(data=True):
-            node_type = node_data['node_type']
-            if node_type not in layers:
-                layers[node_type] = 0  # Default to middle layer for unknown types
-            layer = layers[node_type]
-            pos[node_id] = (layer, len([n for n in pos if pos[n][0] == layer]))
-            colors.append(node_colors.get(node_type, 'lightgray'))
-
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(10, 9))
+        plt.title('Water System Network Layout and Flows', fontsize=20)
         
-        # Draw nodes
-        nx.draw_networkx_nodes(self.graph, pos, node_color=colors, node_size=500)
+        node_colors = {
+            SupplyNode: 'skyblue',
+            StorageNode: 'lightgreen',
+            DemandNode: 'salmon',
+            SinkNode: 'lightgray'
+        }
         
-        # Draw edges
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True)
+        node_size = 5000
         
-        # Draw labels
-        nx.draw_networkx_labels(self.graph, pos, font_size=10)
-
-        # Draw edge labels (flow values)
+        for node_type, color in node_colors.items():
+            node_list = [node for node, data in self.graph.nodes(data=True) if isinstance(data['node'], node_type)]
+            nx.draw_networkx_nodes(self.graph, pos, nodelist=node_list, node_color=color, node_size=node_size, alpha=0.8)
+        
+        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=75)
+        
+        # Update node labels
+        labels = {}
+        for node, data in self.graph.nodes(data=True):
+            node_instance = data['node']
+            if isinstance(node_instance, SupplyNode):
+                actual_supply = node_instance.supply_history[-1] if node_instance.supply_history else 0
+                labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
+            elif isinstance(node_instance, DemandNode):
+                satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
+                labels[node] = f"{node}\nDemand Node\n{satisfied_demand:.1f} ({node_instance.demand_rate})"
+            elif isinstance(node_instance, SinkNode):
+                total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
+                labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
+            elif isinstance(node_instance, StorageNode):
+                actual_storage = node_instance.storage[-1] if node_instance.storage else 0
+                labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
+            else:
+                labels[node] = f"{node}\n{node_instance.__class__.__name__}"
+        
+        nx.draw_networkx_labels(self.graph, pos, labels, font_size=9)
+        
+        # Update edge labels to show actual flow and capacity
         edge_labels = {}
-        for (u, v, data) in self.graph.edges(data=True):
-            if data['edge'].flow:
-                edge_labels[(u, v)] = f"{data['edge'].flow[-1]:.2f}"
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=8)
-
-        plt.title(f"Water System - Time Step: {self.time_steps}")
+        for u, v, d in self.graph.edges(data=True):
+            edge = d['edge']
+            actual_flow = edge.flow[-1] if edge.flow else 0
+            capacity = edge.capacity
+            edge_labels[(u, v)] = f'{actual_flow:.1f} ({capacity})'
+        
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=14)
+        
         plt.axis('off')
         plt.tight_layout()
-        plt.show()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"Network layout plot saved to {filename}")
+
+        # Display the plot if requested
+        if display:
+            plt.show()
+        else:
+            plt.close()
     
     def print_water_balances(self):
         """

@@ -246,7 +246,8 @@ def run_sample_tests():
     num_time_steps = 12
     super_simple_system.simulate(num_time_steps)
     save_water_balance_to_csv(super_simple_system, "super_simple_system_balance.csv")
-    plot_water_system(super_simple_system, "super_simple_system_plot.png")
+    super_simple_system.visualize()
+    #plot_water_system(super_simple_system, "super_simple_system_plot.png")
     plot_network_layout(super_simple_system, "super_simple_system_network.png")    
 
     # Test simple system
