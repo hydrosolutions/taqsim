@@ -2,7 +2,7 @@ import csv
 import networkx as nx 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, Edge
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, DiversionNode, ConfluenceNode, Edge
 
 def create_most_simple_system():
     """
@@ -20,6 +20,35 @@ def create_most_simple_system():
 
     system.add_edge(Edge(supply, agriculture, capacity=100))
     system.add_edge(Edge(agriculture,outflow,capacity=50))
+
+    return system
+
+def create_diversion_node_system():
+    """
+    Creates the most simple system with one supply, one diversion, one confluence, and one sink node
+    """
+    system = WaterSystem()
+
+    supply = SupplyNode("Inflow", default_supply_rate=100)
+    diversion1 = DiversionNode("Diversion1")
+    diversion2 = DiversionNode("Diversion2")
+    diversion3 = DiversionNode("Diversion3")
+    confluence = ConfluenceNode("Confluence")
+    outflow = SinkNode("Outflow")
+
+    system.add_node(supply)
+    system.add_node(diversion1)
+    system.add_node(diversion2)
+    system.add_node(diversion3)
+    system.add_node(confluence)
+    system.add_node(outflow)
+
+    system.add_edge(Edge(supply, diversion1, capacity=100))
+    system.add_edge(Edge(diversion1, diversion2, capacity=50))
+    system.add_edge(Edge(diversion2, confluence, capacity=50))
+    system.add_edge(Edge(diversion1, diversion3, capacity=50))
+    system.add_edge(Edge(diversion3, confluence, capacity=50))
+    system.add_edge(Edge(confluence, outflow, capacity=100))
 
     return system
 
@@ -171,72 +200,6 @@ def plot_water_system(water_system, filename):
     plt.savefig(filename, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Water system plot saved to {filename}")
-    
-def plot_network_layout(water_system, filename):
-    """
-    Create and save a network layout plot for the water system, showing actual flows and capacities on edges,
-    and demand satisfaction on demand nodes.
-    
-    Args:
-    water_system (WaterSystem): The water system to plot.
-    filename (str): The name of the PNG file to save to.
-    """
-    G = water_system.graph
-    pos = nx.spring_layout(G, k=0.9, iterations=50)
-    
-    plt.figure(figsize=(10, 9))  # Further increased figure size
-    plt.title('Water System Network Layout', fontsize=20)
-    
-    node_colors = {
-        SupplyNode: 'skyblue',
-        StorageNode: 'lightgreen',
-        DemandNode: 'salmon',
-        SinkNode: 'lightgray'
-    }
-    
-    for node_type, color in node_colors.items():
-        node_list = [node for node, data in G.nodes(data=True) if isinstance(data['node'], node_type)]
-        nx.draw_networkx_nodes(G, pos, nodelist=node_list, node_color=color, node_size=5000, alpha=0.8)  # Increased node size
-    
-    nx.draw_networkx_edges(G, pos, edge_color='gray', arrows=True, arrowsize=75)
-    
-    # Update node labels
-    labels = {}
-    for node, data in G.nodes(data=True):
-        node_instance = data['node']
-        if isinstance(node_instance, SupplyNode):
-            actual_supply = node_instance.supply_history[-1] if node_instance.supply_history else 0
-            labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
-        elif isinstance(node_instance, DemandNode):
-            satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
-            labels[node] = f"{node}\nDemand Node\n{satisfied_demand:.1f} ({node_instance.demand_rate})"
-        elif isinstance(node_instance, SinkNode):
-            total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
-            labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
-        elif isinstance(node_instance, StorageNode):
-            actual_storage = node_instance.storage[-1] if node_instance.storage else 0
-            labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
-        else:
-            labels[node] = f"{node}\n{node_instance.__class__.__name__}"
-    
-    
-    nx.draw_networkx_labels(G, pos, labels, font_size=9)  # Slightly reduced font size to fit more text
-    
-    # Update edge labels to show actual flow and capacity
-    edge_labels = {}
-    for u, v, d in G.edges(data=True):
-        edge = d['edge']
-        actual_flow = edge.flow[-1] if edge.flow else 0  # Get the last flow value
-        capacity = edge.capacity
-        edge_labels[(u, v)] = f'{actual_flow:.1f} ({capacity})'
-    
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=14)
-    
-    plt.axis('off')
-    plt.tight_layout()
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Network layout plot saved to {filename}")
 
 def run_sample_tests():
     
@@ -246,9 +209,7 @@ def run_sample_tests():
     num_time_steps = 12
     super_simple_system.simulate(num_time_steps)
     save_water_balance_to_csv(super_simple_system, "super_simple_system_balance.csv")
-    super_simple_system.visualize()
-    #plot_water_system(super_simple_system, "super_simple_system_plot.png")
-    plot_network_layout(super_simple_system, "super_simple_system_network.png")    
+    super_simple_system.visualize(display=False)
 
     # Test simple system
     simple_system = create_simple_system()
@@ -256,8 +217,7 @@ def run_sample_tests():
     num_time_steps = 12
     simple_system.simulate(num_time_steps)
     save_water_balance_to_csv(simple_system, "simple_system_balance.csv")
-    plot_water_system(simple_system, "simple_system_plot.png")
-    plot_network_layout(simple_system, "simple_system_network.png")
+    simple_system.visualize(display=False)
 
     print("\n" + "="*50 + "\n")
 
@@ -267,9 +227,7 @@ def run_sample_tests():
     num_time_steps = 36
     complex_system.simulate(num_time_steps)
     save_water_balance_to_csv(complex_system, "complex_system_balance.csv")
-    plot_water_system(complex_system, "complex_system_plot.png")
-    plot_network_layout(complex_system, "complex_system_network.png")
-
+    complex_system.visualize(display=False)
 
     print("\n" + "="*50 + "\n")
 
@@ -279,8 +237,15 @@ def run_sample_tests():
     num_time_steps = 120
     drought_system.simulate(num_time_steps)
     save_water_balance_to_csv(drought_system, "drought_system_balance.csv")
-    plot_water_system(drought_system, "drought_system_plot.png")
-    plot_network_layout(drought_system, "drought_system_network.png")
+    drought_system.visualize(display=False)
+
+    # Test Diversion node system
+    diversion_system = create_diversion_node_system()
+    print("Diversion Node System Test:")
+    num_time_steps = 12
+    diversion_system.simulate(num_time_steps)
+    save_water_balance_to_csv(diversion_system, "diversion_system_balance.csv")
+    diversion_system.visualize("diversion_system_network.png", display=False)
 
 
 # Run the sample tests
