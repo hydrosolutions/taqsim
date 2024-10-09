@@ -10,10 +10,11 @@ This Python package simulates and optimizes water flow in a network system. It u
    - `StorageNode`: Represents reservoirs or storage facilities
    - `DemandNode`: Represents points of water consumption
    - `SinkNode`: Represents endpoints where water exits the system
+   - `HydroWorks`: Represents diversion or confluence points in the canal/river system
 3. `Edge` class: Represents connections between nodes
 
 ## Key Features
-- Simulation of water flow over multiple time steps
+- Simulation of variable water flow over multiple time steps
 - Water balance calculations for each node
 - CSV output of simulation results
 - Comprehensive visualization of the water system
@@ -26,12 +27,15 @@ This Python package simulates and optimizes water flow in a network system. It u
    - Total inflow on sink nodes
    - Actual storage and capacity on storage nodes
 2. Flexible Display Options: The `visualize()` method can both save the plot to disk and display it on-screen, making it suitable for use in Jupyter notebooks and scripts.
+3. DiversionNode and ConfluenceNode were combined into a single HydroWorks class for simplification and flexibility.
 
 ## Sample Test Systems
-Three sample test systems have been implemented:
-1. Simple System: Basic setup with one supply, one storage, two demands, and one sink.
-2. Complex System: More intricate network with multiple supplies, storages, and demands.
-3. Drought System: System with variable supply to simulate alternating normal and drought conditions.
+Several sample test systems have been implemented:
+1. Most Simple System: Most simple system with one supply, one demand, and one sink node 
+2. System with Hydroworks: System with one supply, three HydroWorks nodes, and one sink node
+3. Simple System: Basic setup with one supply, one storage, two demands, and one sink.
+4. Complex System: More intricate network with multiple supplies, storages, and demands.
+5. Drought System: System with variable supply to simulate alternating normal and drought conditions.
 
 ## Current Functionality
 - Creation of water system networks with various node types
@@ -41,12 +45,17 @@ Three sample test systems have been implemented:
 
 ## Next Steps
 1. Further stress testing of the system under various conditions
-2. Implementing more complex node behaviors
-3. Adding water quality modeling
-4. Incorporating optimization algorithms
-5. Developing a user interface
-6. Implementing data import/export features
-7. Adding support for stochastic simulations
+2. Proper flow volume conversion for reservoir node water balance
+3. Implement node location characteristics (lat/lon)
+4. Each edge has a length computed from the connecting node coordinates.
+5. Each edge has a loss factor upon which flow losses depend
+6. Implement water level volume relationship for reservoir nodes
+7. Implement evaporative losses at reservoir nodes
+8. Implementing data import/export features to load supply and demand nodes data from csv sources.
+9. Implementing more complex node behaviors
+10. Incorporating optimization algorithms
+11. Developing a user interface
+12. Adding support for stochastic simulations
 
 ## Dependencies
 - NetworkX
