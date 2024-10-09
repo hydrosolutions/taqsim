@@ -210,7 +210,7 @@ def run_sample_tests():
     num_time_steps = 12
     super_simple_system.simulate(num_time_steps)
     save_water_balance_to_csv(super_simple_system, "super_simple_system_balance.csv")
-    super_simple_system.visualize(display=False)
+    super_simple_system.visualize("super_simple_system.png", display=False)
 
     # Test simple system
     simple_system = create_simple_system()
@@ -218,7 +218,7 @@ def run_sample_tests():
     num_time_steps = 12
     simple_system.simulate(num_time_steps)
     save_water_balance_to_csv(simple_system, "simple_system_balance.csv")
-    simple_system.visualize(display=False)
+    simple_system.visualize("simple_system.png", display=False)
 
     print("\n" + "="*50 + "\n")
 
@@ -228,7 +228,7 @@ def run_sample_tests():
     num_time_steps = 36
     complex_system.simulate(num_time_steps)
     save_water_balance_to_csv(complex_system, "complex_system_balance.csv")
-    complex_system.visualize(display=False)
+    complex_system.visualize("complex_system.png", display=False)
 
     print("\n" + "="*50 + "\n")
 
@@ -238,7 +238,7 @@ def run_sample_tests():
     num_time_steps = 120
     drought_system.simulate(num_time_steps)
     save_water_balance_to_csv(drought_system, "drought_system_balance.csv")
-    drought_system.visualize(display=False)
+    drought_system.visualize("drought_system.png", display=False)
 
     # Test HydroWorks system
     hydroworks_system = create_hydroworks_system()
