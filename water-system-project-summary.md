@@ -44,22 +44,23 @@ Several sample test systems have been implemented:
 - Water balance calculations and CSV output
 
 ## Next Steps
-1. Further stress testing of the system under various conditions
-2. Implement proper time series visualization of key system flows and volumes
-3. Proper flow to volume and volume to flow conversion for reservoir node water balance
-4. Implement node location characteristics (lat/lon)
-5. Each edge has a length computed from the connecting node coordinates and thus has a length attribute
-6. Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
-7. Implement water level volume relationship for reservoir nodes
-8. Implement evaporative losses at reservoir nodes
-9. Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.
-10. Same as 8., but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
-11. Same as 8. and 9. but for industrial water demand where you enter the total industrial water demand over time.
-12. Implementing data import/export features to load supply and demand nodes data from .csv sources.
-13. Implementing more complex node behaviors
-14. Incorporating optimization algorithms
-15. Developing a user interface
-16. Adding support for stochastic simulations
+- [ ] Further stress testing of the system under various conditions
+- [ ] Implement proper time series visualization of key system flows and volumes over time
+- [ ] Improve network plotting to better represent the system layout
+- [ ] Proper flow to volume and volume to flow conversion for reservoir node water balance 
+- [ ] Implement node location characteristics (easting, northing) for each node
+- [ ] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
+- [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
+- [ ] Implement water level volume relationship for reservoir nodes
+- [ ] Implement evaporative losses at reservoir nodes
+- [ ] Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.
+- [ ] Same as 8., but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
+- [ ] Same as 8. and 9. but for industrial water demand where you enter the total industrial water demand over time.
+- [ ] Implementing data import/export features to load supply and demand nodes data from .csv sources.
+- [ ] Implementing more complex node behaviors
+- [ ] Incorporating optimization algorithms
+- [ ] Developing a user interface (GUI)
+- [ ] Adding support for stochastic simulations
 
 ## Dependencies
 - NetworkX

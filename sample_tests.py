@@ -33,7 +33,6 @@ def create_hydroworks_system():
     hydroworks1 = HydroWorks("HydroWorks1")
     hydroworks2 = HydroWorks("HydroWorks2")
     demandsite = DemandNode("Agriculture", demand_rate=60)
-    #hydroworks3 = HydroWorks("HydroWorks3")
     hydroworks4 = HydroWorks("HydroWorks4")
     outflow = SinkNode("Outflow")
 
@@ -41,7 +40,6 @@ def create_hydroworks_system():
     system.add_node(hydroworks1)
     system.add_node(hydroworks2)
     system.add_node(demandsite)
-    #system.add_node(hydroworks3)
     system.add_node(hydroworks4)
     system.add_node(outflow)
 

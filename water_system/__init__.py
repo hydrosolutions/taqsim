@@ -15,7 +15,7 @@ Classes:
     DemandNode: Represents a point of water demand (e.g., agricultural, domestic, or industrial use).
     StorageNode: Represents a water storage facility (e.g., a reservoir).
     HydroWorks: Represents a point where water can be redistributed, combining diversion and confluence functionality.
-    Edge: Represents a connection between two nodes in the water system.
+    Edge: Represents a connection between two nodes in the water system. This can either represent a river or a canal.
 
 Usage:
     from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, Edge
