@@ -194,46 +194,55 @@ def save_water_balance_to_csv(water_system, filename):
     balance_table.to_csv(filename, index=False)
     print(f"Water balance table saved to {filename}")
 
-def plot_water_system(water_system, filename):
+def plot_water_system(water_system, filename, columns_to_plot=None):
     """
-    Create and save a single plot for the entire water system.
+    Create and save a single plot for the entire water system with dual y-axes.
     
     Args:
     water_system (WaterSystem): The water system to plot.
     filename (str): The name of the PNG file to save to.
+    columns_to_plot (list): Optional list of column names to plot. If None, all columns are plotted.
     """
     balance_table = water_system.get_water_balance_table()
     
-    plt.figure(figsize=(12, 8))
+    if columns_to_plot is None:
+        columns_to_plot = [col for col in balance_table.columns if col != 'TimeStep']
+    
+    fig, ax1 = plt.subplots(figsize=(12, 8))
+    ax2 = ax1.twinx()  # Create a second y-axis
+    
     plt.title('Water System Simulation Results')
     
     colors = list(mcolors.TABLEAU_COLORS.values())  # Use predefined Tableau colors
     line_styles = ['-', '--', ':', '-.']
     
-    for i, (node_id, node_data) in enumerate(water_system.graph.nodes(data=True)):
-        node = node_data['node']
-        color = colors[i % len(colors)]
+    color_index = 0
+    for column in columns_to_plot:
+        if column == 'TimeStep':
+            continue
         
-        plt.plot(balance_table['TimeStep'], balance_table[f'{node_id}_Inflow'], 
-                 color=color, linestyle=line_styles[0], label=f'{node_id} Inflow')
-        plt.plot(balance_table['TimeStep'], balance_table[f'{node_id}_Outflow'], 
-                 color=color, linestyle=line_styles[1], label=f'{node_id} Outflow')
+        color = colors[color_index % len(colors)]
+        line_style = line_styles[color_index % len(line_styles)]
+        color_index += 1
         
-        if isinstance(node, StorageNode):
-            plt.plot(balance_table['TimeStep'], balance_table[f'{node_id}_Storage'], 
-                     color=color, linestyle=line_styles[2], label=f'{node_id} Storage')
-        elif isinstance(node, DemandNode):
-            plt.plot(balance_table['TimeStep'], balance_table[f'{node_id}_SatisfiedDemand'], 
-                     color=color, linestyle=line_styles[2], label=f'{node_id} Satisfied Demand')
-            plt.axhline(y=node.demand_rate, color=color, linestyle=line_styles[3], 
-                        label=f'{node_id} Demand')
-        elif isinstance(node, SupplyNode):
-            plt.plot(balance_table['TimeStep'], balance_table[f'{node_id}_SupplyRate'], 
-                     color=color, linestyle=line_styles[2], label=f'{node_id} Supply Rate')
+        if 'Storage' in column:
+            # Plot storage volume on the right y-axis
+            ax2.plot(balance_table['TimeStep'], balance_table[column], 
+                     color=color, linestyle=line_style, label=column)
+        else:
+            # Plot other columns on the left y-axis
+            ax1.plot(balance_table['TimeStep'], balance_table[column], 
+                     color=color, linestyle=line_style, label=column)
     
-    plt.xlabel('Time Step')
-    plt.ylabel('Water Units')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax1.set_xlabel('Time Step')
+    ax1.set_ylabel('Flow Rate (m³/s)')
+    ax2.set_ylabel('Volume (m³)')
+    
+    # Combine legends from both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, bbox_to_anchor=(1.05, 1), loc='upper left')
+    
     plt.tight_layout()
     plt.savefig(filename, dpi=300, bbox_inches='tight')
     plt.close()
@@ -288,6 +297,7 @@ def run_sample_tests():
     print("Super simple system test:")
     num_time_steps = 12
     super_simple_system.simulate(num_time_steps)
+    plot_water_system(super_simple_system, "super_simple_time_series_plot.png")
     save_water_balance_to_csv(super_simple_system, "super_simple_system_balance.csv")
     super_simple_system.visualize("super_simple_system.png", display=False)
 
@@ -334,16 +344,16 @@ def run_sample_tests():
     print("\n" + "="*50 + "\n")
 
     # Test seasonal reservoir
-    system = create_seasonal_reservoir_system()
-    num_time_steps = 12 * 10  # 10 years of monthly data
+    seasonal_system = create_seasonal_reservoir_system()
+    num_time_steps = 12 * 2  # 2 years of monthly data
     
     print("Running Seasonal Reservoir Test")
     
-    system.simulate(num_time_steps)
+    seasonal_system.simulate(num_time_steps)
     
      # Extract and print results
-    reservoir_node = next(data['node'] for _, data in system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))
-    demand_node = next(data['node'] for _, data in system.graph.nodes(data=True) if isinstance(data['node'], DemandNode))
+    reservoir_node = next(data['node'] for _, data in seasonal_system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))
+    demand_node = next(data['node'] for _, data in seasonal_system.graph.nodes(data=True) if isinstance(data['node'], DemandNode))
     
     print("\nReservoir Storage Levels (every 12 months):")
     for year in range(10):
@@ -360,12 +370,20 @@ def run_sample_tests():
         print(f"Year {year + 1}: {satisfaction_rate:.2f}% ({satisfied:.2f} / {total_demand:.2f} m³/s)")
     
     # Generate water balance table
-    balance_table = system.get_water_balance_table()
+    balance_table = seasonal_system.get_water_balance_table()
     balance_table.to_csv("seasonal_reservoir_test_balance.csv", index=False)
     print("\nWater balance table saved to 'seasonal_reservoir_test_balance.csv'")
     
     # Visualize the system
-    system.visualize("seasonal_reservoir_test_layout.png", display=False)
+    columns_to_plot = [
+        "LargeReservoir_Inflow",
+        "LargeReservoir_Outflow",
+        "LargeReservoir_Storage",
+        "SeasonalDemand_Demand",
+        "SeasonalDemand_SatisfiedDemand"
+    ]
+    plot_water_system(seasonal_system, "seasonal_reservoir_test_time_series.png", columns_to_plot)
+    seasonal_system.visualize("seasonal_reservoir_test_layout.png", display=False)
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
 
 

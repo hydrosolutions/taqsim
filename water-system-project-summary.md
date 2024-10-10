@@ -69,6 +69,7 @@ Several sample test systems have been implemented:
 - [ ] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
 
 ### Water demand
+- [ ] Time variable demand and supply. Now testing.
 - [ ] Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.
 - [ ] Same as before, but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
 - [ ] Same as before, but for industrial water demand where you enter the total industrial water demand over time.
