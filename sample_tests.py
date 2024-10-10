@@ -33,21 +33,24 @@ def create_hydroworks_system():
     dt = 30.44 * 24 * 3600 # Average month in seconds
     system = WaterSystem(dt)
 
-    supply = SupplyNode("Inflow", default_supply_rate=100)
+    supplyA = SupplyNode("River A", default_supply_rate=100)
+    supplyB = SupplyNode("River B", default_supply_rate=50)
     hydroworks1 = HydroWorks("HydroWorks1")
     hydroworks2 = HydroWorks("HydroWorks2")
-    demandsite = DemandNode("Agriculture", demand_rates=60)
+    demandsite = DemandNode("Agriculture", demand_rates=40)
     hydroworks4 = HydroWorks("HydroWorks4")
     outflow = SinkNode("Outflow")
 
-    system.add_node(supply)
+    system.add_node(supplyA)
+    system.add_node(supplyB)
     system.add_node(hydroworks1)
     system.add_node(hydroworks2)
     system.add_node(demandsite)
     system.add_node(hydroworks4)
     system.add_node(outflow)
 
-    system.add_edge(Edge(supply, hydroworks1, capacity=100))
+    system.add_edge(Edge(supplyA, hydroworks1, capacity=100))
+    system.add_edge(Edge(supplyB, hydroworks1, capacity=100))
     system.add_edge(Edge(hydroworks1, hydroworks2, capacity=50))
     system.add_edge(Edge(hydroworks2, hydroworks4, capacity=50))
     system.add_edge(Edge(hydroworks1, demandsite, capacity=50))
