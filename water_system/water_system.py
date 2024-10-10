@@ -22,12 +22,16 @@ class WaterSystem:
         time_steps (int): The number of time steps in the most recent simulation.
     """
 
-    def __init__(self):
+    def __init__(self, dt=2629800):  # Default to average month in seconds (365.25 days / 12 months * 24 hours * 3600 seconds)
         """
         Initialize a new WaterSystem instance.
+
+        Args:
+            dt (float): The length of each time step in seconds. Defaults to one month.
         """
         self.graph = nx.DiGraph()
         self.time_steps = 0
+        self.dt = dt
 
     def add_node(self, node):
         """
@@ -70,7 +74,7 @@ class WaterSystem:
             for node_type in [SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode]:
                 for node_id, node_data in self.graph.nodes(data=True):
                     if isinstance(node_data['node'], node_type):
-                        node_data['node'].update(t)
+                        node_data['node'].update(t, self.dt)
             
             # Update edges after all nodes have been updated
             for _, _, edge_data in self.graph.edges(data=True):
@@ -134,7 +138,8 @@ class WaterSystem:
                 labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
             elif isinstance(node_instance, DemandNode):
                 satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
-                labels[node] = f"{node}\nDemand Node\n{satisfied_demand:.1f} ({node_instance.demand_rate})"
+                current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
+                labels[node] = f"{node}\nDemand Node\n{satisfied_demand:.1f} ({current_demand:.1f})"
             elif isinstance(node_instance, SinkNode):
                 total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
                 labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
@@ -252,9 +257,10 @@ class WaterSystem:
                     storage_change = node.storage[time_step] - node.storage[time_step - 1] if time_step > 0 else node.storage[0]
                     data[time_step][f"{node_id}_StorageChange"] = storage_change
                 elif isinstance(node, DemandNode):
-                    data[time_step][f"{node_id}_Demand"] = node.demand_rate
+                    data[time_step][f"{node_id}_Demand"] = node.get_demand_rate(time_step)
                     data[time_step][f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
-                    data[time_step][f"{node_id}_Deficit"] = node.demand_rate - node.satisfied_demand[time_step]
+                    data[time_step][f"{node_id}_Deficit"] = node.get_demand_rate(time_step) - node.satisfied_demand[time_step]
+
                 # No additional data needed for SinkNode
 
         # Create a DataFrame from the collected data

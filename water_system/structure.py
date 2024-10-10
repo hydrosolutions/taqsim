@@ -45,7 +45,7 @@ class Node:
         """
         self.outflows[edge.target.id] = edge
 
-    def update(self, time_step):
+    def update(self, time_step, dt):
         """
         Update the node's state for the given time step.
 
@@ -54,6 +54,7 @@ class Node:
 
         Args:
             time_step (int): The current time step of the simulation.
+            dt (float): Number of seconds in time step.
         """
         pass
 
@@ -95,7 +96,7 @@ class SupplyNode(Node):
             return self.supply_rates[time_step]
         return self.default_supply_rate
 
-    def update(self, time_step):
+    def update(self, time_step, dt):
         """
         Update the SupplyNode's state for the given time step.
 
@@ -103,11 +104,11 @@ class SupplyNode(Node):
 
         Args:
             time_step (int): The current time step of the simulation.
+            dt (float): The duration of the time step in seconds.
         """
         current_supply_rate = self.get_supply_rate(time_step)
         self.supply_history.append(current_supply_rate)
 
-        # Distribute supply among outflow edges
         total_capacity = sum(edge.capacity for edge in self.outflows.values())
         if total_capacity > 0:
             for edge in self.outflows.values():
@@ -122,7 +123,7 @@ class SinkNode(Node):
     Represents a point where water exits the system.
     """
 
-    def update(self, time_step):
+    def update(self, time_step, dt):
         """
         Update the SinkNode's state for the given time step.
 
@@ -131,6 +132,8 @@ class SinkNode(Node):
 
         Args:
             time_step (int): The current time step of the simulation.
+            dt (float): The duration of the time step in seconds.
+
         """
         total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         # Sink nodes remove all incoming water from the system
@@ -140,25 +143,40 @@ class DemandNode(Node):
     Represents a point of water demand in the system.
 
     Attributes:
-        demand_rate (float): The constant demand rate for this node.
+        demand_rates (list): A list of demand rates for each time step.
         satisfied_demand (list): A record of satisfied demand for each time step.
         excess_flow (list): A record of excess flow for each time step.
     """
 
-    def __init__(self, id, demand_rate):
+    def __init__(self, id, demand_rates):
         """
         Initialize a DemandNode object.
 
         Args:
             id (str): A unique identifier for the node.
-            demand_rate (float): The constant demand rate for this node.
+            demand_rates (list or float): Either a list of demand rates for each time step,
+                                          or a constant demand rate.
         """
         super().__init__(id)
-        self.demand_rate = demand_rate
+        self.demand_rates = demand_rates if isinstance(demand_rates, list) else [demand_rates]
         self.satisfied_demand = []
         self.excess_flow = []
 
-    def update(self, time_step):
+    def get_demand_rate(self, time_step):
+        """
+        Get the demand rate for a specific time step.
+
+        Args:
+            time_step (int): The time step for which to retrieve the demand rate.
+
+        Returns:
+            float: The demand rate for the specified time step, or the last known rate if out of range.
+        """
+        if time_step < len(self.demand_rates):
+            return self.demand_rates[time_step]
+        return self.demand_rates[-1]
+
+    def update(self, time_step, dt):
         """
         Update the DemandNode's state for the given time step.
 
@@ -167,15 +185,16 @@ class DemandNode(Node):
 
         Args:
             time_step (int): The current time step of the simulation.
+            dt (float): The duration of the time step in seconds.
         """
         total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
-        satisfied = min(total_inflow, self.demand_rate)
-        excess = max(0, total_inflow - self.demand_rate)
+        current_demand = self.get_demand_rate(time_step)
+        satisfied = min(total_inflow, current_demand)
+        excess = max(0, total_inflow - current_demand)
         
         self.satisfied_demand.append(satisfied)
         self.excess_flow.append(excess)
 
-        # Distribute excess water to outflow edges
         total_outflow_capacity = sum(edge.capacity for edge in self.outflows.values())
         if total_outflow_capacity > 0:
             for edge in self.outflows.values():
@@ -204,8 +223,8 @@ class StorageNode(Node):
     Represents a water storage facility in the system.
 
     Attributes:
-        capacity (float): The maximum storage capacity of the node.
-        storage (list): A record of storage levels for each time step.
+        capacity (float): The maximum storage capacity of the node in cubic meters.
+        storage (list): A record of storage levels for each time step in cubic meters.
     """
 
     def __init__(self, id, capacity, initial_storage=0):
@@ -214,14 +233,14 @@ class StorageNode(Node):
 
         Args:
             id (str): A unique identifier for the node.
-            capacity (float): The maximum storage capacity of the node.
-            initial_storage (float, optional): The initial storage level. Defaults to 0.
+            capacity (float): The maximum storage capacity of the node in cubic meters.
+            initial_storage (float, optional): The initial storage level in cubic meters. Defaults to 0.
         """
         super().__init__(id)
         self.capacity = capacity
         self.storage = [initial_storage]
 
-    def update(self, time_step):
+    def update(self, time_step, dt):
         """
         Update the StorageNode's state for the given time step.
 
@@ -230,28 +249,36 @@ class StorageNode(Node):
 
         Args:
             time_step (int): The current time step of the simulation.
+            dt (float): The length of the time step in seconds.
         """
         inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         previous_storage = self.storage[-1]
-        available_water = previous_storage + inflow
+        
+        # Convert flow rates (m³/s) to volumes (m³) for the time step
+        inflow_volume = inflow * dt
+        available_water = previous_storage + inflow_volume
         
         # Calculate total requested outflow
         requested_outflow = sum(edge.capacity for edge in self.outflows.values())
         
+        # Convert requested outflow to volume
+        requested_outflow_volume = requested_outflow * dt
+        
         # Limit actual outflow to available water
-        actual_outflow = min(available_water, requested_outflow)
+        actual_outflow_volume = min(available_water, requested_outflow_volume)
         
         # Distribute actual outflow among edges proportionally
-        if requested_outflow > 0:
+        if requested_outflow_volume > 0:
             for edge in self.outflows.values():
-                edge_flow = (edge.capacity / requested_outflow) * actual_outflow
-                edge.update(time_step, edge_flow)
+                edge_flow_volume = (edge.capacity / requested_outflow) * actual_outflow_volume
+                edge_flow_rate = edge_flow_volume / dt
+                edge.update(time_step, edge_flow_rate)
         else:
             for edge in self.outflows.values():
                 edge.update(time_step, 0)
         
         # Calculate new storage
-        new_storage = available_water - actual_outflow
+        new_storage = available_water - actual_outflow_volume
         self.storage.append(min(new_storage, self.capacity))
 
     def get_storage(self, time_step):
@@ -262,7 +289,7 @@ class StorageNode(Node):
             time_step (int): The time step for which to retrieve the storage level.
 
         Returns:
-            float: The storage level for the specified time step, or the last known storage level if out of range.
+            float: The storage level in cubic meters for the specified time step, or the last known storage level if out of range.
         """
         if time_step < len(self.storage):
             return self.storage[time_step]
@@ -274,7 +301,7 @@ class HydroWorks(Node):
     of diversion and confluence points.
     """
 
-    def update(self, time_step):
+    def update(self, time_step, dt):
         """
         Update the HydroWorks node's state for the given time step.
 
@@ -283,6 +310,7 @@ class HydroWorks(Node):
 
         Args:
             time_step (int): The current time step of the simulation.
+            dt (float): The duration of the time step in seconds.
         """
         total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
         total_outflow_capacity = sum(edge.capacity for edge in self.outflows.values())

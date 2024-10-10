@@ -1,17 +1,17 @@
 # Water System Simulation Project Summary
 
 ## Project Overview
-This Python package simulates and optimizes water flow in a network system. It uses NetworkX for graph representation and matplotlib for visualization.
+The project is a Python-based water system simulation that models the flow of water through various types of nodes (supply, storage, demand, sink, and hydroworks) connected by edges. The system supports time-step based simulations with the ability to handle variable time steps, typically set to monthly intervals.
 
 ## Key Components
-1. `WaterSystem` class: Manages the overall water system simulation.
+1. `WaterSystem` class: The main class that represents the entire water system. It manages the simulation, visualization, and data analysis.
 2. Node classes:
-   - `SupplyNode`: Represents water sources
-   - `StorageNode`: Represents reservoirs or storage facilities
-   - `DemandNode`: Represents points of water consumption
+   - `SupplyNode`: Represents water sources with variable supply rates
+   - `StorageNode`: Represents reservoirs or storage facilities with a defined capacity
+   - `DemandNode`: Represents points of water consumption with variable demand rates
    - `SinkNode`: Represents endpoints where water exits the system
-   - `HydroWorks`: Represents diversion or confluence points in the canal/river system
-3. `Edge` class: Represents connections between nodes
+   - `HydroWorks`: Represents points where water can be redistributed (combining diversion and confluence functionality)
+3. `Edge` class: Represents connections between nodes, with defined capacities.
 
 ## Key Features
 - Simulation of variable water flow over multiple time steps
@@ -20,14 +20,11 @@ This Python package simulates and optimizes water flow in a network system. It u
 - Comprehensive visualization of the water system
 
 ## Recent Enhancements
-1. Improved Visualization: The `visualize()` method in the `WaterSystem` class now provides a detailed network layout plot showing:
-   - Actual flows and capacities on edges
-   - Demand satisfaction on demand nodes
-   - Actual supply on supply nodes
-   - Total inflow on sink nodes
-   - Actual storage and capacity on storage nodes
-2. Flexible Display Options: The `visualize()` method can both save the plot to disk and display it on-screen, making it suitable for use in Jupyter notebooks and scripts.
-3. DiversionNode and ConfluenceNode were combined into a single HydroWorks class for simplification and flexibility.
+- Time Step Handling: The system now properly accounts for the time step duration (dt) in flow calculations, especially for storage nodes.
+- Variable Demand Rates: DemandNodes now support variable demand rates over time, similar to how SupplyNodes handle variable supply rates.
+- Visualization: The visualize method in WaterSystem has been updated to correctly display information for nodes with variable rates.
+- Water Balance Calculations: The get_water_balance_table method has been updated to handle variable demand rates and provide more accurate data.
+- Seasonal Reservoir Test: A new test case has been added to simulate a system with seasonal supply and demand variations over a 10-year period.
 
 ## Sample Test Systems
 Several sample test systems have been implemented:
@@ -36,6 +33,7 @@ Several sample test systems have been implemented:
 3. Simple System: Basic setup with one supply, one storage, two demands, and one sink.
 4. Complex System: More intricate network with multiple supplies, storages, and demands.
 5. Drought System: System with variable supply to simulate alternating normal and drought conditions.
+6. Test Seasonal Reservoir: System wqith seasonal demand and supply variations over a 10 year period.
 
 ## Current Functionality
 - Creation of water system networks with various node types
@@ -44,22 +42,43 @@ Several sample test systems have been implemented:
 - Water balance calculations and CSV output
 
 ## Next Steps
+
+### Debugging
 - [ ] Further stress testing of the system under various conditions
+- [ ] Add a water volume reservoir testing system
+
+### Visualization / GUI
 - [ ] Implement proper time series visualization of key system flows and volumes over time
 - [ ] Improve network plotting to better represent the system layout
+- [ ] Developing a user interface (GUI)
+
+### Water Balancing
 - [ ] Proper flow to volume and volume to flow conversion for reservoir node water balance 
+- [ ] Initialize reservoirs with initial condition of reservoir filling
+- [ ] Implement reservoir spillway where V(t) <= Vmax is always true
+- [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
+- [ ] Implement water level-volume relationship for reservoir nodes
+- [ ] Implement evaporative losses at reservoir nodes
+
+### Unsaturated and Saturated Zone
+- [ ] Soil moisture/infiltration model
+- [ ] Implementing simple representation of groundwater
+
+### Geospatial Characteristics
 - [ ] Implement node location characteristics (easting, northing) for each node
 - [ ] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
-- [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
-- [ ] Implement water level volume relationship for reservoir nodes
-- [ ] Implement evaporative losses at reservoir nodes
+
+### Water demand
 - [ ] Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.
-- [ ] Same as 8., but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
-- [ ] Same as 8. and 9. but for industrial water demand where you enter the total industrial water demand over time.
+- [ ] Same as before, but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
+- [ ] Same as before, but for industrial water demand where you enter the total industrial water demand over time.
+
+### I/O
 - [ ] Implementing data import/export features to load supply and demand nodes data from .csv sources.
-- [ ] Implementing more complex node behaviors
+
+### Optimization
+- [ ] Implementing more complex node behaviors where each node becomes a decision variable
 - [ ] Incorporating optimization algorithms
-- [ ] Developing a user interface (GUI)
 - [ ] Adding support for stochastic simulations
 
 ## Dependencies
