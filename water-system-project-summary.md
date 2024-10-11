@@ -6,11 +6,11 @@ The project is a Python-based water system simulation that models the flow of wa
 ## Key Components
 1. `WaterSystem` class: The main class that represents the entire water system. It manages the simulation, visualization, and data analysis.
 2. Node classes:
-   - `SupplyNode`: Represents water sources with variable supply rates
-   - `StorageNode`: Represents reservoirs or storage facilities with a defined capacity
-   - `DemandNode`: Represents points of water consumption with variable demand rates
-   - `SinkNode`: Represents endpoints where water exits the system
-   - `HydroWorks`: Represents points where water can be redistributed (combining diversion and confluence functionality)
+  - `SupplyNode`: Represents water sources with variable supply rates
+- `StorageNode`: Represents reservoirs or storage facilities with a defined capacity
+- `DemandNode`: Represents points of water consumption with variable demand rates
+- `SinkNode`: Represents endpoints where water exits the system
+- `HydroWorks`: Represents points where water can be redistributed (combining diversion and confluence functionality)
 3. `Edge` class: Represents connections between nodes, with defined capacities.
 
 ## Key Features
@@ -28,7 +28,7 @@ The project is a Python-based water system simulation that models the flow of wa
 
 ## Sample Test Systems
 Several sample test systems have been implemented:
-1. Most Simple System: Most simple system with one supply, one demand, and one sink node 
+  1. Most Simple System: Most simple system with one supply, one demand, and one sink node 
 2. System with Hydroworks: System with one supply, three HydroWorks nodes, and one sink node
 3. Simple System: Basic setup with one supply, one storage, two demands, and one sink.
 4. Complex System: More intricate network with multiple supplies, storages, and demands.
@@ -43,17 +43,16 @@ Several sample test systems have been implemented:
 
 ## Next Steps
 
-### Debugging
-- [ ] Further stress testing of the system under various conditions
-- [ ] Add a water volume reservoir testing system
-
 ### Visualization / GUI
 - [ ] Implement proper time series visualization of key system flows and volumes over time
 - [ ] Improve network plotting to better represent the system layout
 - [ ] Developing a user interface (GUI)
 
+### Network
+- [ ] Implementing topological sorting of the network to ensure proper flow calculations from upstream to downstream nodes so that outflow from a node is always calculated after inflow to that node
+
 ### Water Balancing
-- [ ] Proper flow to volume and volume to flow conversion for reservoir node water balance 
+- [x] Proper flow to volume and volume to flow conversion for reservoir node water balance 
 - [ ] Initialize reservoirs with initial condition of reservoir filling
 - [ ] Implement reservoir spillway where V(t) <= Vmax is always true
 - [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
@@ -69,7 +68,6 @@ Several sample test systems have been implemented:
 - [ ] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
 
 ### Water demand
-- [ ] Time variable demand and supply. Now testing.
 - [ ] Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.
 - [ ] Same as before, but for domestic water demand where you enter the total number of people requiring water and the demand node calculates the total water demand over time.
 - [ ] Same as before, but for industrial water demand where you enter the total industrial water demand over time.
@@ -81,6 +79,10 @@ Several sample test systems have been implemented:
 - [ ] Implementing more complex node behaviors where each node becomes a decision variable
 - [ ] Incorporating optimization algorithms
 - [ ] Adding support for stochastic simulations
+
+## Issues
+
+- Spillway: What happens to water when upstream inflow to hydroworks structure is larger than total outflow capacity of hydroworks structure? Have to build in spillway as in the case of the reservoir and heavily penalize spillway use at any time.
 
 ## Dependencies
 - NetworkX
