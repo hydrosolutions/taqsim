@@ -82,6 +82,8 @@ Several sample test systems have been implemented:
 
 ## Issues
 
+- Water Balance issues
+
 - Spillway: What happens to water when upstream inflow to hydroworks structure is larger than total outflow capacity of hydroworks structure? Have to build in spillway as in the case of the reservoir and heavily penalize spillway use at any time.
 
 ## Dependencies
