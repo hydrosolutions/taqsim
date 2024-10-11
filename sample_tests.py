@@ -48,7 +48,7 @@ def create_most_simple_system():
 
     return system
 
-def create_hydroworks_system():
+def create_hydroworks_system_3_diversions():
     """
     Creates a system with one supply, three HydroWorks nodes, and one sink node
     """
@@ -82,6 +82,37 @@ def create_hydroworks_system():
 
     return system
 
+def create_hydroworks_system_2_diversions():
+    """
+    Creates a system with one supply, two HydroWorks nodes, and one sink node
+    """
+
+    dt = 30.44 * 24 * 3600 # Average month in seconds
+    system = WaterSystem(dt)
+
+    supplyA = SupplyNode("River A", default_supply_rate=60)
+    supplyB = SupplyNode("River B", default_supply_rate=30)
+    hydroworks1 = HydroWorks("HydroWorks1")
+    hydroworks2 = HydroWorks("HydroWorks2")
+    demandsite = DemandNode("Agriculture", demand_rates=20)
+    outflow = SinkNode("Outflow")
+
+    system.add_node(supplyA)
+    system.add_node(supplyB)
+    system.add_node(hydroworks1)
+    system.add_node(hydroworks2)
+    system.add_node(demandsite)
+    system.add_node(outflow)
+
+    system.add_edge(Edge(supplyA, hydroworks1, capacity=100))
+    system.add_edge(Edge(supplyB, hydroworks1, capacity=100))
+    system.add_edge(Edge(hydroworks1, hydroworks2, capacity=60))
+    system.add_edge(Edge(hydroworks1, demandsite, capacity=40))
+    system.add_edge(Edge(demandsite, hydroworks2, capacity=50))
+    system.add_edge(Edge(hydroworks2, outflow, capacity=100))
+
+    return system
+
 def create_simple_system():
     """
     Creates a simple water system with one supply, one storage, two demands, and one sink.
@@ -105,6 +136,33 @@ def create_simple_system():
     system.add_edge(Edge(reservoir, agriculture, capacity=70))
     system.add_edge(Edge(reservoir, urban, capacity=40))
     system.add_edge(Edge(agriculture, sink, capacity=100))
+    system.add_edge(Edge(urban, sink, capacity=50))
+
+    return system
+
+def create_simple_system_with_diversion():
+    """
+    Creates a simple water system with one supply, one storage, two demands, and one sink.
+    """
+    dt = 30.44 * 24 * 3600 # Average month in seconds
+    system = WaterSystem(dt)
+
+    supply = SupplyNode("Source", default_supply_rate=100)
+    reservoir = StorageNode("MainReservoir", capacity=500)
+    diversion = HydroWorks("Diversion")
+    urban = DemandNode("Urban", demand_rates=30)
+    sink = SinkNode("Sink")
+
+    system.add_node(supply)
+    system.add_node(reservoir)
+    system.add_node(diversion)
+    system.add_node(urban)
+    system.add_node(sink)
+
+    system.add_edge(Edge(supply, reservoir, capacity=120))
+    system.add_edge(Edge(reservoir, diversion, capacity=70))
+    system.add_edge(Edge(reservoir, urban, capacity=40))
+    system.add_edge(Edge(diversion, sink, capacity=100))
     system.add_edge(Edge(urban, sink, capacity=50))
 
     return system
@@ -144,35 +202,6 @@ def create_complex_system():
     system.add_edge(Edge(urban1, sink, capacity=70))
     system.add_edge(Edge(urban2, sink, capacity=60))
     system.add_edge(Edge(industry, sink, capacity=50))
-
-    return system
-
-def create_drought_system():
-    """
-    Creates a system to test drought conditions with variable supply.
-    """
-    dt = 30.44 * 24 * 3600 # Average month in seconds
-    system = WaterSystem(dt)
-
-    # Alternating between normal (100) and drought (20) conditions
-    variable_supply = [100 if i % 2 == 0 else 20 for i in range(50)]
-    supply = SupplyNode("VariableSupply", supply_rates=variable_supply)
-    reservoir = StorageNode("EmergencyReservoir", capacity=500)
-    city = DemandNode("DroughtCity", demand_rates=80)
-    agriculture = DemandNode("DroughtAgriculture", demand_rates=40)
-    sink = SinkNode("Sink")
-
-    system.add_node(supply)
-    system.add_node(reservoir)
-    system.add_node(city)
-    system.add_node(agriculture)
-    system.add_node(sink)
-
-    system.add_edge(Edge(supply, reservoir, capacity=150))
-    system.add_edge(Edge(reservoir, city, capacity=90))
-    system.add_edge(Edge(reservoir, agriculture, capacity=50))
-    system.add_edge(Edge(city, sink, capacity=100))
-    system.add_edge(Edge(agriculture, sink, capacity=60))
 
     return system
 
@@ -318,7 +347,7 @@ def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
 
-    # Test super simple system
+    # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
     super_simple_system = create_most_simple_system()
     print("Super simple system test:")
     num_time_steps = 12
@@ -339,7 +368,7 @@ def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
 
-    # Test simple system
+    # Test: Simple System. This is a system with one source, one reservoir, two demand sites connected to the reservoir and return flows to one sink.
     simple_system = create_simple_system()
     print("Simple System Test:")
     num_time_steps = 12
@@ -364,7 +393,53 @@ def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
 
-    # Test complex system
+   # Test: Simple System with Diversion. Same as the simple system but with the agricultural node replaced by a hydroworks node.
+    simple_system_with_diversion = create_simple_system_with_diversion()
+    print("Simple System with Diversion Test:")
+    num_time_steps = 12
+    simple_system_with_diversion.simulate(num_time_steps)
+
+    # Visualize the system
+    columns_to_plot = [
+    "Source_Outflow",
+    "MainReservoir_Outflow",
+    "Diversion_Inflow",
+    "Urban_Inflow",
+    "Urban_SatisfiedDemand",
+    "Diversion_Outflow",
+    "Urban_Outflow",
+    "Sink_Inflow"
+    ]
+
+    plot_water_balance_time_series(simple_system_with_diversion, "ts_plot_simple_system_with_diversion.png", columns_to_plot=columns_to_plot)
+    save_water_balance_to_csv(simple_system_with_diversion, "balance_table_simple_system_with_diversion.csv")
+    simple_system_with_diversion.visualize("nw_plot_simple_system_with_diversion.png", display=False)
+
+    print("\n" + "="*50 + "\n")
+
+    # Test: HydroWorks System with 2 Diversions. Two sources feeding into a hydrowokrs diversion water to a ag demand site and a second diversion. Return flow from the ag demand site enters that second diversion for the total flow to end up in one sink.
+    hydroworks_system_2_diversions = create_hydroworks_system_2_diversions()
+    print("HydroWorks System Test:")
+    num_time_steps = 12
+    hydroworks_system_2_diversions.simulate(num_time_steps)
+    plot_water_balance_time_series(hydroworks_system_2_diversions, "ts_plot_hydroworks_2_diversions_system.png")
+    save_water_balance_to_csv(hydroworks_system_2_diversions, "balance_table_hydroworks_2_diversions_system.csv")
+    hydroworks_system_2_diversions.visualize("nw_plot_hydroworks_2_diversions_system_balance.png", display=False)
+
+    print("\n" + "="*50 + "\n")
+
+    # Test: HydroWorks System with 3 Diversions. Two sources feeding into a hydroworks diverting water to a third hydroworks. Fromt the first hydroworks, there is a brnaching to a demand node from which return flow ends in the third hydroworks. Total water from the third hydroworks flows into the sink.
+    hydroworks_system_3_diversions = create_hydroworks_system_3_diversions()
+    print("HydroWorks System Test:")
+    num_time_steps = 12
+    hydroworks_system_3_diversions.simulate(num_time_steps)
+    plot_water_balance_time_series(hydroworks_system_3_diversions, "ts_plot_hydroworks_3_diversions_system.png")
+    save_water_balance_to_csv(hydroworks_system_3_diversions, "balance_table_hydroworks_3_diversions_system.csv")
+    hydroworks_system_3_diversions.visualize("nw_plot_hydroworks_3_diversions_system_balance.png", display=False)
+
+    print("\n" + "="*50 + "\n")
+
+    # Test: Complex System. This is a complex system to test many to many connections.
     complex_system = create_complex_system()
     print("Complex System Test:")
     num_time_steps = 36
@@ -375,29 +450,7 @@ def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
 
-    # Test drought system
-    drought_system = create_drought_system()
-    print("Drought System Test:")
-    num_time_steps = 120
-    drought_system.simulate(num_time_steps)
-    plot_water_balance_time_series(drought_system, "ts_plot_drought_system.png")
-    save_water_balance_to_csv(drought_system, "balance_table_drought_system.csv")
-    drought_system.visualize("nw_plot_drought_system.png", display=False)
-
-    print("\n" + "="*50 + "\n")
-
-    # Test HydroWorks system
-    hydroworks_system = create_hydroworks_system()
-    print("HydroWorks System Test:")
-    num_time_steps = 12
-    hydroworks_system.simulate(num_time_steps)
-    plot_water_balance_time_series(hydroworks_system, "ts_plot_hydroworks_system.png")
-    save_water_balance_to_csv(hydroworks_system, "balance_table_hydroworks_system.csv")
-    hydroworks_system.visualize("nw_plot_hydroworks_system_balance.png",display=False)
-
-    print("\n" + "="*50 + "\n")
-
-    # Test seasonal reservoir
+    # Test: Seasonal Reservoir. Fully seasonal system.
     seasonal_system = create_seasonal_reservoir_system()
     num_time_steps = 12 * 2  # 2 years of monthly data
 
