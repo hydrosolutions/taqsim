@@ -69,17 +69,19 @@ class WaterSystem:
         This method updates all nodes and edges in the system for each time step.
         """
         self.time_steps = time_steps
+        # Perform a topological sort to determine the correct order for node updates
+        sorted_nodes = list(nx.topological_sort(self.graph))
+
         for t in range(time_steps):
-            # Update nodes in order: SupplyNode, StorageNode, DemandNode, SinkNode
-            for node_type in [SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode]:
-                for node_id, node_data in self.graph.nodes(data=True):
-                    if isinstance(node_data['node'], node_type):
-                        node_data['node'].update(t, self.dt)
-            
-            # Update edges after all nodes have been updated
-            for _, _, edge_data in self.graph.edges(data=True):
-                if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, HydroWorks, DemandNode)):
-                    edge_data['edge'].update(t)
+            # Update nodes in topologically sorted order
+            for node_id in sorted_nodes:
+                node_data = self.graph.nodes[node_id]
+                node_data['node'].update(t, self.dt)
+                
+                # Update edges after all nodes have been updated
+                for _, _, edge_data in self.graph.edges(data=True):
+                    if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, HydroWorks, DemandNode)):
+                        edge_data['edge'].update(t)
 
     def visualize(self, filename='water_system_layout.png', display=True):
         """

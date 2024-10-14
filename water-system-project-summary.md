@@ -49,7 +49,7 @@ Several sample test systems have been implemented:
 - [ ] Developing a user interface (GUI)
 
 ### Network
-- [ ] Implementing topological sorting of the network to ensure proper flow calculations from upstream to downstream nodes so that outflow from a node is always calculated after inflow to that node
+- [x] Implementing topological sorting of the network to ensure proper flow calculations from upstream to downstream nodes so that outflow from a node is always calculated after inflow to that node
 
 ### Water Balancing
 - [x] Proper flow to volume and volume to flow conversion for reservoir node water balance 
