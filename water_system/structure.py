@@ -239,6 +239,7 @@ class StorageNode(Node):
         super().__init__(id)
         self.capacity = capacity
         self.storage = [initial_storage]
+        self.spillway_register = [0] # List to store spill events
 
     def update(self, time_step, dt):
         """
@@ -279,7 +280,17 @@ class StorageNode(Node):
         
         # Calculate new storage
         new_storage = available_water - actual_outflow_volume
-        self.storage.append(min(new_storage, self.capacity))
+
+        # Check if new storage exceeds maximum and handle spillway
+        if new_storage > self.capacity:
+            excess_volume = new_storage - self.capacity
+            new_storage = self.capacity
+        else:
+            excess_volume = 0
+        # Log the spill event in the storage node's spillway register
+        self.spillway_register.append(excess_volume)
+        
+        self.storage.append(new_storage)
 
     def get_storage(self, time_step):
         """

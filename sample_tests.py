@@ -232,7 +232,7 @@ def create_seasonal_reservoir_system():
 
     # Connect nodes with edges
     system.add_edge(Edge(supply, reservoir, capacity=100))  # 100 m³/s max flow from supply to reservoir
-    system.add_edge(Edge(reservoir, demand, capacity=80))   # 80 m³/s max flow from reservoir to demand
+    system.add_edge(Edge(reservoir, demand, capacity=40))   # 80 m³/s max flow from reservoir to demand
     system.add_edge(Edge(demand, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
     return system
@@ -282,6 +282,9 @@ def plot_water_balance_time_series(water_system, filename, columns_to_plot=None)
 
         if 'Storage' in column:
             # Plot storage volume on the right y-axis
+            ax2.plot(balance_table['TimeStep'], balance_table[column], 
+            color=color, linestyle=line_style, label=column)
+        elif 'ExcessVolume' in column:
             ax2.plot(balance_table['TimeStep'], balance_table[column], 
             color=color, linestyle=line_style, label=column)
         else:
@@ -486,6 +489,7 @@ def run_sample_tests():
     "LargeReservoir_Inflow",
     "LargeReservoir_Outflow",
     "LargeReservoir_Storage",
+    "LargeReservoir_ExcessVolume",
     "SeasonalDemand_Demand",
     "SeasonalDemand_SatisfiedDemand"
     ]

@@ -229,7 +229,7 @@ class WaterSystem:
             if isinstance(node, SupplyNode):
                 type_columns = [f"{node_id}_SupplyRate"]
             elif isinstance(node, StorageNode):
-                type_columns = [f"{node_id}_Storage", f"{node_id}_StorageChange"]
+                type_columns = [f"{node_id}_Storage", f"{node_id}_StorageChange", f"{node_id}_ExcessVolume"]
             elif isinstance(node, DemandNode):
                 type_columns = [f"{node_id}_Demand", f"{node_id}_SatisfiedDemand", f"{node_id}_Deficit"]
             elif isinstance(node, SinkNode):
@@ -258,6 +258,9 @@ class WaterSystem:
                     data[time_step][f"{node_id}_Storage"] = node.storage[time_step]
                     storage_change = node.storage[time_step] - node.storage[time_step - 1] if time_step > 0 else node.storage[0]
                     data[time_step][f"{node_id}_StorageChange"] = storage_change
+                    # Add excess volume information if any spill occurred
+                    excess_volume = node.spillway_register[time_step]
+                    data[time_step][f"{node_id}_ExcessVolume"] = excess_volume
                 elif isinstance(node, DemandNode):
                     data[time_step][f"{node_id}_Demand"] = node.get_demand_rate(time_step)
                     data[time_step][f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
