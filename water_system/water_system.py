@@ -97,7 +97,7 @@ class WaterSystem:
             filename (str): The name of the PNG file to save to. Defaults to 'water_system_layout.png'.
             display (bool): Whether to display the plot or not. Defaults to True.
         """
-        
+
         # Setting node positions based on easting and northing
         pos = {}
         for node, data in self.graph.nodes(data=True):
@@ -106,7 +106,7 @@ class WaterSystem:
 
 
 
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(25, 20))
         plt.title('Water System Network Layout and Flows', fontsize=20)
         
         node_colors = {
@@ -136,7 +136,7 @@ class WaterSystem:
                                 node_size=node_size, 
                                 alpha=0.8)
         
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=75)
+        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=65)
         
         # Update node labels
         labels = {}
@@ -148,7 +148,7 @@ class WaterSystem:
             elif isinstance(node_instance, DemandNode):
                 satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
                 current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
-                labels[node] = f"{node}\nDemand Node\n{satisfied_demand:.1f} ({current_demand:.1f})"
+                labels[node] = f"{node}\nDemand\n{satisfied_demand:.1f} ({current_demand:.1f})"
             elif isinstance(node_instance, SinkNode):
                 total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
                 labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"

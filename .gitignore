@@ -156,5 +156,5 @@ cython_debug/
 *.png
 
 *.csv
-
+!Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv
 .DS_Store

@@ -54,7 +54,7 @@ Several sample test systems have been implemented:
 ### Water Balancing
 - [x] Proper flow to volume and volume to flow conversion for reservoir node water balance 
 - [ ] Initialize reservoirs with initial condition of reservoir filling
-- [ ] Implement reservoir spillway where V(t) <= Vmax is always true
+- [x] Implement reservoir spillway where V(t) <= Vmax is always true
 - [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
 - [ ] Implement water level-volume relationship for reservoir nodes
 - [ ] Implement evaporative losses at reservoir nodes
@@ -64,7 +64,7 @@ Several sample test systems have been implemented:
 - [ ] Implementing simple representation of groundwater
 
 ### Geospatial Characteristics
-- [ ] Implement node location characteristics (easting, northing) for each node
+- [x] Implement node location characteristics (easting, northing) for each node
 - [ ] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
 
 ### Water demand
@@ -85,6 +85,8 @@ Several sample test systems have been implemented:
 - Water Balance issues
 
 - Spillway: What happens to water when upstream inflow to hydroworks structure is larger than total outflow capacity of hydroworks structure? Have to build in spillway as in the case of the reservoir and heavily penalize spillway use at any time.
+
+- So far supply node data is importet from .csv only in ZRB_test file and not in module itself
 
 ## Dependencies
 - NetworkX
