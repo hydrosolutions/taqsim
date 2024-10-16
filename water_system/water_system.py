@@ -97,8 +97,15 @@ class WaterSystem:
             filename (str): The name of the PNG file to save to. Defaults to 'water_system_layout.png'.
             display (bool): Whether to display the plot or not. Defaults to True.
         """
-        pos = nx.spring_layout(self.graph, k=0.9, iterations=50)
         
+        # Setting node positions based on easting and northing
+        pos = {}
+        for node, data in self.graph.nodes(data=True):
+            node_instance = data['node']
+            pos[node] = (node_instance.easting, node_instance.northing)
+
+
+
         plt.figure(figsize=(12, 10))
         plt.title('Water System Network Layout and Flows', fontsize=20)
         
