@@ -1,3 +1,4 @@
+import math
 """
 This module defines the Edge class, which represents a connection between two nodes in a water system.
 
@@ -67,3 +68,16 @@ class Edge:
         if time_step < len(self.flow):
             return self.flow[time_step]
         return 0
+    
+    def get_edge_length(self):
+        """
+        Calculate the length of the edge using the easting and northing coordinates
+        of the source and target nodes.
+
+        Returns:
+            float: The Euclidean distance between the source and target nodes. [m]
+        """
+        delta_easting = self.source.easting - self.target.easting
+        delta_northing = self.source.northing - self.target.northing
+        
+        return math.sqrt(delta_easting**2 + delta_northing**2)

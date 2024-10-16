@@ -53,7 +53,7 @@ Several sample test systems have been implemented:
 
 ### Water Balancing
 - [x] Proper flow to volume and volume to flow conversion for reservoir node water balance 
-- [ ] Initialize reservoirs with initial condition of reservoir filling
+- [x] Initialize reservoirs with initial condition of reservoir filling
 - [x] Implement reservoir spillway where V(t) <= Vmax is always true
 - [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
 - [ ] Implement water level-volume relationship for reservoir nodes
@@ -92,5 +92,6 @@ Several sample test systems have been implemented:
 - NetworkX
 - Matplotlib
 - Pandas
+- Math (edge.py)
 
 This summary reflects the current state of the Water System Simulation Project, including the recent improvements to the visualization capabilities. It can be used to quickly brief someone on the project's status and capabilities.
