@@ -14,9 +14,11 @@ class Node:
         id (str): A unique identifier for the node.
         inflows (dict): A dictionary of inflow edges, keyed by the source node's id.
         outflows (dict): A dictionary of outflow edges, keyed by the target node's id.
+        easting (float): The easting coordinate of the node.
+        northing (float): The northing coordinate of the node.
     """
 
-    def __init__(self, id):
+    def __init__(self, id, easting=None, northing=None):
         """
         Initialize a Node object.
 
@@ -26,6 +28,8 @@ class Node:
         self.id = id
         self.inflows = {}  # Dictionary of inflow edges
         self.outflows = {}  # Dictionary of outflow edges
+        self.easting = easting # easting coordinate of the node. Defaults to None.
+        self.northing = northing # northing coordinate of the node. Defaults to None.
 
     def add_inflow(self, edge):
         """
@@ -68,7 +72,7 @@ class SupplyNode(Node):
         supply_history (list): A record of actual supply amounts for each time step.
     """
 
-    def __init__(self, id, supply_rates=None, default_supply_rate=0):
+    def __init__(self, id, supply_rates=None, default_supply_rate=0, easting=None, northing=None):
         """
         Initialize a SupplyNode object.
 
@@ -81,6 +85,8 @@ class SupplyNode(Node):
         self.supply_rates = supply_rates if supply_rates is not None else []
         self.default_supply_rate = default_supply_rate
         self.supply_history = []
+        self.easting = easting # easting coordinate of the node. Defaults to None.
+        self.northing = northing # northing coordinate of the node. Defaults to None.
 
     def get_supply_rate(self, time_step):
         """
@@ -148,7 +154,7 @@ class DemandNode(Node):
         excess_flow (list): A record of excess flow for each time step.
     """
 
-    def __init__(self, id, demand_rates):
+    def __init__(self, id, demand_rates, easting=None, northing=None):
         """
         Initialize a DemandNode object.
 
@@ -161,6 +167,8 @@ class DemandNode(Node):
         self.demand_rates = demand_rates if isinstance(demand_rates, list) else [demand_rates]
         self.satisfied_demand = []
         self.excess_flow = []
+        self.easting = easting # easting coordinate of the node. Defaults to None.
+        self.northing = northing # northing coordinate of the node. Defaults to None.
 
     def get_demand_rate(self, time_step):
         """
@@ -227,7 +235,7 @@ class StorageNode(Node):
         storage (list): A record of storage levels for each time step in cubic meters.
     """
 
-    def __init__(self, id, capacity, initial_storage=0):
+    def __init__(self, id, capacity, initial_storage=0, easting=None, northing=None):
         """
         Initialize a StorageNode object.
 
@@ -240,6 +248,8 @@ class StorageNode(Node):
         self.capacity = capacity
         self.storage = [initial_storage]
         self.spillway_register = [0] # List to store spill events
+        self.easting = easting # easting coordinate of the node. Defaults to None.
+        self.northing = northing # northing coordinate of the node. Defaults to None.
 
     def update(self, time_step, dt):
         """
