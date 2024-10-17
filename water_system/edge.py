@@ -33,6 +33,7 @@ class Edge:
         self.flow = []
         self.source.add_outflow(self)
         self.target.add_inflow(self)
+        self.length = self.get_edge_length() 
 
     def update(self, time_step, flow=None):
         """
