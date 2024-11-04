@@ -65,7 +65,7 @@ Several sample test systems have been implemented:
 
 ### Geospatial Characteristics
 - [x] Implement node location characteristics (easting, northing) for each node
-- [ ] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
+- [x] Each edge has a length computed from the connecting node coordinates and thus has a length attribute
 
 ### Water demand
 - [ ] Implement irrigation water demand at agricultural demand nodes where one enters area and crop type and irrigation water demand for Samarkand region comes out. Use Climate Explorer to get the data for relevant crops. The idea would then be to pass a dictionary of crop types and areas to the demand node and have it calculate the total irrigation water demand over time.

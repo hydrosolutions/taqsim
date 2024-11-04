@@ -16,9 +16,10 @@ class Edge:
         target (Node): The target node of the edge.
         capacity (float): The maximum flow capacity of the edge.
         flow (list): A list of flow values for each time step of the simulation.
+        length (float): The length of the canals in the irrigation/demand system [km]
     """
 
-    def __init__(self, source, target, capacity):
+    def __init__(self, source, target, capacity, length=None):
         """
         Initialize an Edge object.
 
@@ -33,7 +34,10 @@ class Edge:
         self.flow = []
         self.source.add_outflow(self)
         self.target.add_inflow(self)
-        self.length = self.get_edge_length() 
+        if length is not None:
+            self.length=length
+        else:
+            self.length = self.get_edge_length() 
 
     def update(self, time_step, flow=None):
         """
