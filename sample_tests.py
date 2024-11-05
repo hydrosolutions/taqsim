@@ -75,12 +75,12 @@ def create_hydroworks_system_3_diversions():
     system.add_node(hydroworks4)
     system.add_node(outflow)
 
-    system.add_edge(Edge(supplyA, hydroworks1, capacity=100))
+    system.add_edge(Edge(supplyA, hydroworks1, capacity=100, length=10, loss_factor=0.01))
     system.add_edge(Edge(supplyB, hydroworks1, capacity=100))
-    system.add_edge(Edge(hydroworks1, hydroworks2, capacity=60))
-    system.add_edge(Edge(hydroworks2, hydroworks4, capacity=50))
+    system.add_edge(Edge(hydroworks1, hydroworks2, capacity=60, length=10, loss_factor=0.01))
+    system.add_edge(Edge(hydroworks2, hydroworks4, capacity=50, length=10, loss_factor=0.01))
     system.add_edge(Edge(hydroworks1, demandsite, capacity=40))
-    system.add_edge(Edge(demandsite, hydroworks4, capacity=50))
+    system.add_edge(Edge(demandsite, hydroworks4, capacity=50, length=10, loss_factor=0.01))
     system.add_edge(Edge(hydroworks4, outflow, capacity=100))
 
     return system
@@ -163,9 +163,9 @@ def create_simple_system_with_diversion():
     system.add_node(sink)
 
     system.add_edge(Edge(supply, reservoir, capacity=120))
-    system.add_edge(Edge(reservoir, diversion, capacity=70))
+    system.add_edge(Edge(reservoir, diversion, capacity=70, length=4, loss_factor=0.1))
     system.add_edge(Edge(reservoir, urban, capacity=40))
-    system.add_edge(Edge(diversion, sink, capacity=100))
+    system.add_edge(Edge(diversion, sink, capacity=100, length=2, loss_factor=0.2))
     system.add_edge(Edge(urban, sink, capacity=50))
 
     return system
@@ -350,7 +350,7 @@ def generate_seasonal_demand(num_time_steps):
     return demand_rates
 
 def run_sample_tests():
-
+    """
     print("\n" + "="*50 + "\n")
 
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
@@ -396,7 +396,7 @@ def run_sample_tests():
     plot_water_balance_time_series(simple_system, "ts_plot_simple_system.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(simple_system, "balance_table_simple_system.csv")
     simple_system.visualize("nw_plot_simple_system.png", display=False)
-    
+    """
     print("\n" + "="*50 + "\n")
 
     # Test: HydroWorks System with 3 Diversions. Two sources feeding into a hydroworks diverting water to a third hydroworks. Fromt the first hydroworks, there is a brnaching to a demand node from which return flow ends in the third hydroworks. Total water from the third hydroworks flows into the sink.
@@ -407,7 +407,7 @@ def run_sample_tests():
     plot_water_balance_time_series(hydroworks_system_3_diversions, "ts_plot_hydroworks_3_diversions_system.png")
     save_water_balance_to_csv(hydroworks_system_3_diversions, "balance_table_hydroworks_3_diversions_system.csv")
     hydroworks_system_3_diversions.visualize("nw_plot_hydroworks_3_diversions_system_balance.png", display=False)
-
+    
     print("\n" + "="*50 + "\n")
 
    # Test: Simple System with Diversion. Same as the simple system but with the agricultural node replaced by a hydroworks node.
@@ -431,7 +431,7 @@ def run_sample_tests():
     plot_water_balance_time_series(simple_system_with_diversion, "ts_plot_simple_system_with_diversion.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(simple_system_with_diversion, "balance_table_simple_system_with_diversion.csv")
     simple_system_with_diversion.visualize("nw_plot_simple_system_with_diversion.png", display=False)
-
+    """
     print("\n" + "="*50 + "\n")
 
     # Test: HydroWorks System with 2 Diversions. Two sources feeding into a hydrowokrs diversion water to a ag demand site and a second diversion. Return flow from the ag demand site enters that second diversion for the total flow to end up in one sink.
@@ -500,7 +500,7 @@ def run_sample_tests():
     plot_water_balance_time_series(seasonal_system, "ts_plot_seasonal_reservoir_system.png", columns_to_plot)
     seasonal_system.visualize("nw_plot_seasonal_reservoir_system.png", display=False)
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
-
+    """
 # Run the sample tests
 if __name__ == "__main__":
   run_sample_tests()

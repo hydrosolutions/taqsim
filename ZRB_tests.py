@@ -16,95 +16,83 @@ def create_seasonal_ZRB_system():
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    num_time_steps = 12 * 10  # 10 years of monthly data
+    num_time_steps = 12 * 5  # 10 years of monthly data
     system = WaterSystem(dt=dt)
 
     # Create nodes
-    supply = SupplyNode("MountainSource", supply_rates=import_supply_data("data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", 2010, 1, num_time_steps), easting=381835,northing=4374682)
+    supply = SupplyNode("MountainSource", supply_rates=import_supply_data("data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", 2014, 1, num_time_steps), easting=381835,northing=4374682)
     # HydroWorks Nodes
     HW_Ravadhoza = HydroWorks("HW-Ravadhoza", easting=363094.43,northing=4377810.64)
     HW_AkKaraDarya = HydroWorks("HW-AkKaraDarya", easting=333156.64,northing=4395650.43)
-    HW_dargom = HydroWorks("HW-Dargom", easting=317022.3, northing=4391315.3)
-    HW_Tuyatortor = HydroWorks("HW-Tuyatortor", easting=369358.0,northing=4397125.3)
     HW_Damkodzha = HydroWorks("HW_Damkodzha", easting=284720.68, northing=4417759.40)
-    HW_AkDarya = HydroWorks("HW_AkDarya", easting=310395,northing=4420338)
     HW_Narpay = HydroWorks("HW-Narpay", easting=270403.55,northing=4424501.92)
     HW_Confluence=HydroWorks("HW-Confluence", easting=239889.6,northing=4433214.0)
     HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
     # Demand Nodes
-    D1 = DemandNode("D1", demand_rates=generate_seasonal_demand(num_time_steps),easting=289406,northing=4398839)
-    D2 = DemandNode("D2", demand_rates=generate_seasonal_demand(num_time_steps),easting=344919,northing=4403848)
-    D3 = DemandNode("D3", demand_rates=generate_seasonal_demand(num_time_steps),easting=300105,northing=4415798)
-    D4 = DemandNode("D4", demand_rates=generate_seasonal_demand(num_time_steps),easting=233633,northing=4424363)
-    D5 = DemandNode("D5", demand_rates=generate_seasonal_demand(num_time_steps),easting=198042,northing=4446583)
-    D6 = DemandNode("D6", demand_rates=generate_seasonal_demand(num_time_steps),easting=182974,northing=4461910)
-    
+    D1 = DemandNode("Irrigation-Dargom", demand_rates=generate_seasonal_demand(num_time_steps),easting=289406,northing=4398839)
+    D2 = DemandNode("Irrigation-Mirzapay", demand_rates=generate_seasonal_demand(num_time_steps),easting=344919,northing=4403848)
+    D3 = DemandNode("Irrigation-Akdarya", demand_rates=generate_seasonal_demand(num_time_steps),easting=314014,northing=4413771)
+    D4 = DemandNode("Irrigation-Narpay", demand_rates=generate_seasonal_demand(num_time_steps),easting=233633,northing=4424363)
+    D5 = DemandNode("Irrigation-MiankalToss", demand_rates=generate_seasonal_demand(num_time_steps),easting=234815,northing=4443998)
+    D6 = DemandNode("Irrigation-Karmana-Konimex", demand_rates=generate_seasonal_demand(num_time_steps),easting=183378,northing=4462461)
+    D7 = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
     # Reservoir
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",easting=265377.2,northing= 4414217.5, capacity=1e8, initial_storage=5e7)
-    RES_AkDarya = StorageNode("RES-AkDarya", easting= 274383.7,northing=4432954.7, capacity=4.55e8, initial_storage=4e8)
+    RES_AkDarya = StorageNode("RES-AkDarya", easting= 274383.7,northing=4432954.7, capacity=1e7, initial_storage=5e6)
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
     sink_eskiankhor = SinkNode("EskiAnkhor", easting=286019.5,northing=4384078.7)
-    sink_downstream = SinkNode("Outflow-Navoi", easting=176079,northing=4454183)
+    sink_downstream = SinkNode("Sink-Navoi", easting=176079,northing=4454183)
 
     # Add nodes to the system
-    system.add_node(supply)
-    system.add_node(HW_Ravadhoza)
-    system.add_node(HW_AkKaraDarya)
-    system.add_node(HW_dargom)
-    system.add_node(HW_Tuyatortor)
-    system.add_node(HW_Damkodzha)
-    system.add_node(HW_AkDarya)
-    system.add_node(HW_Narpay)
-    system.add_node(HW_Confluence)
-    system.add_node(HW_Karmana)
-    system.add_node(RES_Kattakurgan)
-    system.add_node(RES_AkDarya)
-    system.add_node(sink_tuyatortor)
-    system.add_node(sink_eskiankhor)
-    system.add_node(sink_downstream)
-    system.add_node(D1)
-    system.add_node(D2)
-    system.add_node(D3)
-    system.add_node(D4)
-    system.add_node(D5)
-    system.add_node(D6)
+    supply_node = [supply]  # List of supply nodes
+    reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
+    hydroworks = [HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
+    demand = [D1, D2, D3, D4, D5, D6, D7]  # List of domestic demand nodes
+    sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
+
+    # Iterate through each category and add nodes to the system
+    for node in supply_node + reservoir + hydroworks + demand + sink_node:
+        system.add_node(node)
 
 
     # Connect nodes with edges
-    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=400))
-    system.add_edge(Edge(HW_Ravadhoza, HW_Tuyatortor, capacity=100))
-    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=150))  
-    system.add_edge(Edge(HW_Ravadhoza, HW_dargom, capacity=150))
+    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=885))
     
-    system.add_edge(Edge(HW_Tuyatortor, sink_tuyatortor, capacity=100))  
-    system.add_edge(Edge(HW_dargom, sink_eskiankhor, capacity=150))
+    system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=50))
+    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))  
+    system.add_edge(Edge(HW_Ravadhoza, sink_eskiankhor, capacity=60))
+    system.add_edge(Edge(HW_Ravadhoza, D2, capacity=125, length=268.6))
+    system.add_edge(Edge(HW_Ravadhoza, D1, capacity=40, length=205))
+ 
+    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
+    system.add_edge(Edge(HW_AkKaraDarya, D3, capacity=230, length=79.9))
 
-    system.add_edge(Edge(HW_AkKaraDarya, HW_AkDarya, capacity=50))  
-    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=100))
-
-    system.add_edge(Edge(HW_AkDarya, RES_AkDarya, capacity=50))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=50))
-
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=230))
     system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=70))
-    system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=70))
-
-    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=150))
-    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=150))
-
-    system.add_edge(Edge(HW_dargom, D1, capacity=40))
-    system.add_edge(Edge(D1, HW_Damkodzha, capacity=40))
-    system.add_edge(Edge(HW_Tuyatortor, D2, capacity=40))
-    system.add_edge(Edge(D2, HW_AkDarya, capacity=40))
-    system.add_edge(Edge(HW_AkKaraDarya, D3, capacity=40))
-    system.add_edge(Edge(D3, HW_Confluence, capacity=40))
-    system.add_edge(Edge(HW_Narpay, D4, capacity=40))
-    system.add_edge(Edge(D4, HW_Karmana, capacity=40))
-    system.add_edge(Edge(HW_Karmana, D5, capacity=40))
-    system.add_edge(Edge(D5,sink_downstream, capacity=40))
-    system.add_edge(Edge(HW_Karmana, D6, capacity=40))
+    system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
+    system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
     
+    system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
+    system.add_edge(Edge(HW_Narpay, D4, capacity=80, length=53.8))
+    
+    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=600))
+    
+    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=550))
+    system.add_edge(Edge(HW_Damkodzha, D5, capacity=54, length=102.4))
+    system.add_edge(Edge(HW_Karmana, D6, capacity=60))
+    system.add_edge(Edge(HW_Karmana, D7, capacity=30))
+
+    # Demand return flows
+    system.add_edge(Edge(D1, HW_Damkodzha, capacity=40))
+    system.add_edge(Edge(D2, RES_AkDarya, capacity=40))
+    system.add_edge(Edge(D3, RES_AkDarya, capacity=230))
+    system.add_edge(Edge(D4, HW_Karmana, capacity=40))
+    system.add_edge(Edge(D5,HW_Karmana, capacity=40))
+    system.add_edge(Edge(D6,sink_downstream, capacity=40))
+    system.add_edge(Edge(D7,sink_downstream, capacity=40))    
+
     return system
 
 def save_water_balance_to_csv(water_system, filename):
@@ -247,7 +235,7 @@ def run_sample_tests():
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
     ZRB_system = create_seasonal_ZRB_system()
     print("ZRB system test:")
-    num_time_steps = 48
+    num_time_steps = 24
     ZRB_system.simulate(num_time_steps)
 
     # Extract and print results
@@ -270,21 +258,31 @@ def run_sample_tests():
 
     # Visualize the system
     columns_to_plot = [
-        "HW-Ravadhoza_Inflow",
-        "D1_Inflow",
-        "D1_Outflow",
-        "D1_Demand",
-        "D1_SatisfiedDemand",
-        "RES-Kattakurgan_Inflow",
-        "RES-Kattakurgan_Outflow",
-        "RES-Kattakurgan_Storage",
-        "RES-Kattakurgan_ExcessVolume",
+        "HW-Ravadhoza_Inflow", 
+        "Sink-Navoi_Inflow",
+        #"D1_Inflow",
+        #"D1_Outflow",
+        #"D1_Demand",
+        #"D1_SatisfiedDemand",
+        #"RES-Kattakurgan_Inflow",
+        #"RES-Kattakurgan_Outflow",
+        #"RES-Kattakurgan_Storage",
+        #"RES-Kattakurgan_ExcessVolume",
     ]
 
     plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
     ZRB_system.visualize("nw_plot_ZRB_system.png", display=False)
 
+    # Visualize Reservoirs
+    columns_to_plot = [
+        "RES-Kattakurgan_Inflow",
+        "RES-Kattakurgan_Outflow",
+        "RES-Kattakurgan_Storage",
+        "RES-Kattakurgan_ExcessVolume"
+    ]
+
+    plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_RES_Kattakurgan.png", columns_to_plot=columns_to_plot)
 
 # Run the sample tests
 if __name__ == "__main__":

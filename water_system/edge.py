@@ -17,9 +17,13 @@ class Edge:
         capacity (float): The maximum flow capacity of the edge.
         flow (list): A list of flow values for each time step of the simulation.
         length (float): The length of the canals in the irrigation/demand system [km]
+        loss_factor (float): The loss factor per unit distance [fraction/km].
+        inflow (list): A list of inflow values before losses.
+        losses (list): A list of total losses for each time step.
+        
     """
 
-    def __init__(self, source, target, capacity, length=None):
+    def __init__(self, source, target, capacity, length=None, loss_factor=0.0):
         """
         Initialize an Edge object.
 
@@ -27,13 +31,19 @@ class Edge:
             source (Node): The source node of the edge.
             target (Node): The target node of the edge.
             capacity (float): The maximum flow capacity of the edge.
+            loss_factor (float, optional): The loss factor per unit distance [fraction/km]. Defaults to 0 (0% per km)
         """
         self.source = source
         self.target = target
         self.capacity = capacity
+        self.loss_factor = loss_factor
         self.flow = []
+        self.inflow = []
+        self.losses =[]
+
         self.source.add_outflow(self)
         self.target.add_inflow(self)
+
         if length is not None:
             self.length=length
         else:
@@ -41,7 +51,7 @@ class Edge:
 
     def update(self, time_step, flow=None):
         """
-        Update the flow of the edge for the given time step.
+        Update the flow of the edge for the given time step, accounting for losses.
 
         If a flow value is provided, it is used (capped at the edge's capacity).
         If the source is a SupplyNode, the flow is set to the minimum of the supply rate and the edge's capacity.
@@ -52,13 +62,22 @@ class Edge:
             flow (float, optional): The flow value to set for this time step. Defaults to None.
         """
         if flow is not None:
-            self.flow.append(min(flow, self.capacity))
+            input_flow = min(flow, self.capacity)
         elif isinstance(self.source, SupplyNode):
             supply_rate = self.source.get_supply_rate(time_step)
-            self.flow.append(min(supply_rate, self.capacity))
+            input_flow = min(supply_rate, self.capacity)
         else:
-            # This case should not occur with the current node update methods
-            self.flow.append(0)
+            input_flow = 0
+            
+        # Record the inflow before losses
+        self.inflow.append(input_flow)
+        
+        # Calculate remaining flow after losses
+        remaining_flow, losses = self.calculate_losses(input_flow)
+        
+        # Record the flow after losses and the total losses
+        self.flow.append(remaining_flow)
+        self.losses.append(losses)
 
     def get_flow(self, time_step):
         """
@@ -80,9 +99,33 @@ class Edge:
         of the source and target nodes.
 
         Returns:
-            float: The Euclidean distance between the source and target nodes. [m]
+            float: The Euclidean distance between the source and target nodes. [km]
         """
         delta_easting = self.source.easting - self.target.easting
         delta_northing = self.source.northing - self.target.northing
         
-        return math.sqrt(delta_easting**2 + delta_northing**2)
+        return math.sqrt(delta_easting**2 + delta_northing**2)/1000
+    
+    def calculate_losses(self, flow):
+        """
+        Calculate water losses along the edge based on distance and loss factor.
+        
+        Args:
+            flow (float): The initial flow rate entering the edge [m³/s].
+            
+        Returns:
+            tuple: (remaining_flow, losses) where:
+                - remaining_flow (float): Flow rate after losses [m³/s]
+                - losses (float): Total flow lost along the edge [m³/s]
+        """
+        # Calculate loss fraction based on length and loss factor
+        total_loss_fraction = 1 - (1 - self.loss_factor)**self.length
+        
+        # Ensure loss fraction doesn't exceed 1 (100%)
+        total_loss_fraction = min(total_loss_fraction, 1.0)
+        
+        # Calculate losses and remaining flow
+        losses = flow * total_loss_fraction
+        remaining_flow = flow - losses
+        
+        return remaining_flow, losses
