@@ -83,107 +83,6 @@ class WaterSystem:
                     if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, HydroWorks, DemandNode)):
                         edge_data['edge'].update(t)
 
-    def visualize(self, filename='water_system_layout.png', display=True):
-        """
-        Create and save a network layout plot for the water system, showing:
-        - Actual flows and capacities on edges
-        - Demand satisfaction on demand nodes
-        - Actual supply on supply nodes
-        - Total inflow on sink nodes
-        - Actual storage and capacity on storage nodes
-        - Diversion and confluence nodes as orange circles
-        
-        Args:
-            filename (str): The name of the PNG file to save to. Defaults to 'water_system_layout.png'.
-            display (bool): Whether to display the plot or not. Defaults to True.
-        """
-
-        # Setting node positions based on easting and northing
-        pos = {}
-        for node, data in self.graph.nodes(data=True):
-            node_instance = data['node']
-            pos[node] = (node_instance.easting, node_instance.northing)
-
-
-
-        plt.figure(figsize=(25, 20))
-        plt.title('Water System Network Layout and Flows', fontsize=20)
-        
-        node_colors = {
-            SupplyNode: 'skyblue',
-            StorageNode: 'lightgreen',
-            DemandNode: 'salmon',
-            SinkNode: 'lightgray',
-            HydroWorks: 'orange'
-        }
-        
-        node_shapes = {
-            SupplyNode: 's',    # square
-            StorageNode: 's',   # square
-            DemandNode: 'o',    # circle
-            SinkNode: 's',      # square
-            HydroWorks: 'o',    # circle
-        }
-        
-        node_size = 5000
-        
-        for node_type in node_colors.keys():
-            node_list = [node for node, data in self.graph.nodes(data=True) if isinstance(data['node'], node_type)]
-            nx.draw_networkx_nodes(self.graph, pos, 
-                                nodelist=node_list, 
-                                node_color=node_colors[node_type], 
-                                node_shape=node_shapes[node_type],
-                                node_size=node_size, 
-                                alpha=0.8)
-        
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', arrows=True, arrowsize=65)
-        
-        # Update node labels
-        labels = {}
-        for node, data in self.graph.nodes(data=True):
-            node_instance = data['node']
-            if isinstance(node_instance, SupplyNode):
-                actual_supply = node_instance.supply_history[-1] if node_instance.supply_history else 0
-                labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
-            elif isinstance(node_instance, DemandNode):
-                satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
-                current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
-                labels[node] = f"{node}\nDemand\n{satisfied_demand:.1f} ({current_demand:.1f})"
-            elif isinstance(node_instance, SinkNode):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
-                labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
-            elif isinstance(node_instance, StorageNode):
-                actual_storage = node_instance.storage[-1] if node_instance.storage else 0
-                labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
-            elif isinstance(node_instance, HydroWorks):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 for edge in node_instance.inflows.values())
-                labels[node] = f"{node}\nHydroWorks\nInflow: {total_inflow:.1f}"
-            else:
-                labels[node] = f"{node}\n{node_instance.__class__.__name__}"
-        
-        nx.draw_networkx_labels(self.graph, pos, labels, font_size=12)
-        
-        # Update edge labels to show actual flow and capacity
-        edge_labels = {}
-        for u, v, d in self.graph.edges(data=True):
-            edge = d['edge']
-            actual_flow = edge.flow[-1] if edge.flow else 0
-            capacity = edge.capacity
-            edge_labels[(u, v)] = f'{actual_flow:.1f} ({capacity})'
-        
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, font_size=14)
-        
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
-        print(f"Network layout plot saved to {filename}")
-
-        # Display the plot if requested
-        if display:
-            plt.show()
-        else:
-            plt.close()
-    
     def print_water_balances(self):
         """
         Print water balances for each node at each time step.
@@ -212,20 +111,25 @@ class WaterSystem:
                     
     def get_water_balance_table(self):
         """
-        Generate a table with water balance data for all nodes across all time steps.
+        Generate a table with water balance data for all nodes across all time steps,
+        including transmission losses.
 
         Returns:
             pd.DataFrame: A pandas DataFrame containing the water balance data.
-                          Columns represent different aspects of each node's water balance.
-                          Rows represent time steps.
         """
-        data = []
-        node_columns = []
+        # Return empty DataFrame if no time steps have been simulated
+        if self.time_steps == 0:
+            return pd.DataFrame({'TimeStep': []})
 
+        # Initialize lists for columns and data
+        node_columns = []
+        edge_columns = []
+        data = []
+
+        # Generate column names for nodes
         for node_id, node_data in self.graph.nodes(data=True):
             node = node_data['node']
-            node_type = type(node).__name__
-
+            
             # Common columns for all node types
             base_columns = [
                 f"{node_id}_Inflow",
@@ -236,49 +140,206 @@ class WaterSystem:
             if isinstance(node, SupplyNode):
                 type_columns = [f"{node_id}_SupplyRate"]
             elif isinstance(node, StorageNode):
-                type_columns = [f"{node_id}_Storage", f"{node_id}_StorageChange", f"{node_id}_ExcessVolume"]
+                type_columns = [
+                    f"{node_id}_Storage",
+                    f"{node_id}_StorageChange",
+                    f"{node_id}_ExcessVolume"
+                ]
             elif isinstance(node, DemandNode):
-                type_columns = [f"{node_id}_Demand", f"{node_id}_SatisfiedDemand", f"{node_id}_Deficit"]
-            elif isinstance(node, SinkNode):
-                type_columns = []  # SinkNodes don't have additional columns
+                type_columns = [
+                    f"{node_id}_Demand",
+                    f"{node_id}_SatisfiedDemand",
+                    f"{node_id}_Deficit"
+                ]
             else:
-                type_columns = []  # For any other node types
+                type_columns = []
 
             node_columns.extend(base_columns + type_columns)
 
-        # Initialize the data list with the correct number of time steps
-        data = [dict.fromkeys(node_columns, 0) for _ in range(self.time_steps)]
+        # Generate column names for edges
+        for u, v, d in self.graph.edges(data=True):
+            edge_columns.extend([
+                f"Edge_{u}_to_{v}_Inflow",
+                f"Edge_{u}_to_{v}_Outflow",
+                f"Edge_{u}_to_{v}_Losses",
+                f"Edge_{u}_to_{v}_LossPercent"
+            ])
 
-        # Populate the data
+        # Combine all columns
+        all_columns = ['TimeStep'] + node_columns + edge_columns
+
+        # Initialize data list with dictionaries
+        data = []
         for time_step in range(self.time_steps):
+            row_data = {'TimeStep': time_step}
+            
+            # Initialize all columns with 0
+            for col in node_columns + edge_columns:
+                row_data[col] = 0.0
+                
+            # Populate node data
             for node_id, node_data in self.graph.nodes(data=True):
                 node = node_data['node']
-                inflow = sum(edge.get_flow(time_step) for edge in node.inflows.values())
-                outflow = sum(edge.get_flow(time_step) for edge in node.outflows.values())
+                try:
+                    inflow = sum(edge.get_flow(time_step) for edge in node.inflows.values())
+                    outflow = sum(edge.get_flow(time_step) for edge in node.outflows.values())
 
-                data[time_step][f"{node_id}_Inflow"] = inflow
-                data[time_step][f"{node_id}_Outflow"] = outflow
+                    row_data[f"{node_id}_Inflow"] = inflow
+                    row_data[f"{node_id}_Outflow"] = outflow
 
-                if isinstance(node, SupplyNode):
-                    data[time_step][f"{node_id}_SupplyRate"] = node.get_supply_rate(time_step)
-                elif isinstance(node, StorageNode):
-                    data[time_step][f"{node_id}_Storage"] = node.storage[time_step]
-                    storage_change = node.storage[time_step] - node.storage[time_step - 1] if time_step > 0 else node.storage[0]
-                    data[time_step][f"{node_id}_StorageChange"] = storage_change
-                    # Add excess volume information if any spill occurred
-                    excess_volume = node.spillway_register[time_step]
-                    data[time_step][f"{node_id}_ExcessVolume"] = excess_volume
-                elif isinstance(node, DemandNode):
-                    data[time_step][f"{node_id}_Demand"] = node.get_demand_rate(time_step)
-                    data[time_step][f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
-                    data[time_step][f"{node_id}_Deficit"] = node.get_demand_rate(time_step) - node.satisfied_demand[time_step]
+                    if isinstance(node, SupplyNode):
+                        row_data[f"{node_id}_SupplyRate"] = node.get_supply_rate(time_step)
+                    elif isinstance(node, StorageNode):
+                        row_data[f"{node_id}_Storage"] = node.storage[time_step]
+                        storage_change = (node.storage[time_step] - node.storage[time_step - 1] 
+                                        if time_step > 0 else node.storage[0])
+                        row_data[f"{node_id}_StorageChange"] = storage_change
+                        row_data[f"{node_id}_ExcessVolume"] = node.spillway_register[time_step]
+                    elif isinstance(node, DemandNode):
+                        row_data[f"{node_id}_Demand"] = node.get_demand_rate(time_step)
+                        row_data[f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
+                        row_data[f"{node_id}_Deficit"] = (node.get_demand_rate(time_step) - 
+                                                        node.satisfied_demand[time_step])
+                except Exception as e:
+                    print(f"Warning: Error processing node {node_id} at time step {time_step}: {str(e)}")
 
-                # No additional data needed for SinkNode
+            # Populate edge data
+            for u, v, d in self.graph.edges(data=True):
+                edge = d['edge']
+                try:
+                    if time_step < len(edge.inflow):
+                        inflow = edge.inflow[time_step]
+                        outflow = edge.flow[time_step]
+                        losses = edge.losses[time_step]
+                        loss_percent = (losses / inflow * 100) if inflow > 0 else 0
+                        
+                        row_data[f"Edge_{u}_to_{v}_Inflow"] = inflow
+                        row_data[f"Edge_{u}_to_{v}_Outflow"] = outflow
+                        row_data[f"Edge_{u}_to_{v}_Losses"] = losses
+                        row_data[f"Edge_{u}_to_{v}_LossPercent"] = loss_percent
+                except Exception as e:
+                    print(f"Warning: Error processing edge {u}->{v} at time step {time_step}: {str(e)}")
 
-        # Create a DataFrame from the collected data
-        df = pd.DataFrame(data)
+            data.append(row_data)
+
+        # Create DataFrame
+        try:
+            df = pd.DataFrame(data, columns=all_columns)
+            return df
+        except Exception as e:
+            print(f"Error creating DataFrame: {str(e)}")
+            # Return minimal DataFrame with just TimeStep column
+            return pd.DataFrame({'TimeStep': range(self.time_steps)}) 
+
+    def visualize(self, filename='water_system_layout.png', display=True):
+        """
+        Create and save a network layout plot for the water system, showing flows and losses.
         
-        # Add a 'TimeStep' column
-        df.insert(0, 'TimeStep', range(self.time_steps))
+        Args:
+            filename (str): The name of the PNG file to save to. Defaults to 'water_system_layout.png'.
+            display (bool): Whether to display the plot or not. Defaults to True.
+        """
+        # Setting node positions based on easting and northing
+        pos = {}
+        for node, data in self.graph.nodes(data=True):
+            node_instance = data['node']
+            pos[node] = (node_instance.easting, node_instance.northing)
 
-        return df
+        # Create figure and axis objects with a single subplot
+        fig, ax = plt.subplots(figsize=(30, 25))
+        plt.title('Water System Network Layout', fontsize=20)
+        
+        # Define node styling
+        node_colors = {
+            SupplyNode: 'skyblue',
+            StorageNode: 'lightgreen',
+            DemandNode: 'salmon',
+            SinkNode: 'lightgray',
+            HydroWorks: 'orange'
+        }
+        
+        node_shapes = {
+            SupplyNode: 's',    # square
+            StorageNode: 's',   # square
+            DemandNode: 'o',    # circle
+            SinkNode: 's',      # square
+            HydroWorks: 'o',    # circle
+        }
+        
+        node_size = 5000
+        
+        # Draw nodes
+        for node_type in node_colors.keys():
+            node_list = [node for node, data in self.graph.nodes(data=True) 
+                        if isinstance(data['node'], node_type)]
+            nx.draw_networkx_nodes(self.graph, pos, 
+                                nodelist=node_list, 
+                                node_color=node_colors[node_type], 
+                                node_shape=node_shapes[node_type],
+                                node_size=node_size, 
+                                alpha=0.8,
+                                ax=ax)
+
+        # Draw edges with standard color
+        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', 
+                            arrows=True, arrowsize=65, width=2, ax=ax)
+
+        # Update node labels
+        labels = {}
+        for node, data in self.graph.nodes(data=True):
+            node_instance = data['node']
+            if isinstance(node_instance, SupplyNode):
+                actual_supply = node_instance.supply_history[-1] if node_instance.supply_history else 0
+                labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
+            elif isinstance(node_instance, DemandNode):
+                satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
+                current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
+                labels[node] = f"{node}\nDemand\n{satisfied_demand:.1f} ({current_demand:.1f})"
+            elif isinstance(node_instance, SinkNode):
+                total_inflow = sum(edge.flow[-1] if edge.flow else 0 
+                                for edge in node_instance.inflows.values())
+                labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
+            elif isinstance(node_instance, StorageNode):
+                actual_storage = node_instance.storage[-1] if node_instance.storage else 0
+                labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
+            elif isinstance(node_instance, HydroWorks):
+                total_inflow = sum(edge.flow[-1] if edge.flow else 0 
+                                for edge in node_instance.inflows.values())
+                labels[node] = f"{node}\nHydroWorks\nInflow: {total_inflow:.1f}"
+            else:
+                labels[node] = f"{node}\n{node_instance.__class__.__name__}"
+        
+        nx.draw_networkx_labels(self.graph, pos, labels, font_size=12, ax=ax)
+        
+        # Update edge labels to show flows and losses
+        edge_labels = {}
+        for u, v, d in self.graph.edges(data=True):
+            edge = d['edge']
+            if edge.flow and edge.inflow and edge.losses:
+                inflow = edge.inflow[-1]
+                outflow = edge.flow[-1]
+                losses = edge.losses[-1]
+                loss_percent = (losses / inflow * 100) if inflow > 0 else 0
+                edge_labels[(u, v)] = (f'In: {inflow:.1f}m³/s\n'
+                                    f'Out: {outflow:.1f}m³/s\n'
+                                    f'Loss: {edge.loss_factor} [/km]\n'
+                                    f'Cap: {edge.capacity}m³/s\n'
+                                    f'L: {edge.length:.1f} km\n')
+            else:
+                edge_labels[(u, v)] = f'Cap: {edge.capacity}'
+        
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, 
+                                font_size=10, ax=ax)
+        
+        plt.axis('off')
+        plt.tight_layout()
+        
+        # Save the figure
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"Network layout plot saved to {filename}")
+
+        # Display or close the plot
+        if display:
+            plt.show()
+        else:
+            plt.close(fig)

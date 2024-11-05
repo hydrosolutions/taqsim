@@ -25,6 +25,9 @@ The project is a Python-based water system simulation that models the flow of wa
 - Visualization: The visualize method in WaterSystem has been updated to correctly display information for nodes with variable rates.
 - Water Balance Calculations: The get_water_balance_table method has been updated to handle variable demand rates and provide more accurate data.
 - Seasonal Reservoir Test: A new test case has been added to simulate a system with seasonal supply and demand variations over a 10-year period.
+- Spillway Register: Reservoir excess volume is registered and saved when the reservoir capacity is exceeded. 
+- Node location: Each node has easting and northing attributes which are also used to calculate edge length if (and only if) length attribute is not available
+- Loss Factor: Water losses over edges are now determined using the edge length and a loss factor (in kilometer)
 
 ## Sample Test Systems
 Several sample test systems have been implemented:
@@ -55,7 +58,7 @@ Several sample test systems have been implemented:
 - [x] Proper flow to volume and volume to flow conversion for reservoir node water balance 
 - [x] Initialize reservoirs with initial condition of reservoir filling
 - [x] Implement reservoir spillway where V(t) <= Vmax is always true
-- [ ] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
+- [x] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
 - [ ] Implement water level-volume relationship for reservoir nodes
 - [ ] Implement evaporative losses at reservoir nodes
 
@@ -83,10 +86,9 @@ Several sample test systems have been implemented:
 ## Issues
 
 - Water Balance issues
-
 - Spillway: What happens to water when upstream inflow to hydroworks structure is larger than total outflow capacity of hydroworks structure? Have to build in spillway as in the case of the reservoir and heavily penalize spillway use at any time.
-
 - So far supply node data is importet from .csv only in ZRB_test file and not in module itself
+- Loss factor proportional to discharge or only dependent on canal length?
 
 ## Dependencies
 - NetworkX
