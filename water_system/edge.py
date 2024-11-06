@@ -15,12 +15,11 @@ class Edge:
         source (Node): The source node of the edge.
         target (Node): The target node of the edge.
         capacity (float): The maximum flow capacity of the edge.
-        flow (list): A list of flow values for each time step of the simulation.
+        outflow (list): A list of outflow values for each time step of the simulation.
         length (float): The length of the canals in the irrigation/demand system [km]
         loss_factor (float): The loss factor per unit distance [fraction/km].
         inflow (list): A list of inflow values before losses.
         losses (list): A list of total losses for each time step.
-        
     """
 
     def __init__(self, source, target, capacity, length=None, loss_factor=0.0):
@@ -37,17 +36,17 @@ class Edge:
         self.target = target
         self.capacity = capacity
         self.loss_factor = loss_factor
-        self.flow = []
+        self.outflow = []  # Changed from flow to outflow
         self.inflow = []
-        self.losses =[]
+        self.losses = []
 
         self.source.add_outflow(self)
         self.target.add_inflow(self)
 
         if length is not None:
-            self.length=length
+            self.length = length
         else:
-            self.length = self.get_edge_length() 
+            self.length = self.get_edge_length()
 
     def update(self, time_step, flow=None):
         """
@@ -76,7 +75,7 @@ class Edge:
         remaining_flow, losses = self.calculate_losses(input_flow)
         
         # Record the flow after losses and the total losses
-        self.flow.append(remaining_flow)
+        self.outflow.append(remaining_flow)  # Changed from flow to outflow
         self.losses.append(losses)
 
     def get_flow(self, time_step):
@@ -89,8 +88,8 @@ class Edge:
         Returns:
             float: The flow value for the specified time step, or 0 if the time step is out of range.
         """
-        if time_step < len(self.flow):
-            return self.flow[time_step]
+        if time_step < len(self.outflow):  # Changed from flow to outflow
+            return self.outflow[time_step]  # Changed from flow to outflow
         return 0
     
     def get_edge_length(self):

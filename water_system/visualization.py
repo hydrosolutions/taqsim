@@ -324,15 +324,15 @@ class WaterSystemVisualizer:
                 current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
                 labels[node] = f"{node}\nDemand\n{satisfied_demand:.1f} ({current_demand:.1f})"
             elif isinstance(node_instance, SinkNode):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 
-                                for edge in node_instance.inflows.values())
+                total_inflow = sum(edge.outflow[-1] if edge.outflow else 0 
+                                for edge in node_instance.inflow_edges.values())
                 labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
             elif isinstance(node_instance, StorageNode):
                 actual_storage = node_instance.storage[-1] if node_instance.storage else 0
                 labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
             elif isinstance(node_instance, HydroWorks):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 
-                                for edge in node_instance.inflows.values())
+                total_inflow = sum(edge.outflow[-1] if edge.outflow else 0 
+                                for edge in node_instance.inflow_edges.values())
                 labels[node] = f"{node}\nHydroWorks\nInflow: {total_inflow:.1f}"
             else:
                 labels[node] = f"{node}\n{node_instance.__class__.__name__}"
@@ -343,9 +343,9 @@ class WaterSystemVisualizer:
         edge_labels = {}
         for u, v, d in self.system.graph.edges(data=True):
             edge = d['edge']
-            if hasattr(edge, 'inflow') and hasattr(edge, 'losses') and edge.flow and edge.inflow and edge.losses:
+            if hasattr(edge, 'inflow') and hasattr(edge, 'losses') and edge.outflow and edge.inflow and edge.losses:
                 inflow = edge.inflow[-1]
-                outflow = edge.flow[-1]
+                outflow = edge.outflow[-1]
                 losses = edge.losses[-1]
                 loss_percent = (losses / inflow * 100) if inflow > 0 else 0
                 edge_labels[(u, v)] = (f'In: {inflow:.1f}m³/s\n'

@@ -26,8 +26,8 @@ class Node:
             id (str): A unique identifier for the node.
         """
         self.id = id
-        self.inflows = {}  # Dictionary of inflow edges
-        self.outflows = {}  # Dictionary of outflow edges
+        self.inflow_edges = {}  # Dictionary of inflow edges
+        self.outflow_edges = {}  # Dictionary of outflow edges
         self.easting = easting # easting coordinate of the node. Defaults to None.
         self.northing = northing # northing coordinate of the node. Defaults to None.
 
@@ -38,7 +38,7 @@ class Node:
         Args:
             edge (Edge): The edge to be added as an inflow.
         """
-        self.inflows[edge.source.id] = edge
+        self.inflow_edges[edge.source.id] = edge
 
     def add_outflow(self, edge):
         """
@@ -47,7 +47,7 @@ class Node:
         Args:
             edge (Edge): The edge to be added as an outflow.
         """
-        self.outflows[edge.target.id] = edge
+        self.outflow_edges[edge.target.id] = edge
 
     def update(self, time_step, dt):
         """
@@ -115,13 +115,13 @@ class SupplyNode(Node):
         current_supply_rate = self.get_supply_rate(time_step)
         self.supply_history.append(current_supply_rate)
 
-        total_capacity = sum(edge.capacity for edge in self.outflows.values())
+        total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
         if total_capacity > 0:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge_flow = (edge.capacity / total_capacity) * current_supply_rate
                 edge.update(time_step, edge_flow)
         else:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
 
 class SinkNode(Node):
@@ -141,7 +141,7 @@ class SinkNode(Node):
             dt (float): The duration of the time step in seconds.
 
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
         # Sink nodes remove all incoming water from the system
 
 class DemandNode(Node):
@@ -195,7 +195,7 @@ class DemandNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
         current_demand = self.get_demand_rate(time_step)
         satisfied = min(total_inflow, current_demand)
         excess = max(0, total_inflow - current_demand)
@@ -203,13 +203,13 @@ class DemandNode(Node):
         self.satisfied_demand.append(satisfied)
         self.excess_flow.append(excess)
 
-        total_outflow_capacity = sum(edge.capacity for edge in self.outflows.values())
+        total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
         if total_outflow_capacity > 0:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge_flow = (edge.capacity / total_outflow_capacity) * excess
                 edge.update(time_step, edge_flow)
         else:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
 
     def get_satisfied_demand(self, time_step):
@@ -262,7 +262,7 @@ class StorageNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The length of the time step in seconds.
         """
-        inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
+        inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
         previous_storage = self.storage[-1]
         
         # Convert flow rates (m³/s) to volumes (m³) for the time step
@@ -270,7 +270,7 @@ class StorageNode(Node):
         available_water = previous_storage + inflow_volume
         
         # Calculate total requested outflow
-        requested_outflow = sum(edge.capacity for edge in self.outflows.values())
+        requested_outflow = sum(edge.capacity for edge in self.outflow_edges.values())
         
         # Convert requested outflow to volume
         requested_outflow_volume = requested_outflow * dt
@@ -280,12 +280,12 @@ class StorageNode(Node):
         
         # Distribute actual outflow among edges proportionally
         if requested_outflow_volume > 0:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge_flow_volume = (edge.capacity / requested_outflow) * actual_outflow_volume
                 edge_flow_rate = edge_flow_volume / dt
                 edge.update(time_step, edge_flow_rate)
         else:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
         
         # Calculate new storage
@@ -333,15 +333,15 @@ class HydroWorks(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflows.values())
-        total_outflow_capacity = sum(edge.capacity for edge in self.outflows.values())
+        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
 
         if total_outflow_capacity > 0:
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 # Distribute water proportionally based on edge capacity
                 edge_flow = (edge.capacity / total_outflow_capacity) * total_inflow
                 edge.update(time_step, edge_flow)
         else:
             # If there's no outflow capacity, set all outflows to 0
-            for edge in self.outflows.values():
+            for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
