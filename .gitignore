@@ -157,4 +157,6 @@ cython_debug/
 
 *.csv
 !Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv
+!Akdarya_H_V_A.csv
+!Kattakurgan_H_V_A.csv
 .DS_Store

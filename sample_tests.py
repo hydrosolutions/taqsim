@@ -151,7 +151,7 @@ def create_simple_system_with_diversion():
     system = WaterSystem(dt)
 
     supply = SupplyNode("Source", default_supply_rate=100, easting=1, northing=1)
-    reservoir = StorageNode("MainReservoir", capacity=500, easting=2, northing=1)
+    reservoir = StorageNode.from_csv(id="MainReservoir", csv_path='./data/Kattakurgan_H_V_A.csv', easting=2, northing=1, initial_storage=0)
     diversion = HydroWorks("Diversion", easting=3, northing=2)
     urban = DemandNode("Urban", demand_rates=30, easting=3, northing=0)
     sink = SinkNode("Sink", easting=4, northing=1)

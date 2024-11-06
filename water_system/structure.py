@@ -305,30 +305,90 @@ class DemandNode(Node):
             return self.satisfied_demand[time_step]
         return 0
 
-class StorageNode(Node):
+class StorageNode(Node):  # Inherits from Node
     """
     Represents a water storage facility in the system.
+    Now enhanced with height-volume-area relationships from survey data.
 
     Attributes:
-        capacity (float): The maximum storage capacity of the node in cubic meters.
-        storage (list): A record of storage levels for each time step in cubic meters.
+        id (str): Unique identifier for the node
+        capacity (float): Maximum storage capacity [m³]
+        storage (list): Record of storage levels for each time step [m³]
+        survey_data (dict): Dictionary containing the height-volume-area relationships
+            from survey measurements
     """
+
+    @classmethod
+    def from_csv(cls, id, csv_path, capacity=None, easting=None, northing=None, initial_storage=0):
+        """
+        Create a StorageNode instance from CSV survey data.
+        
+        Args:
+            id (str): Node identifier
+            csv_path (str): Path to CSV file containing survey data
+            capacity (float, optional): If not provided, will use maximum volume from survey
+            easting (float, optional): Easting coordinate
+            northing (float, optional): Northing coordinate
+            
+        Expected CSV format:
+            Height_m,Volume_m3,Area_m2
+            100,0,1000
+            105,50000,2000
+            ...
+        
+        Returns:
+            StorageNode: Initialized storage node with survey data
+        """
+        try:
+            # Read and validate CSV
+            df = pd.read_csv(csv_path, sep=';')
+            
+            # Check required columns
+            required_cols = ['Height_m', 'Volume_m3', 'Area_m2']
+            if not all(col in df.columns for col in required_cols):
+                missing = [col for col in required_cols if col not in df.columns]
+                raise ValueError(f"Missing required columns: {missing}")
+            
+            # Sort by height and remove duplicates
+            df = df.sort_values('Height_m').drop_duplicates(subset=['Height_m'])
+            
+            # Create storage node instance
+            if capacity is None:
+                capacity = float(df['Volume_m3'].max())
+            
+            instance = cls(id=id, capacity=capacity, easting=easting, northing=northing, initial_storage=initial_storage)
+            
+            # Store survey data in dictionary
+            instance.survey_data = {
+                'heights': df['Height_m'].values,
+                'volumes': df['Volume_m3'].values,
+                'areas': df['Area_m2'].values
+            }
+            
+            return instance
+            
+        except Exception as e:
+            raise Exception(f"Error loading CSV file: {str(e)}")
 
     def __init__(self, id, capacity, initial_storage=0, easting=None, northing=None):
         """
         Initialize a StorageNode object.
 
         Args:
-            id (str): A unique identifier for the node.
-            capacity (float): The maximum storage capacity of the node in cubic meters.
-            initial_storage (float, optional): The initial storage level in cubic meters. Defaults to 0.
+            id (str): Unique identifier for the node
+            capacity (float): Maximum storage capacity [m³]
+            initial_storage (float, optional): Initial storage volume. Defaults to 0.
+            easting (float, optional): Easting coordinate
+            northing (float, optional): Northing coordinate
         """
-        super().__init__(id)
+        # Call parent class (Node) initialization
+        super().__init__(id, easting=easting, northing=northing)
+        
+        # Initialize StorageNode specific attributes
         self.capacity = capacity
         self.storage = [initial_storage]
-        self.spillway_register = [0] # List to store spill events
-        self.easting = easting # easting coordinate of the node. Defaults to None.
-        self.northing = northing # northing coordinate of the node. Defaults to None.
+        self.spillway_register = [0]
+        self.survey_data = None  # Will be populated if created from CSV
 
     def update(self, time_step, dt):
         """
