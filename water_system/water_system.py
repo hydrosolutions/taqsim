@@ -1,17 +1,15 @@
 """
 This module defines the WaterSystem class, which is the main class for creating and managing
-a water system simulation. It uses NetworkX for graph representation and matplotlib for visualization.
+a water system simulation. It uses NetworkX for graph representation.
 
-The WaterSystem class allows users to add nodes and edges to the system, run simulations,
-and visualize the results.
+The WaterSystem class allows users to add nodes and edges to the system and run simulations
 """
 
 import networkx as nx
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import pandas as pd
 from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode
 from .edge import Edge
+from .visualization import WaterSystemVisualizer
 
 class WaterSystem:
     """
@@ -230,116 +228,3 @@ class WaterSystem:
             print(f"Error creating DataFrame: {str(e)}")
             # Return minimal DataFrame with just TimeStep column
             return pd.DataFrame({'TimeStep': range(self.time_steps)}) 
-
-    def visualize(self, filename='water_system_layout.png', display=True):
-        """
-        Create and save a network layout plot for the water system, showing flows and losses.
-        
-        Args:
-            filename (str): The name of the PNG file to save to. Defaults to 'water_system_layout.png'.
-            display (bool): Whether to display the plot or not. Defaults to True.
-        """
-        # Setting node positions based on easting and northing
-        pos = {}
-        for node, data in self.graph.nodes(data=True):
-            node_instance = data['node']
-            pos[node] = (node_instance.easting, node_instance.northing)
-
-        # Create figure and axis objects with a single subplot
-        fig, ax = plt.subplots(figsize=(30, 25))
-        plt.title('Water System Network Layout', fontsize=20)
-        
-        # Define node styling
-        node_colors = {
-            SupplyNode: 'skyblue',
-            StorageNode: 'lightgreen',
-            DemandNode: 'salmon',
-            SinkNode: 'lightgray',
-            HydroWorks: 'orange'
-        }
-        
-        node_shapes = {
-            SupplyNode: 's',    # square
-            StorageNode: 's',   # square
-            DemandNode: 'o',    # circle
-            SinkNode: 's',      # square
-            HydroWorks: 'o',    # circle
-        }
-        
-        node_size = 5000
-        
-        # Draw nodes
-        for node_type in node_colors.keys():
-            node_list = [node for node, data in self.graph.nodes(data=True) 
-                        if isinstance(data['node'], node_type)]
-            nx.draw_networkx_nodes(self.graph, pos, 
-                                nodelist=node_list, 
-                                node_color=node_colors[node_type], 
-                                node_shape=node_shapes[node_type],
-                                node_size=node_size, 
-                                alpha=0.8,
-                                ax=ax)
-
-        # Draw edges with standard color
-        nx.draw_networkx_edges(self.graph, pos, edge_color='gray', 
-                            arrows=True, arrowsize=65, width=2, ax=ax)
-
-        # Update node labels
-        labels = {}
-        for node, data in self.graph.nodes(data=True):
-            node_instance = data['node']
-            if isinstance(node_instance, SupplyNode):
-                actual_supply = node_instance.supply_history[-1] if node_instance.supply_history else 0
-                labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
-            elif isinstance(node_instance, DemandNode):
-                satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
-                current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
-                labels[node] = f"{node}\nDemand\n{satisfied_demand:.1f} ({current_demand:.1f})"
-            elif isinstance(node_instance, SinkNode):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 
-                                for edge in node_instance.inflows.values())
-                labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
-            elif isinstance(node_instance, StorageNode):
-                actual_storage = node_instance.storage[-1] if node_instance.storage else 0
-                labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
-            elif isinstance(node_instance, HydroWorks):
-                total_inflow = sum(edge.flow[-1] if edge.flow else 0 
-                                for edge in node_instance.inflows.values())
-                labels[node] = f"{node}\nHydroWorks\nInflow: {total_inflow:.1f}"
-            else:
-                labels[node] = f"{node}\n{node_instance.__class__.__name__}"
-        
-        nx.draw_networkx_labels(self.graph, pos, labels, font_size=12, ax=ax)
-        
-        # Update edge labels to show flows and losses
-        edge_labels = {}
-        for u, v, d in self.graph.edges(data=True):
-            edge = d['edge']
-            if edge.flow and edge.inflow and edge.losses:
-                inflow = edge.inflow[-1]
-                outflow = edge.flow[-1]
-                losses = edge.losses[-1]
-                loss_percent = (losses / inflow * 100) if inflow > 0 else 0
-                edge_labels[(u, v)] = (f'In: {inflow:.1f}m³/s\n'
-                                    f'Out: {outflow:.1f}m³/s\n'
-                                    f'Loss: {edge.loss_factor} [/km]\n'
-                                    f'Cap: {edge.capacity}m³/s\n'
-                                    f'L: {edge.length:.1f} km\n')
-            else:
-                edge_labels[(u, v)] = f'Cap: {edge.capacity}'
-        
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels=edge_labels, 
-                                font_size=10, ax=ax)
-        
-        plt.axis('off')
-        plt.tight_layout()
-        
-        # Save the figure
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
-        print(f"Network layout plot saved to {filename}")
-
-        # Display or close the plot
-        if display:
-            plt.show()
-        else:
-            plt.close(fig)

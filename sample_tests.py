@@ -3,7 +3,7 @@ import math
 import networkx as nx 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
 
 def debug_hydroworks_flow():
     """
@@ -350,7 +350,7 @@ def generate_seasonal_demand(num_time_steps):
     return demand_rates
 
 def run_sample_tests():
-    """
+    
     print("\n" + "="*50 + "\n")
 
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
@@ -370,7 +370,8 @@ def run_sample_tests():
 
     plot_water_balance_time_series(super_simple_system, "ts_plot_super_simple_system.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(super_simple_system, "balance_table_super_simple_system.csv")
-    super_simple_system.visualize("nw_plot_super_simple_system.png", display=False)
+    vis=WaterSystemVisualizer(super_simple_system, 'super_simple')
+    vis.plot_network_layout()
     
     print("\n" + "="*50 + "\n")
 
@@ -395,8 +396,9 @@ def run_sample_tests():
 
     plot_water_balance_time_series(simple_system, "ts_plot_simple_system.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(simple_system, "balance_table_simple_system.csv")
-    simple_system.visualize("nw_plot_simple_system.png", display=False)
-    """
+    vis=WaterSystemVisualizer(simple_system, 'simple')
+    vis.plot_network_layout()
+    
     print("\n" + "="*50 + "\n")
 
     # Test: HydroWorks System with 3 Diversions. Two sources feeding into a hydroworks diverting water to a third hydroworks. Fromt the first hydroworks, there is a brnaching to a demand node from which return flow ends in the third hydroworks. Total water from the third hydroworks flows into the sink.
@@ -404,9 +406,13 @@ def run_sample_tests():
     print("HydroWorks System Test:")
     num_time_steps = 12
     hydroworks_system_3_diversions.simulate(num_time_steps)
+
+    visualizer=WaterSystemVisualizer(hydroworks_system_3_diversions, 'HW_3_diversions')
+    visualizer.plot_node_flows(['HydroWorks1', 'Agriculture'])
+    visualizer.plot_network_layout()
+
     plot_water_balance_time_series(hydroworks_system_3_diversions, "ts_plot_hydroworks_3_diversions_system.png")
     save_water_balance_to_csv(hydroworks_system_3_diversions, "balance_table_hydroworks_3_diversions_system.csv")
-    hydroworks_system_3_diversions.visualize("nw_plot_hydroworks_3_diversions_system_balance.png", display=False)
     
     print("\n" + "="*50 + "\n")
 
@@ -430,8 +436,9 @@ def run_sample_tests():
 
     plot_water_balance_time_series(simple_system_with_diversion, "ts_plot_simple_system_with_diversion.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(simple_system_with_diversion, "balance_table_simple_system_with_diversion.csv")
-    simple_system_with_diversion.visualize("nw_plot_simple_system_with_diversion.png", display=False)
-    """
+    vis=WaterSystemVisualizer(simple_system_with_diversion, 'simple_w_diversion')
+    vis.plot_network_layout()
+    
     print("\n" + "="*50 + "\n")
 
     # Test: HydroWorks System with 2 Diversions. Two sources feeding into a hydrowokrs diversion water to a ag demand site and a second diversion. Return flow from the ag demand site enters that second diversion for the total flow to end up in one sink.
@@ -441,7 +448,8 @@ def run_sample_tests():
     hydroworks_system_2_diversions.simulate(num_time_steps)
     plot_water_balance_time_series(hydroworks_system_2_diversions, "ts_plot_hydroworks_2_diversions_system.png")
     save_water_balance_to_csv(hydroworks_system_2_diversions, "balance_table_hydroworks_2_diversions_system.csv")
-    hydroworks_system_2_diversions.visualize("nw_plot_hydroworks_2_diversions_system_balance.png", display=False)
+    vis=WaterSystemVisualizer(hydroworks_system_2_diversions, 'HW_2_diversion')
+    vis.plot_network_layout()
 
     print("\n" + "="*50 + "\n")
     
@@ -452,7 +460,8 @@ def run_sample_tests():
     complex_system.simulate(num_time_steps)
     plot_water_balance_time_series(complex_system, "ts_plot_complex_system.png")
     save_water_balance_to_csv(complex_system, "balance_table_complex_system.csv")
-    complex_system.visualize("nw_plot_complex_system.png", display=False)
+    vis=WaterSystemVisualizer(complex_system, 'complex')
+    vis.plot_network_layout()
     
     print("\n" + "="*50 + "\n")
 
@@ -463,25 +472,6 @@ def run_sample_tests():
     print("Running Seasonal Reservoir Test")
 
     seasonal_system.simulate(num_time_steps)
-
-    # Extract and print results
-    reservoir_node = next(data['node'] for _, data in seasonal_system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))
-    demand_node = next(data['node'] for _, data in seasonal_system.graph.nodes(data=True) if isinstance(data['node'], DemandNode))
-
-    print("\nReservoir Storage Levels (every 12 months):")
-    for year in range(10):
-        month = year * 12
-        storage = reservoir_node.get_storage(month)
-        print(f"Year {year + 1}: {storage:,.0f} m³")
-
-    print("\nDemand Satisfaction (every 12 months):")
-    for year in range(10):
-        month = year * 12
-        satisfied = demand_node.get_satisfied_demand(month)
-        total_demand = demand_node.get_demand_rate(month)
-        satisfaction_rate = (satisfied / total_demand) * 100 if total_demand > 0 else 100
-        print(f"Year {year + 1}: {satisfaction_rate:.2f}% ({satisfied:.2f} / {total_demand:.2f} m³/s)")
-
     # Generate water balance table
     balance_table = seasonal_system.get_water_balance_table()
     balance_table.to_csv("balance_table_seasonal_reservoir_system.csv", index=False)
@@ -498,9 +488,10 @@ def run_sample_tests():
     ]
 
     plot_water_balance_time_series(seasonal_system, "ts_plot_seasonal_reservoir_system.png", columns_to_plot)
-    seasonal_system.visualize("nw_plot_seasonal_reservoir_system.png", display=False)
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
-    """
+    vis=WaterSystemVisualizer(seasonal_system, 'seasonal')
+    vis.plot_network_layout()
+    
 # Run the sample tests
 if __name__ == "__main__":
   run_sample_tests()

@@ -4,7 +4,7 @@ import networkx as nx
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
 
 def create_seasonal_ZRB_system():
     """
@@ -238,6 +238,15 @@ def run_sample_tests():
     num_time_steps = 24
     ZRB_system.simulate(num_time_steps)
 
+    vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
+    #visualizer.plot_node_flows(['MountainSource', 'Sink-Navoi'])
+    vis_ZRB.plot_storage_levels()
+    vis_ZRB.plot_demand_satisfaction()
+    vis_ZRB.plot_demand_deficit_heatmap()
+    vis_ZRB.plot_supply_utilization()
+    vis_ZRB.plot_storage_spills()
+    vis_ZRB.plot_network_layout()
+
     # Extract and print results
     reservoir_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))
     demand_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], DemandNode))
@@ -272,7 +281,6 @@ def run_sample_tests():
 
     plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png", columns_to_plot=columns_to_plot)
     save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
-    ZRB_system.visualize("nw_plot_ZRB_system.png", display=False)
 
     # Visualize Reservoirs
     columns_to_plot = [

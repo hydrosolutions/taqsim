@@ -43,10 +43,11 @@ Usage:
 from .water_system import WaterSystem
 from .structure import Node, SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks
 from .edge import Edge
+from .visualization import WaterSystemVisualizer
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'Node', 'SupplyNode', 'SinkNode', 'DemandNode', 
-           'StorageNode', 'HydroWorks', 'Edge']
+           'StorageNode', 'HydroWorks', 'Edge', 'WaterSystemVisualizer']
 
 # Package version
 __version__ = '0.2.0'
