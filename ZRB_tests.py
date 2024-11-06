@@ -41,6 +41,13 @@ def create_seasonal_ZRB_system():
     # Reservoir
     RES_Kattakurgan =StorageNode.from_csv("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
     RES_AkDarya = StorageNode.from_csv("RES-AkDarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
+    
+    print('interpolation ranges: ')
+    print(f'Akdarya: {RES_AkDarya.get_interpolation_ranges()}')
+    print(f'Kattakurgan: {RES_Kattakurgan.get_interpolation_ranges()}')
+    print(f'Kattakurgan area at 500 m asl: {RES_Kattakurgan.get_area_from_height(500)}')
+    print(f'Akdarya area at 500 m asl: {RES_AkDarya.get_area_from_height(500)}')
+    
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
     sink_eskiankhor = SinkNode("EskiAnkhor", easting=286019.5,northing=4384078.7)

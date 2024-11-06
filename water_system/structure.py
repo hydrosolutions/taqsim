@@ -6,6 +6,7 @@ SupplyNode, SinkNode, DemandNode, StorageNode, and HydroWorks.
 Each node type has its own behavior for handling water inflows and outflows.
 """
 import pandas as pd
+from scipy.interpolate import interp1d
 
 class Node:
     """
@@ -305,7 +306,7 @@ class DemandNode(Node):
             return self.satisfied_demand[time_step]
         return 0
 
-class StorageNode(Node):  # Inherits from Node
+class StorageNode(Node):  
     """
     Represents a water storage facility in the system.
     Now enhanced with height-volume-area relationships from survey data.
@@ -365,6 +366,9 @@ class StorageNode(Node):  # Inherits from Node
                 'areas': df['Area_m2'].values
             }
             
+            # Initialize interpolation functions
+            instance._initialize_interpolators()
+            
             return instance
             
         except Exception as e:
@@ -390,6 +394,111 @@ class StorageNode(Node):  # Inherits from Node
         self.spillway_register = [0]
         self.survey_data = None  # Will be populated if created from CSV
 
+    def _initialize_interpolators(self):
+        """Initialize interpolation functions for height-volume-area relationships."""
+        if not self.survey_data:
+            return
+
+        try:
+            from scipy.interpolate import interp1d
+            
+            # Create height to volume interpolator
+            self._height_to_volume = interp1d(
+                self.survey_data['heights'],
+                self.survey_data['volumes'],
+                kind='linear',
+                bounds_error=False,  # Allow extrapolation
+                fill_value=(self.survey_data['volumes'][0], self.survey_data['volumes'][-1])
+            )
+            
+            # Create volume to height interpolator
+            self._volume_to_height = interp1d(
+                self.survey_data['volumes'],
+                self.survey_data['heights'],
+                kind='linear',
+                bounds_error=False,
+                fill_value=(self.survey_data['heights'][0], self.survey_data['heights'][-1])
+            )
+            
+            # Create height to area interpolator
+            self._height_to_area = interp1d(
+                self.survey_data['heights'],
+                self.survey_data['areas'],
+                kind='linear',
+                bounds_error=False,
+                fill_value=(self.survey_data['areas'][0], self.survey_data['areas'][-1])
+            )
+            
+        except Exception as e:
+            raise Exception(f"Error creating interpolation functions: {str(e)}")
+
+    def get_volume_from_height(self, height):
+        """
+        Get storage volume for a given height.
+        
+        Args:
+            height (float): Water level height [m]
+            
+        Returns:
+            float: Corresponding storage volume [m³]
+        """
+        if self._height_to_volume is None:
+            raise ValueError("No height-volume relationship available")
+        return float(self._height_to_volume(height))
+
+    def get_height_from_volume(self, volume):
+        """
+        Get water level height for a given storage volume.
+        
+        Args:
+            volume (float): Storage volume [m³]
+            
+        Returns:
+            float: Corresponding water level height [m]
+        """
+        if self._volume_to_height is None:
+            raise ValueError("No volume-height relationship available")
+        return float(self._volume_to_height(volume))
+
+    def get_area_from_height(self, height):
+        """
+        Get surface area for a given height.
+        
+        Args:
+            height (float): Water level height [m]
+            
+        Returns:
+            float: Corresponding surface area [m²]
+        """
+        if self._height_to_area is None:
+            raise ValueError("No height-area relationship available")
+        return float(self._height_to_area(height))
+
+    def get_interpolation_ranges(self):
+        """
+        Get the valid ranges for interpolation.
+        
+        Returns:
+            dict: Dictionary containing min/max values for height, volume, and area
+        """
+        if not self.survey_data:
+            return None
+            
+        return {
+            'height_range': {
+                'min': float(self.survey_data['heights'][0]),
+                'max': float(self.survey_data['heights'][-1])
+            },
+            'volume_range': {
+                'min': float(self.survey_data['volumes'][0]),
+                'max': float(self.survey_data['volumes'][-1])
+            },
+            'area_range': {
+                'min': float(self.survey_data['areas'][0]),
+                'max': float(self.survey_data['areas'][-1])
+            }
+        }
+    
     def update(self, time_step, dt):
         """
         Update the StorageNode's state for the given time step.
