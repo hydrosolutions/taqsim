@@ -72,24 +72,38 @@ class Edge:
         self.inflow.append(input_flow)
         
         # Calculate remaining flow after losses
-        remaining_flow, losses = self.calculate_losses(input_flow)
+        remaining_flow, losses = self.calculate_edge_losses(input_flow)
         
         # Record the flow after losses and the total losses
         self.outflow.append(remaining_flow)  # Changed from flow to outflow
         self.losses.append(losses)
 
-    def get_flow(self, time_step):
+    def get_edge_inflow(self, time_step):
         """
-        Get the flow value for a specific time step.
+        Get the inflow value for a specific time step.
 
         Args:
-            time_step (int): The time step for which to retrieve the flow value.
+            time_step (int): The time step for which to retrieve the inflow value.
 
         Returns:
-            float: The flow value for the specified time step, or 0 if the time step is out of range.
+            float: The inflow value for the specified time step, or 0 if the time step is out of range.
         """
-        if time_step < len(self.outflow):  # Changed from flow to outflow
-            return self.outflow[time_step]  # Changed from flow to outflow
+        if time_step < len(self.inflow):
+            return self.inflow[time_step]
+        return 0
+
+    def get_edge_outflow(self, time_step):
+        """
+        Get the outflow value for a specific time step.
+
+        Args:
+            time_step (int): The time step for which to retrieve the outflow value.
+
+        Returns:
+            float: The outflow value for the specified time step, or 0 if the time step is out of range.
+        """
+        if time_step < len(self.outflow):
+            return self.outflow[time_step]
         return 0
     
     def get_edge_length(self):
@@ -105,7 +119,7 @@ class Edge:
         
         return math.sqrt(delta_easting**2 + delta_northing**2)/1000
     
-    def calculate_losses(self, flow):
+    def calculate_edge_losses(self, flow):
         """
         Calculate water losses along the edge based on distance and loss factor.
         

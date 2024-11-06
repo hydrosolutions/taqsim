@@ -89,8 +89,8 @@ class WaterSystem:
             print(f"\nTime Step {time_step}:")
             for node_id, node_data in self.graph.nodes(data=True):
                 node = node_data['node']
-                inflow = sum(edge.get_flow(time_step) for edge in node.inflow_edges.values())
-                outflow = sum(edge.get_flow(time_step) for edge in node.outflow_edges.values())
+                inflow = sum(edge.get_edge_outflow(time_step) for edge in node.inflow_edges.values())
+                outflow = sum(edge.get_edge_inflow(time_step) for edge in node.outflow_edges.values())
                 
                 if isinstance(node, DemandNode):
                     balance = inflow - outflow - node.satisfied_demand[time_step]
@@ -179,8 +179,8 @@ class WaterSystem:
             for node_id, node_data in self.graph.nodes(data=True):
                 node = node_data['node']
                 try:
-                    inflow = sum(edge.get_flow(time_step) for edge in node.inflow_edges.values())
-                    outflow = sum(edge.get_flow(time_step) for edge in node.outflow_edges.values())
+                    inflow = sum(edge.get_edge_outflow(time_step) for edge in node.inflow_edges.values())
+                    outflow = sum(edge.get_edge_inflow(time_step) for edge in node.outflow_edges.values())
 
                     row_data[f"{node_id}_Inflow"] = inflow
                     row_data[f"{node_id}_Outflow"] = outflow

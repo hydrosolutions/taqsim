@@ -141,7 +141,7 @@ class SinkNode(Node):
             dt (float): The duration of the time step in seconds.
 
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
         # Sink nodes remove all incoming water from the system
 
 class DemandNode(Node):
@@ -195,7 +195,7 @@ class DemandNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
         current_demand = self.get_demand_rate(time_step)
         satisfied = min(total_inflow, current_demand)
         excess = max(0, total_inflow - current_demand)
@@ -262,7 +262,7 @@ class StorageNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The length of the time step in seconds.
         """
-        inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
         previous_storage = self.storage[-1]
         
         # Convert flow rates (m³/s) to volumes (m³) for the time step
@@ -333,7 +333,7 @@ class HydroWorks(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        total_inflow = sum(edge.get_flow(time_step) for edge in self.inflow_edges.values())
+        total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
         total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
 
         if total_outflow_capacity > 0:
