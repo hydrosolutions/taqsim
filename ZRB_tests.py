@@ -16,11 +16,13 @@ def create_seasonal_ZRB_system():
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    num_time_steps = 12 * 5  # 10 years of monthly data
+    num_time_steps = 12 * 5  # 5 years of monthly data
+    start_year = 2014
+    start_month = 1
     system = WaterSystem(dt=dt)
 
     # Create nodes
-    supply = SupplyNode("MountainSource", supply_rates=import_supply_data("data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", 2014, 1, num_time_steps), easting=381835,northing=4374682)
+    supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file="data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
     # HydroWorks Nodes
     HW_Ravadhoza = HydroWorks("HW-Ravadhoza", easting=363094.43,northing=4377810.64)
     HW_AkKaraDarya = HydroWorks("HW-AkKaraDarya", easting=333156.64,northing=4395650.43)
@@ -203,30 +205,6 @@ def generate_seasonal_demand(num_time_steps):
         demand_rate = base_demand + amplitude * seasonal_factor
         demand_rates.append(max(0, demand_rate))  # Ensure non-negative demand
     return demand_rates
-
-def import_supply_data(csv_file, start_year, start_month, num_time_steps):
-    # Read the CSV file into a pandas DataFrame
-    supply = pd.read_csv(csv_file, parse_dates=['Date'])
-    
-    # Filter the DataFrame to find the start point
-    start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
-    end_date = start_date+pd.DateOffset(months=num_time_steps)
-    supply = supply[(supply['Date'] >= start_date) & (supply["Date"]< end_date)]
-    
-    
-    # Check if the start date can be found in the data
-    if supply["Date"].iloc[0] != start_date:
-        print(f"Warning: No data found starting from {start_year}-{start_month:02d}. Please check the input date.")
-        raise SystemExit
-        return []
-    
-    # Extract the required number of Q values
-    supply_values = supply['Q'].tolist()
-    # Check if enough time steps are available
-    if len(supply_values) < num_time_steps:
-        print(f"Warning: Only {len(supply_values)} time steps are available starting from {start_year}-{start_month:02d}, but {num_time_steps} were requested.")
-        raise SystemExit
-    return supply_values
 
 def run_sample_tests():
 
