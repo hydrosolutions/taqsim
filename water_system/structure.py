@@ -353,6 +353,14 @@ class StorageNode(Node):
             # Sort by height and remove duplicates
             df = df.sort_values('Height_m').drop_duplicates(subset=['Height_m'])
             
+            # Convert elevations to water levels (depth above ground)
+            min_elevation = df['Height_m'].min()
+            df['Water_Level_m'] = df['Height_m'] - min_elevation
+            
+            # Store original elevations for reference
+            bottom_elevation = min_elevation
+            max_elevation = df['Height_m'].max()
+
             # Create storage node instance
             if capacity is None:
                 capacity = float(df['Volume_m3'].max())
@@ -361,9 +369,13 @@ class StorageNode(Node):
             
             # Store survey data in dictionary
             instance.survey_data = {
-                'heights': df['Height_m'].values,
+                'water_levels': df['Water_Level_m'].values,  # Depth above ground
+                'elevations': df['Height_m'].values,         # Original elevations
                 'volumes': df['Volume_m3'].values,
-                'areas': df['Area_m2'].values
+                'areas': df['Area_m2'].values,
+                'bottom_elevation': bottom_elevation,        # Ground level
+                'max_elevation': max_elevation,              # Maximum elevation
+                'max_depth': max_elevation - min_elevation   # Maximum water depth
             }
             
             # Initialize interpolation functions
@@ -393,6 +405,10 @@ class StorageNode(Node):
         self.storage = [initial_storage]
         self.spillway_register = [0]
         self.survey_data = None  # Will be populated if created from CSV
+        if self.survey_data is not None:
+            self.water_level = [self.get_level_from_volume(initial_storage)]
+        else:
+            self.water_level = [0]
 
     def _initialize_interpolators(self):
         """Initialize interpolation functions for height-volume-area relationships."""
@@ -400,11 +416,11 @@ class StorageNode(Node):
             return
 
         try:
-            from scipy.interpolate import interp1d
+            #from scipy.interpolate import interp1d
             
             # Create height to volume interpolator
-            self._height_to_volume = interp1d(
-                self.survey_data['heights'],
+            self._level_to_volume = interp1d(
+                self.survey_data['water_levels'],
                 self.survey_data['volumes'],
                 kind='linear',
                 bounds_error=False,  # Allow extrapolation
@@ -412,17 +428,17 @@ class StorageNode(Node):
             )
             
             # Create volume to height interpolator
-            self._volume_to_height = interp1d(
+            self._volume_to_level = interp1d(
                 self.survey_data['volumes'],
-                self.survey_data['heights'],
+                self.survey_data['water_levels'],
                 kind='linear',
                 bounds_error=False,
-                fill_value=(self.survey_data['heights'][0], self.survey_data['heights'][-1])
+                fill_value=(self.survey_data['water_levels'][0], self.survey_data['water_levels'][-1])
             )
             
             # Create height to area interpolator
-            self._height_to_area = interp1d(
-                self.survey_data['heights'],
+            self._level_to_area = interp1d(
+                self.survey_data['water_levels'],
                 self.survey_data['areas'],
                 kind='linear',
                 bounds_error=False,
@@ -432,47 +448,92 @@ class StorageNode(Node):
         except Exception as e:
             raise Exception(f"Error creating interpolation functions: {str(e)}")
 
-    def get_volume_from_height(self, height):
+    def get_volume_from_level(self, water_level):
         """
-        Get storage volume for a given height.
+        Get storage volume for a given water level.
         
         Args:
-            height (float): Water level height [m]
+            water_level (float): Water level above ground [m]
             
         Returns:
             float: Corresponding storage volume [m³]
         """
-        if self._height_to_volume is None:
-            raise ValueError("No height-volume relationship available")
-        return float(self._height_to_volume(height))
+        if not self.survey_data:
+            print(f'{self.id} volume can not be determined from water level: Height-Volume relation is missing!')
+            return
 
-    def get_height_from_volume(self, volume):
+        if self._level_to_volume is None:
+            raise ValueError("No level-volume relationship available")
+        return float(self._level_to_volume(water_level))
+        
+
+    def get_level_from_volume(self, volume):
         """
-        Get water level height for a given storage volume.
+        Get water level for a given storage volume.
         
         Args:
             volume (float): Storage volume [m³]
             
         Returns:
-            float: Corresponding water level height [m]
+            float: Corresponding water level above ground [m]
         """
-        if self._volume_to_height is None:
-            raise ValueError("No volume-height relationship available")
-        return float(self._volume_to_height(volume))
+        if not self.survey_data:
+            print(f'{self.id} water level can not be determined from volume: Height-Volume relation is missing!')
+            return
 
-    def get_area_from_height(self, height):
+        if self._volume_to_level is None:
+            raise ValueError("No volume-level relationship available")
+        return float(self._volume_to_level(volume))
+
+    def get_area_from_level(self, water_level):
         """
-        Get surface area for a given height.
+        Get surface area for a given water level.
         
         Args:
-            height (float): Water level height [m]
+            water_level (float): Water level above ground [m]
             
         Returns:
             float: Corresponding surface area [m²]
         """
-        if self._height_to_area is None:
-            raise ValueError("No height-area relationship available")
-        return float(self._height_to_area(height))
+        if not self.survey_data:
+            print(f'{self.id} water surface area can not be determined from water level: Height-Area relation is missing!')
+            return
+        
+        if self._level_to_area is None:
+            raise ValueError("No level-area relationship available")
+        return float(self._level_to_area(water_level))
+
+    def get_elevation_from_level(self, water_level):
+        """Convert water level to elevation."""
+        if not self.survey_data:
+            print(f'{self.id}: Height-Volume-Area relation is missing!')
+            return
+        return self.survey_data['bottom_elevation'] + water_level
+
+    def get_level_from_elevation(self, elevation):
+        """Convert elevation to water level."""
+        if not self.survey_data:
+            print(f'{self.id}: Height-Volume-Area relation is missing!')
+            return
+        return elevation - self.survey_data['bottom_elevation']
+    
+    def get_reservoir_info(self):
+        """
+        Get basic reservoir information.
+        
+        Returns:
+            dict: Dictionary containing reservoir characteristics
+        """
+        if not self.survey_data:
+            print(f'{self.id}: Height-Volume-Area relation is missing!')
+            return
+        return {
+            'bottom_elevation': self.survey_data['bottom_elevation'],
+            'max_elevation': self.survey_data['max_elevation'],
+            'max_depth': self.survey_data['max_depth'],
+            'max_volume': self.capacity,
+            'max_area': float(self._level_to_area(self.survey_data['max_depth']))
+        }
 
     def get_interpolation_ranges(self):
         """
@@ -485,9 +546,13 @@ class StorageNode(Node):
             return None
             
         return {
-            'height_range': {
-                'min': float(self.survey_data['heights'][0]),
-                'max': float(self.survey_data['heights'][-1])
+            'elevation_range': {
+                'min': float(self.survey_data['elevations'][0]),
+                'max': float(self.survey_data['elevations'][-1])
+            },
+            'water_level_range': {
+                'min': float(self.survey_data['water_levels'][0]),
+                'max': float(self.survey_data['water_levels'][-1])
             },
             'volume_range': {
                 'min': float(self.survey_data['volumes'][0]),
@@ -549,6 +614,8 @@ class StorageNode(Node):
         self.spillway_register.append(excess_volume)
         
         self.storage.append(new_storage)
+        if self.survey_data:
+            self.water_level.append(self.get_level_from_volume(new_storage))
 
     def get_storage(self, time_step):
         """
