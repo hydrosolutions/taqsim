@@ -26,7 +26,21 @@ class Node:
 
         Args:
             id (str): A unique identifier for the node.
+            easting (float, optional): The easting coordinate of the node.
+            northing (float, optional): The northing coordinate of the node.
+
+        Raises:
+            ValueError: If id is empty or coordinates are invalid.
         """
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+
+
         self.id = id
         self.inflow_edges = {}  # Dictionary of inflow edges
         self.outflow_edges = {}  # Dictionary of outflow edges
@@ -90,17 +104,16 @@ class SupplyNode(Node):
             start_month (int, optional): Starting month (1-12) for CSV data import. Defaults to None.
             num_time_steps (int, optional): Number of time steps to import from CSV. Defaults to None.
         """
-        super().__init__(id)
+        super().__init__(id, easting, northing)
         self.default_supply_rate = default_supply_rate
         self.supply_history = []
-        self.easting = easting
-        self.northing = northing
 
         self.supply_rates = self._initialize_supply_rates(
             id, csv_file, start_year, start_month, num_time_steps, supply_rates
         )
 
-    def _initialize_supply_rates(self, id, csv_file, start_year, start_month, num_time_steps, supply_rates):
+    def _initialize_supply_rates(self, id, csv_file, start_year, start_month, 
+                                 num_time_steps, supply_rates):
         """
         Initialize supply rates from either CSV or direct input.
         
@@ -158,15 +171,19 @@ class SupplyNode(Node):
             # Read the CSV file into a pandas DataFrame
             supply = pd.read_csv(csv_file, parse_dates=['Date'])
             
+            if 'Date' not in supply.columns or 'Q' not in supply.columns:
+                raise ValueError("CSV file must contain 'Date' and 'Q' columns")
+        
             # Filter the DataFrame to find the start point
             start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
             end_date = start_date + pd.DateOffset(months=num_time_steps)
-            supply = supply[(supply['Date'] >= start_date) & (supply['Date'] < end_date)]
             
-            return supply
+            return supply[(supply['Date'] >= start_date) & (supply['Date'] < end_date)]
+            
+        except FileNotFoundError:
+            raise ValueError(f"Supply data file not found: {csv_file}")
         except Exception as e:
-            print(f"Error reading CSV file '{csv_file}': {str(e)}")
-            return pd.DataFrame()  # Return empty DataFrame on error
+            raise ValueError(f"Failed to import supply data: {str(e)}")
         
     def get_supply_rate(self, time_step):
         """
@@ -192,17 +209,20 @@ class SupplyNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        current_supply_rate = self.get_supply_rate(time_step)
-        self.supply_history.append(current_supply_rate)
+        try:
+            current_supply_rate = self.get_supply_rate(time_step)
+            self.supply_history.append(current_supply_rate)
 
-        total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
-        if total_capacity > 0:
-            for edge in self.outflow_edges.values():
-                edge_flow = (edge.capacity / total_capacity) * current_supply_rate
-                edge.update(time_step, edge_flow)
-        else:
-            for edge in self.outflow_edges.values():
-                edge.update(time_step, 0)
+            total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
+            if total_capacity > 0:
+                for edge in self.outflow_edges.values():
+                    edge_flow = (edge.capacity / total_capacity) * current_supply_rate
+                    edge.update(time_step, edge_flow)
+            else:
+                for edge in self.outflow_edges.values():
+                    edge.update(time_step, 0)
+        except Exception as e:
+            raise ValueError(f"Failed to update supply node {self.id}: {str(e)}")
 
 class SinkNode(Node):
     """
@@ -221,8 +241,11 @@ class SinkNode(Node):
             dt (float): The duration of the time step in seconds.
 
         """
-        total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
-        # Sink nodes remove all incoming water from the system
+        try:
+            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            # Sink nodes remove all incoming water from the system
+        except Exception as e:
+            raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
 
 class DemandNode(Node):
     """
@@ -243,12 +266,22 @@ class DemandNode(Node):
             demand_rates (list or float): Either a list of demand rates for each time step,
                                           or a constant demand rate.
         """
-        super().__init__(id)
-        self.demand_rates = demand_rates if isinstance(demand_rates, list) else [demand_rates]
+        super().__init__(id, easting, northing)
+        if isinstance(demand_rates, (int, float)):
+            if demand_rates < 0:
+                raise ValueError("Demand rate cannot be negative")
+            self.demand_rates = [demand_rates]
+        elif isinstance(demand_rates, list):
+            if not all(isinstance(rate, (int, float)) for rate in demand_rates):
+                raise ValueError("All demand rates must be numeric values")
+            if any(rate < 0 for rate in demand_rates):
+                raise ValueError("Demand rates cannot be negative")
+            self.demand_rates = demand_rates
+        else:
+            raise ValueError("demand_rates must be a number or list of numbers")
+            
         self.satisfied_demand = []
         self.excess_flow = []
-        self.easting = easting # easting coordinate of the node. Defaults to None.
-        self.northing = northing # northing coordinate of the node. Defaults to None.
 
     def get_demand_rate(self, time_step):
         """
@@ -275,22 +308,25 @@ class DemandNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
-        current_demand = self.get_demand_rate(time_step)
-        satisfied = min(total_inflow, current_demand)
-        excess = max(0, total_inflow - current_demand)
-        
-        self.satisfied_demand.append(satisfied)
-        self.excess_flow.append(excess)
+        try:
+            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            current_demand = self.get_demand_rate(time_step)
+            satisfied = min(total_inflow, current_demand)
+            excess = max(0, total_inflow - current_demand)
+            
+            self.satisfied_demand.append(satisfied)
+            self.excess_flow.append(excess)
 
-        total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
-        if total_outflow_capacity > 0:
-            for edge in self.outflow_edges.values():
-                edge_flow = (edge.capacity / total_outflow_capacity) * excess
-                edge.update(time_step, edge_flow)
-        else:
-            for edge in self.outflow_edges.values():
-                edge.update(time_step, 0)
+            total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
+            if total_outflow_capacity > 0:
+                for edge in self.outflow_edges.values():
+                    edge_flow = (edge.capacity / total_outflow_capacity) * excess
+                    edge.update(time_step, edge_flow)
+            else:
+                for edge in self.outflow_edges.values():
+                    edge.update(time_step, 0)
+        except Exception as e:
+            raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
 
     def get_satisfied_demand(self, time_step):
         """
@@ -398,7 +434,7 @@ class StorageNode(Node):
             northing (float, optional): Northing coordinate
         """
         # Call parent class (Node) initialization
-        super().__init__(id, easting=easting, northing=northing)
+        super().__init__(id, easting, northing)
         
         # Initialize StorageNode specific attributes
         self.capacity = capacity
@@ -648,15 +684,18 @@ class HydroWorks(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The duration of the time step in seconds.
         """
-        total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
-        total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
+        try:
+            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
 
-        if total_outflow_capacity > 0:
-            for edge in self.outflow_edges.values():
-                # Distribute water proportionally based on edge capacity
-                edge_flow = (edge.capacity / total_outflow_capacity) * total_inflow
-                edge.update(time_step, edge_flow)
-        else:
-            # If there's no outflow capacity, set all outflows to 0
-            for edge in self.outflow_edges.values():
-                edge.update(time_step, 0)
+            if total_outflow_capacity > 0:
+                for edge in self.outflow_edges.values():
+                    # Distribute water proportionally based on edge capacity
+                    edge_flow = (edge.capacity / total_outflow_capacity) * total_inflow
+                    edge.update(time_step, edge_flow)
+            else:
+                # If there's no outflow capacity, set all outflows to 0
+                for edge in self.outflow_edges.values():
+                    edge.update(time_step, 0)
+        except Exception as e:
+            raise ValueError(f"Failed to update hydroworks node {self.id}: {str(e)}")
