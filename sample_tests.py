@@ -124,7 +124,7 @@ def create_simple_system():
     system = WaterSystem(dt)
 
     supply = SupplyNode("Source", default_supply_rate=100,easting=1,northing=1)
-    reservoir = StorageNode("MainReservoir", capacity=500, easting=2, northing=1)
+    reservoir = StorageNode("MainReservoir", csv_path='./data/Akdarya_H_V_A.csv', easting=2, northing=1)
     agriculture = DemandNode("Agriculture", demand_rates=60, easting=3,northing=2)
     urban = DemandNode("Urban", demand_rates=30,easting=3,northing=0)
     sink = SinkNode("Sink",easting=4,northing=1)
@@ -151,7 +151,7 @@ def create_simple_system_with_diversion():
     system = WaterSystem(dt)
 
     supply = SupplyNode("Source", default_supply_rate=100, easting=1, northing=1)
-    reservoir = StorageNode.from_csv(id="MainReservoir", csv_path='./data/Kattakurgan_H_V_A.csv', easting=2, northing=1, initial_storage=0)
+    reservoir = StorageNode(id="MainReservoir", csv_path='./data/Kattakurgan_H_V_A.csv', easting=2, northing=1, initial_storage=0)
     diversion = HydroWorks("Diversion", easting=3, northing=2)
     urban = DemandNode("Urban", demand_rates=30, easting=3, northing=0)
     sink = SinkNode("Sink", easting=4, northing=1)
@@ -179,8 +179,8 @@ def create_complex_system():
 
     supply1 = SupplyNode("MountainSupply", default_supply_rate=150, easting=1, northing=2)
     supply2 = SupplyNode("RiverSupply", default_supply_rate=100, easting=1, northing=4)
-    reservoir1 = StorageNode("MountainReservoir", capacity=1000, easting=2, northing=2)
-    reservoir2 = StorageNode("ValleyReservoir", capacity=800, easting=2, northing=4)
+    reservoir1 = StorageNode("MountainReservoir", csv_path='./data/Akdarya_H_V_A.csv', easting=2, northing=2)
+    reservoir2 = StorageNode("ValleyReservoir", csv_path='./data/Akdarya_H_V_A.csv', easting=2, northing=4)
     agriculture1 = DemandNode("Farmland1", demand_rates=80, easting=3, northing=1)
     agriculture2 = DemandNode("Farmland2", demand_rates=70, easting=3, northing=4)
     urban1 = DemandNode("City1", demand_rates=50,easting=3, northing=2)
@@ -223,9 +223,11 @@ def create_seasonal_reservoir_system():
 
     # Create nodes
     supply = SupplyNode("MountainSource", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=1)
-    reservoir = StorageNode("LargeReservoir", capacity=1e9, initial_storage=5e8, easting=2, northing=1)  # 1 billion m³ capacity, start half full
+    reservoir = StorageNode("LargeReservoir", csv_path='./data/Akdarya_H_V_A.csv', initial_storage=5e7, easting=2, northing=1)  # 1 billion m³ capacity, start half full
     demand = DemandNode("SeasonalDemand", demand_rates=generate_seasonal_demand(num_time_steps), easting=3, northing=1)
     sink = SinkNode("RiverMouth", easting=4, northing=1)
+
+    reservoir.get_volume_from_level(2)
 
     # Add nodes to the system
     system.add_node(supply)
@@ -350,7 +352,7 @@ def generate_seasonal_demand(num_time_steps):
     return demand_rates
 
 def run_sample_tests():
-    """
+    
     print("\n" + "="*50 + "\n")
 
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
@@ -398,7 +400,7 @@ def run_sample_tests():
     save_water_balance_to_csv(simple_system, "balance_table_simple_system.csv")
     vis=WaterSystemVisualizer(simple_system, 'simple')
     vis.plot_network_layout()
-    """
+    
     print("\n" + "="*50 + "\n")
 
     # Test: HydroWorks System with 3 Diversions. Two sources feeding into a hydroworks diverting water to a third hydroworks. Fromt the first hydroworks, there is a brnaching to a demand node from which return flow ends in the third hydroworks. Total water from the third hydroworks flows into the sink.
@@ -450,7 +452,7 @@ def run_sample_tests():
     save_water_balance_to_csv(hydroworks_system_2_diversions, "balance_table_hydroworks_2_diversions_system.csv")
     vis=WaterSystemVisualizer(hydroworks_system_2_diversions, 'HW_2_diversion')
     vis.plot_network_layout()
-    """
+    
     print("\n" + "="*50 + "\n")
     
     # Test: Complex System. This is a complex system to test many to many connections.
@@ -462,7 +464,7 @@ def run_sample_tests():
     save_water_balance_to_csv(complex_system, "balance_table_complex_system.csv")
     vis=WaterSystemVisualizer(complex_system, 'complex')
     vis.plot_network_layout()
-    """
+    
     print("\n" + "="*50 + "\n")
 
     # Test: Seasonal Reservoir. Fully seasonal system.

@@ -39,14 +39,17 @@ def create_seasonal_ZRB_system():
     D6 = DemandNode("Irrigation-Karmana-Konimex", demand_rates=generate_seasonal_demand(num_time_steps),easting=183378,northing=4462461)
     D7 = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
     # Reservoir
-    RES_Kattakurgan =StorageNode.from_csv("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
-    RES_AkDarya = StorageNode.from_csv("RES-AkDarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
+    RES_AkDarya = StorageNode("RES-AkDarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
     
     print('interpolation ranges: ')
     print(f'Akdarya: {RES_AkDarya.get_interpolation_ranges()}')
     print(f'Kattakurgan: {RES_Kattakurgan.get_interpolation_ranges()}')
-    print(f'Kattakurgan area at 500 m asl: {RES_Kattakurgan.get_area_from_height(500)}')
-    print(f'Akdarya area at 500 m asl: {RES_AkDarya.get_area_from_height(500)}')
+    print(f'Kattakurgan area at waterlevel=3 m: {RES_Kattakurgan.get_area_from_level(3)} m2')
+    print(f'Akdarya area at waterlevel=3 m: {RES_AkDarya.get_area_from_level(3)} m2')
+    print(f'Kattakurgan volume at waterlevel=3 m: {RES_Kattakurgan.get_volume_from_level(3)} m3')
+    print(f'Akdarya volume at waterlevel=3 m: {RES_AkDarya.get_volume_from_level(3)} m3')
+
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
@@ -67,7 +70,6 @@ def create_seasonal_ZRB_system():
 
     # Connect nodes with edges
     system.add_edge(Edge(supply, HW_Ravadhoza, capacity=885))
-    
     system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=50))
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))  
     system.add_edge(Edge(HW_Ravadhoza, sink_eskiankhor, capacity=60))

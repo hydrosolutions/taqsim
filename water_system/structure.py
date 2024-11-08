@@ -351,31 +351,31 @@ class StorageNode(Node):
         id (str): Unique identifier for the node
         capacity (float): Maximum storage capacity [m³]
         storage (list): Record of storage levels for each time step [m³]
-        survey_data (dict): Dictionary containing the height-volume-area relationships
-            from survey measurements
+        hva_data (dict): Dictionary containing the height-volume-area relationships
+            from GEE data (Adrian Kreiner)
     """
 
-    @classmethod
-    def from_csv(cls, id, csv_path, capacity=None, easting=None, northing=None, initial_storage=0):
+    def __init__(self, id, csv_path, initial_storage=0, easting=None, northing=None):
         """
-        Create a StorageNode instance from CSV survey data.
-        
+        Initialize a StorageNode object.
+
         Args:
-            id (str): Node identifier
-            csv_path (str): Path to CSV file containing survey data
-            capacity (float, optional): If not provided, will use maximum volume from survey
+            id (str): Unique identifier for the node
+            capacity (float): Maximum storage capacity [m³]
+            initial_storage (float, optional): Initial storage volume. Defaults to 0.
             easting (float, optional): Easting coordinate
             northing (float, optional): Northing coordinate
-            
-        Expected CSV format:
-            Height_m,Volume_m3,Area_m2
-            100,0,1000
-            105,50000,2000
-            ...
-        
-        Returns:
-            StorageNode: Initialized storage node with survey data
         """
+        # Call parent class (Node) initialization
+        super().__init__(id, easting, northing)
+        
+        # Initialize StorageNode specific attributes
+        self.hva_data = None
+        self._level_to_volume = None
+        self._volume_to_level = None
+        self._level_to_area = None
+
+        # Load hegth-volume-area data
         try:
             # Read and validate CSV
             df = pd.read_csv(csv_path, sep=';')
@@ -397,14 +397,11 @@ class StorageNode(Node):
             bottom_elevation = min_elevation
             max_elevation = df['Height_m'].max()
 
-            # Create storage node instance
-            if capacity is None:
-                capacity = float(df['Volume_m3'].max())
-            
-            instance = cls(id=id, capacity=capacity, easting=easting, northing=northing, initial_storage=initial_storage)
+            # Set capacity from maximum volume in survey data
+            self.capacity = float(df['Volume_m3'].max())
             
             # Store survey data in dictionary
-            instance.survey_data = {
+            self.hva_data = {
                 'water_levels': df['Water_Level_m'].values,  # Depth above ground
                 'elevations': df['Height_m'].values,         # Original elevations
                 'volumes': df['Volume_m3'].values,
@@ -415,70 +412,48 @@ class StorageNode(Node):
             }
             
             # Initialize interpolation functions
-            instance._initialize_interpolators()
-            
-            return instance
+            self._initialize_interpolators()
             
         except Exception as e:
-            raise Exception(f"Error loading CSV file: {str(e)}")
+            raise ValueError(f"Error loading CSV file: {str(e)}")
 
-    def __init__(self, id, capacity, initial_storage=0, easting=None, northing=None):
-        """
-        Initialize a StorageNode object.
-
-        Args:
-            id (str): Unique identifier for the node
-            capacity (float): Maximum storage capacity [m³]
-            initial_storage (float, optional): Initial storage volume. Defaults to 0.
-            easting (float, optional): Easting coordinate
-            northing (float, optional): Northing coordinate
-        """
-        # Call parent class (Node) initialization
-        super().__init__(id, easting, northing)
+        # Validate initial storage against capacity
+        if initial_storage > self.capacity:
+            raise ValueError(f"Initial storage ({initial_storage} m³) exceeds maximum capacity ({self.capacity} m³)")
         
-        # Initialize StorageNode specific attributes
-        self.capacity = capacity
+        # Initialize storage attributes
         self.storage = [initial_storage]
         self.spillway_register = [0]
-        self.survey_data = None  # Will be populated if created from CSV
-        if self.survey_data is not None:
-            self.water_level = [self.get_level_from_volume(initial_storage)]
-        else:
-            self.water_level = [0]
+        self.water_level = [self.get_level_from_volume(initial_storage)]
 
     def _initialize_interpolators(self):
         """Initialize interpolation functions for height-volume-area relationships."""
-        if not self.survey_data:
-            return
-
         try:
-            #from scipy.interpolate import interp1d
-            
             # Create height to volume interpolator
             self._level_to_volume = interp1d(
-                self.survey_data['water_levels'],
-                self.survey_data['volumes'],
+                self.hva_data['water_levels'],
+                self.hva_data['volumes'],
                 kind='linear',
                 bounds_error=False,  # Allow extrapolation
-                fill_value=(self.survey_data['volumes'][0], self.survey_data['volumes'][-1])
+                fill_value=(self.hva_data['volumes'][0], self.hva_data['volumes'][-1])
             )
             
             # Create volume to height interpolator
             self._volume_to_level = interp1d(
-                self.survey_data['volumes'],
-                self.survey_data['water_levels'],
+                self.hva_data['volumes'],
+                self.hva_data['water_levels'],
                 kind='linear',
                 bounds_error=False,
-                fill_value=(self.survey_data['water_levels'][0], self.survey_data['water_levels'][-1])
+                fill_value=(self.hva_data['water_levels'][0], self.hva_data['water_levels'][-1])
             )
             
             # Create height to area interpolator
             self._level_to_area = interp1d(
-                self.survey_data['water_levels'],
-                self.survey_data['areas'],
+                self.hva_data['water_levels'],
+                self.hva_data['areas'],
                 kind='linear',
                 bounds_error=False,
-                fill_value=(self.survey_data['areas'][0], self.survey_data['areas'][-1])
+                fill_value=(self.hva_data['areas'][0], self.hva_data['areas'][-1])
             )
             
         except Exception as e:
@@ -494,7 +469,7 @@ class StorageNode(Node):
         Returns:
             float: Corresponding storage volume [m³]
         """
-        if not self.survey_data:
+        if not self.hva_data:
             print(f'{self.id} volume can not be determined from water level: Height-Volume relation is missing!')
             return
 
@@ -502,7 +477,6 @@ class StorageNode(Node):
             raise ValueError("No level-volume relationship available")
         return float(self._level_to_volume(water_level))
         
-
     def get_level_from_volume(self, volume):
         """
         Get water level for a given storage volume.
@@ -513,7 +487,7 @@ class StorageNode(Node):
         Returns:
             float: Corresponding water level above ground [m]
         """
-        if not self.survey_data:
+        if not self.hva_data:
             print(f'{self.id} water level can not be determined from volume: Height-Volume relation is missing!')
             return
 
@@ -531,7 +505,7 @@ class StorageNode(Node):
         Returns:
             float: Corresponding surface area [m²]
         """
-        if not self.survey_data:
+        if not self.hva_data:
             print(f'{self.id} water surface area can not be determined from water level: Height-Area relation is missing!')
             return
         
@@ -541,17 +515,17 @@ class StorageNode(Node):
 
     def get_elevation_from_level(self, water_level):
         """Convert water level to elevation."""
-        if not self.survey_data:
+        if not self.hva_data:
             print(f'{self.id}: Height-Volume-Area relation is missing!')
             return
-        return self.survey_data['bottom_elevation'] + water_level
+        return self.hva_data['bottom_elevation'] + water_level
 
     def get_level_from_elevation(self, elevation):
         """Convert elevation to water level."""
-        if not self.survey_data:
+        if not self.hva_data:
             print(f'{self.id}: Height-Volume-Area relation is missing!')
             return
-        return elevation - self.survey_data['bottom_elevation']
+        return elevation - self.hva_data['bottom_elevation']
     
     def get_reservoir_info(self):
         """
@@ -560,15 +534,15 @@ class StorageNode(Node):
         Returns:
             dict: Dictionary containing reservoir characteristics
         """
-        if not self.survey_data:
+        if not self.hva_data:
             print(f'{self.id}: Height-Volume-Area relation is missing!')
             return
         return {
-            'bottom_elevation': self.survey_data['bottom_elevation'],
-            'max_elevation': self.survey_data['max_elevation'],
-            'max_depth': self.survey_data['max_depth'],
+            'bottom_elevation': self.hva_data['bottom_elevation'],
+            'max_elevation': self.hva_data['max_elevation'],
+            'max_depth': self.hva_data['max_depth'],
             'max_volume': self.capacity,
-            'max_area': float(self._level_to_area(self.survey_data['max_depth']))
+            'max_area': float(self._level_to_area(self.hva_data['max_depth']))
         }
 
     def get_interpolation_ranges(self):
@@ -578,25 +552,25 @@ class StorageNode(Node):
         Returns:
             dict: Dictionary containing min/max values for height, volume, and area
         """
-        if not self.survey_data:
+        if not self.hva_data:
             return None
             
         return {
             'elevation_range': {
-                'min': float(self.survey_data['elevations'][0]),
-                'max': float(self.survey_data['elevations'][-1])
+                'min': float(self.hva_data['elevations'][0]),
+                'max': float(self.hva_data['elevations'][-1])
             },
             'water_level_range': {
-                'min': float(self.survey_data['water_levels'][0]),
-                'max': float(self.survey_data['water_levels'][-1])
+                'min': float(self.hva_data['water_levels'][0]),
+                'max': float(self.hva_data['water_levels'][-1])
             },
             'volume_range': {
-                'min': float(self.survey_data['volumes'][0]),
-                'max': float(self.survey_data['volumes'][-1])
+                'min': float(self.hva_data['volumes'][0]),
+                'max': float(self.hva_data['volumes'][-1])
             },
             'area_range': {
-                'min': float(self.survey_data['areas'][0]),
-                'max': float(self.survey_data['areas'][-1])
+                'min': float(self.hva_data['areas'][0]),
+                'max': float(self.hva_data['areas'][-1])
             }
         }
     
@@ -611,47 +585,51 @@ class StorageNode(Node):
             time_step (int): The current time step of the simulation.
             dt (float): The length of the time step in seconds.
         """
-        inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
-        previous_storage = self.storage[-1]
-        
-        # Convert flow rates (m³/s) to volumes (m³) for the time step
-        inflow_volume = inflow * dt
-        available_water = previous_storage + inflow_volume
-        
-        # Calculate total requested outflow
-        requested_outflow = sum(edge.capacity for edge in self.outflow_edges.values())
-        
-        # Convert requested outflow to volume
-        requested_outflow_volume = requested_outflow * dt
-        
-        # Limit actual outflow to available water
-        actual_outflow_volume = min(available_water, requested_outflow_volume)
-        
-        # Distribute actual outflow among edges proportionally
-        if requested_outflow_volume > 0:
-            for edge in self.outflow_edges.values():
-                edge_flow_volume = (edge.capacity / requested_outflow) * actual_outflow_volume
-                edge_flow_rate = edge_flow_volume / dt
-                edge.update(time_step, edge_flow_rate)
-        else:
-            for edge in self.outflow_edges.values():
-                edge.update(time_step, 0)
-        
-        # Calculate new storage
-        new_storage = available_water - actual_outflow_volume
+        try:
+            inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            previous_storage = self.storage[-1]
+            
+            # Convert flow rates (m³/s) to volumes (m³) for the time step
+            inflow_volume = inflow * dt
+            available_water = previous_storage + inflow_volume
+            
+            # Calculate total requested outflow
+            requested_outflow = sum(edge.capacity for edge in self.outflow_edges.values())
+            
+            # Convert requested outflow to volume
+            requested_outflow_volume = requested_outflow * dt
+            
+            # Limit actual outflow to available water
+            actual_outflow_volume = min(available_water, requested_outflow_volume)
+            
+            # Distribute actual outflow among edges proportionally
+            if requested_outflow_volume > 0:
+                for edge in self.outflow_edges.values():
+                    edge_flow_volume = (edge.capacity / requested_outflow) * actual_outflow_volume
+                    edge_flow_rate = edge_flow_volume / dt
+                    edge.update(time_step, edge_flow_rate)
+            else:
+                for edge in self.outflow_edges.values():
+                    edge.update(time_step, 0)
+            
+            # Calculate new storage
+            new_storage = available_water - actual_outflow_volume
 
-        # Check if new storage exceeds maximum and handle spillway
-        if new_storage > self.capacity:
-            excess_volume = new_storage - self.capacity
-            new_storage = self.capacity
-        else:
-            excess_volume = 0
-        # Log the spill event in the storage node's spillway register
-        self.spillway_register.append(excess_volume)
-        
-        self.storage.append(new_storage)
-        if self.survey_data:
-            self.water_level.append(self.get_level_from_volume(new_storage))
+            # Check if new storage exceeds maximum and handle spillway
+            if new_storage > self.capacity:
+                excess_volume = new_storage - self.capacity
+                new_storage = self.capacity
+            else:
+                excess_volume = 0
+            # Log the spill event in the storage node's spillway register
+            self.spillway_register.append(excess_volume)
+            
+            self.storage.append(new_storage)
+            if self.hva_data:
+                self.water_level.append(self.get_level_from_volume(new_storage))
+        except Exception as e:
+            # Log the error and attempt to maintain last known state
+            print(f"Error updating storage node {self.id}: {str(e)}")
 
     def get_storage(self, time_step):
         """
