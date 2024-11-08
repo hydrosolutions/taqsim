@@ -17,7 +17,7 @@ def create_seasonal_ZRB_system():
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
     num_time_steps = 12 * 5  # 5 years of monthly data
-    start_year = 2014
+    start_year = 2015
     start_month = 1
     system = WaterSystem(dt=dt)
 
@@ -40,16 +40,11 @@ def create_seasonal_ZRB_system():
     D7 = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
     # Reservoir
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
-    RES_AkDarya = StorageNode("RES-AkDarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
+    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
     
-    print('interpolation ranges: ')
-    print(f'Akdarya: {RES_AkDarya.get_interpolation_ranges()}')
-    print(f'Kattakurgan: {RES_Kattakurgan.get_interpolation_ranges()}')
-    print(f'Kattakurgan area at waterlevel=3 m: {RES_Kattakurgan.get_area_from_level(3)} m2')
-    print(f'Akdarya area at waterlevel=3 m: {RES_AkDarya.get_area_from_level(3)} m2')
-    print(f'Kattakurgan volume at waterlevel=3 m: {RES_Kattakurgan.get_volume_from_level(3)} m3')
-    print(f'Akdarya volume at waterlevel=3 m: {RES_AkDarya.get_volume_from_level(3)} m3')
-
+    print('Reservoir Information: ')
+    print(f'Akdarya: {RES_AkDarya.get_reservoir_info()}')
+    print(f'Kattakurgan: {RES_Kattakurgan.get_reservoir_info()}')
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
@@ -79,11 +74,11 @@ def create_seasonal_ZRB_system():
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
     system.add_edge(Edge(HW_AkKaraDarya, D3, capacity=230, length=79.9))
 
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=230))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=20))
     system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
     system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
     system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=20))
     
     system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
     system.add_edge(Edge(HW_Narpay, D4, capacity=80, length=53.8))
@@ -175,26 +170,6 @@ def plot_water_balance_time_series(water_system, filename, columns_to_plot=None)
     plt.close()
     print(f"Water system plot saved to {filename}")
 
-def generate_seasonal_supply(num_time_steps):
-    """
-    Generates a list of seasonal supply rates.
-
-    Args:
-        num_time_steps (int): The number of time steps to generate supply for.
-
-    Returns:
-        list: A list of supply rates for each time step.
-    """
-    base_supply = 175  # m³/s
-    amplitude = 125    # m³/s
-    supply_rates = []
-    for t in range(num_time_steps):
-        month = t % 12
-        seasonal_factor = -math.cos(2 * math.pi * (month+2) / 12)
-        supply_rate = base_supply + amplitude * seasonal_factor
-        supply_rates.append(max(0, supply_rate))  # Ensure non-negative supply
-    return supply_rates
-
 def generate_seasonal_demand(num_time_steps):
     """
     Generates a list of seasonal demand rates.
@@ -222,17 +197,19 @@ def run_sample_tests():
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
     ZRB_system = create_seasonal_ZRB_system()
     print("ZRB system test:")
-    num_time_steps = 24
+    num_time_steps = 2*12
     ZRB_system.simulate(num_time_steps)
 
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
-    #visualizer.plot_node_flows(['MountainSource', 'Sink-Navoi'])
-    vis_ZRB.plot_storage_levels()
+    vis_ZRB.plot_node_flows(['MountainSource', 'Sink-Navoi'])
+    vis_ZRB.plot_node_flows(['RES-Kattakurgan', 'RES-Akdarya'])
+    vis_ZRB.plot_reservoir_volume()
     vis_ZRB.plot_demand_satisfaction()
     vis_ZRB.plot_demand_deficit_heatmap()
     vis_ZRB.plot_supply_utilization()
     vis_ZRB.plot_storage_spills()
     vis_ZRB.plot_network_layout()
+    vis_ZRB.plot_water_levels()
 
     # Extract and print results
     reservoir_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))

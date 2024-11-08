@@ -95,5 +95,6 @@ Several sample test systems have been implemented:
 - Matplotlib
 - Pandas
 - Math (edge.py)
+- scipy.interpolate
 
 This summary reflects the current state of the Water System Simulation Project, including the recent improvements to the visualization capabilities. It can be used to quickly brief someone on the project's status and capabilities.

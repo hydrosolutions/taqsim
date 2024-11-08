@@ -72,7 +72,7 @@ class WaterSystemVisualizer:
                         label=f"{node_id} Outflow", marker='s')
         
         plt.xlabel('Time Step')
-        plt.ylabel('Flow Rate')
+        plt.ylabel('Flow Rate [m³/s]')
         plt.title('Node Flows Over Time')
         plt.grid(True)
         plt.legend()
@@ -80,7 +80,7 @@ class WaterSystemVisualizer:
         nodes_str = "_".join(node_ids)
         return self._save_plot("flows", nodes_str)
         
-    def plot_storage_levels(self):
+    def plot_reservoir_volume(self):
         """
         Create a time series plot of storage levels for all storage nodes.
         """
@@ -101,12 +101,12 @@ class WaterSystemVisualizer:
                        label=f"{node_id} Capacity")
         
         plt.xlabel('Time Step')
-        plt.ylabel('Storage Volume')
+        plt.ylabel('Storage Volume [m³]')
         plt.title('Storage Levels Over Time')
         plt.grid(True)
         plt.legend()
         
-        return self._save_plot("storage_levels")
+        return self._save_plot("reservoir_volume")
         
     def plot_demand_satisfaction(self):
         """
@@ -121,7 +121,6 @@ class WaterSystemVisualizer:
         plt.figure(figsize=(12, 6))
         
         # Color scheme for different demand nodes
-        # Using colorblind-friendly colors
         colors = [
             '#0077BB',  # Blue
             '#EE7733',  # Orange
@@ -133,49 +132,43 @@ class WaterSystemVisualizer:
             '#AA44BB',  # Purple
         ]
         
-        # Line styles for demanded vs satisfied
         demanded_style = 'solid'
         satisfied_style = 'dashed'
-        
-        # Markers for better distinction
         demanded_marker = 'o'
         satisfied_marker = 's'
         
         for idx, col in enumerate(demand_cols):
             node_id = col.replace('_Demand', '')
             satisfied_col = f"{node_id}_SatisfiedDemand"
-            color = colors[idx % len(colors)]  # Cycle through colors if more demands than colors
+            color = colors[idx % len(colors)]
             
-            # Plot demanded with solid line
             plt.plot(self.df['TimeStep'], 
                     self.df[col], 
                     label=f"{node_id} Demanded",
                     color=color,
                     linestyle=demanded_style,
                     marker=demanded_marker,
-                    linewidth=1,
-                    markersize=4,
+                    linewidth=0.8,
+                    markersize=3,
                     markerfacecolor='white',
-                    markeredgewidth=2)
+                    markeredgewidth=1)
             
-            # Plot satisfied with dashed line
             plt.plot(self.df['TimeStep'], 
                     self.df[satisfied_col], 
                     label=f"{node_id} Satisfied",
                     color=color,
                     linestyle=satisfied_style,
                     marker=satisfied_marker,
-                    linewidth=1,
-                    markersize=4,
+                    linewidth=0.8,
+                    markersize=3,
                     markerfacecolor='white',
-                    markeredgewidth=2)
+                    markeredgewidth=1)
         
         plt.xlabel('Time Step', fontsize=12)
-        plt.ylabel('Flow Rate', fontsize=12)
+        plt.ylabel('Flow Rate [m³/s]', fontsize=12)
         plt.title('Demand Satisfaction Over Time', fontsize=14, pad=20)
         plt.grid(True, linestyle='--', alpha=0.7)
         
-        # Enhance legend
         plt.legend(bbox_to_anchor=(1.05, 1), 
                 loc='upper left',
                 borderaxespad=0.,
@@ -184,7 +177,6 @@ class WaterSystemVisualizer:
                 shadow=True,
                 fontsize=10)
         
-        # Adjust layout to prevent legend cutoff
         plt.tight_layout()
         
         return self._save_plot("demand_satisfaction")
@@ -198,11 +190,9 @@ class WaterSystemVisualizer:
             print("No demand nodes found in the system.")
             return
             
-        # Prepare data for heatmap
         deficit_data = self.df[deficit_cols].copy()
         deficit_data.columns = [col.replace('_Deficit', '') for col in deficit_cols]
         
-        # Calculate percentage deficits
         percentage_data = deficit_data.copy()
         for node in deficit_data.columns:
             demand_col = f"{node}_Demand"
@@ -214,10 +204,11 @@ class WaterSystemVisualizer:
         sns.heatmap(deficit_data.T, cmap='YlOrRd', 
                     xticklabels=self.df['TimeStep'],
                     yticklabels=deficit_data.columns,
-                    annot=True, fmt='.1f')
+                    annot=False,
+                    cbar_kws={'label': 'Deficit [m³/s]'})
         plt.xlabel('Time Step')
         plt.ylabel('Demand Node')
-        plt.title('Absolute Water Deficits Over Time (flow units)')
+        plt.title('Absolute Water Deficits Over Time')
         abs_filepath = self._save_plot("deficit_heatmap_absolute")
         
         # Plot percentage deficits
@@ -225,11 +216,12 @@ class WaterSystemVisualizer:
         sns.heatmap(percentage_data.T, cmap='YlOrRd', 
                     xticklabels=self.df['TimeStep'],
                     yticklabels=percentage_data.columns,
-                    annot=True, fmt='.1f',
-                    vmin=0, vmax=100)
+                    annot=False,
+                    vmin=0, vmax=100,
+                    cbar_kws={'label': 'Deficit [%]'})
         plt.xlabel('Time Step')
         plt.ylabel('Demand Node')
-        plt.title('Percentage of Unmet Demand Over Time (%)')
+        plt.title('Percentage of Unmet Demand Over Time')
         pct_filepath = self._save_plot("deficit_heatmap_percentage")
         
         return abs_filepath, pct_filepath
@@ -255,12 +247,98 @@ class WaterSystemVisualizer:
                     label=f"{node_id} Used", marker='s')
         
         plt.xlabel('Time Step')
-        plt.ylabel('Flow Rate')
+        plt.ylabel('Flow Rate [m³/s]')
         plt.title('Supply Utilization Over Time')
         plt.grid(True)
         plt.legend()
         
         return self._save_plot("supply_utilization")
+
+    def plot_storage_spills(self):
+        """
+        Create a time series plot showing storage node spills over time.
+        """
+        spill_cols = [col for col in self.df.columns if col.endswith('_ExcessVolume')]
+        if not spill_cols:
+            print("No storage nodes found in the system.")
+            return
+            
+        plt.figure(figsize=(12, 6))
+        
+        for col in spill_cols:
+            node_id = col.replace('_ExcessVolume', '')
+            plt.plot(self.df['TimeStep'], self.df[col], 
+                    label=f"{node_id} Spills", marker='o')
+        
+        plt.xlabel('Time Step')
+        plt.ylabel('Excess Volume [m³]')
+        plt.title('Storage Node Spills Over Time')
+        plt.grid(True)
+        plt.legend()
+        
+        return self._save_plot("storage_spills")
+
+    def plot_water_levels(self):
+        """
+        Create a time series plot showing water levels for all storage nodes that have hva data.
+        Also shows the bottom and maximum elevation for reference.
+        """
+        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], StorageNode) and data['node'].hva_data is not None]
+        
+        if not storage_nodes:
+            print("No storage nodes with survey data found in the system.")
+            return
+            
+        plt.figure(figsize=(12, 6))
+        
+        for node_id, node in storage_nodes:
+            # Get the water levels time series
+            water_levels = node.water_level if hasattr(node, 'water_level') else []
+            
+            if water_levels:
+                # Convert water levels to absolute elevations
+                elevations = [node.get_elevation_from_level(level) for level in water_levels]
+                
+                # Plot water level time series
+                plt.plot(range(len(elevations)), elevations, 
+                        label=f"{node_id} Water Level", 
+                        marker='o',
+                        linewidth=0.8,
+                        markersize=3,
+                        markerfacecolor='white',
+                        markeredgewidth=1)
+                
+                # Plot bottom and maximum elevations as reference lines
+                plt.axhline(y=node.hva_data['bottom_elevation'], 
+                          linestyle='--', 
+                          color='gray', 
+                          alpha=0.5,
+                          label=f"{node_id} Bottom Elevation")
+                          
+                plt.axhline(y=node.hva_data['max_elevation'], 
+                          linestyle=':', 
+                          color='red', 
+                          alpha=0.5,
+                          label=f"{node_id} Maximum Elevation")
+        
+        plt.xlabel('Time Step')
+        plt.ylabel('Elevation [m.a.s.l.]')  # meters above sea level
+        plt.title('Reservoir Water Levels Over Time')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        
+        # Enhance legend
+        plt.legend(bbox_to_anchor=(1.05, 1), 
+                  loc='upper left',
+                  borderaxespad=0.,
+                  frameon=True,
+                  fancybox=True,
+                  shadow=True,
+                  fontsize=10)
+        
+        plt.tight_layout()
+        
+        return self._save_plot("water_levels")
 
     def plot_network_layout(self):
         """
@@ -363,28 +441,3 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("network_layout")  
-
-    def plot_storage_spills(self):
-        """
-        Create a time series plot showing storage node spills over time.
-        """
-        spill_cols = [col for col in self.df.columns if col.endswith('_ExcessVolume')]
-        if not spill_cols:
-            print("No storage nodes found in the system.")
-            return
-            
-        plt.figure(figsize=(12, 6))
-        
-        for col in spill_cols:
-            node_id = col.replace('_ExcessVolume', '')
-            plt.plot(self.df['TimeStep'], self.df[col], 
-                    label=f"{node_id} Spills", marker='o')
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Excess Volume')
-        plt.title('Storage Node Spills Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        return self._save_plot("storage_spills")
-
