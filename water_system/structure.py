@@ -257,7 +257,8 @@ class DemandNode(Node):
         excess_flow (list): A record of excess flow for each time step.
     """
 
-    def __init__(self, id, demand_rates, easting=None, northing=None):
+    def __init__(self, id, demand_rates=None, easting=None, northing=None,
+                 csv_file=None, start_year=None, start_month=None, num_time_steps=None):
         """
         Initialize a DemandNode object.
 
@@ -267,7 +268,12 @@ class DemandNode(Node):
                                           or a constant demand rate.
         """
         super().__init__(id, easting, northing)
-        if isinstance(demand_rates, (int, float)):
+
+        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
+            self.demand_rates = self._initialize_demand_rates(
+                id, csv_file, start_year, start_month, num_time_steps, demand_rates
+            )
+        elif isinstance(demand_rates, (int, float)):
             if demand_rates < 0:
                 raise ValueError("Demand rate cannot be negative")
             self.demand_rates = [demand_rates]
@@ -278,10 +284,77 @@ class DemandNode(Node):
                 raise ValueError("Demand rates cannot be negative")
             self.demand_rates = demand_rates
         else:
-            raise ValueError("demand_rates must be a number or list of numbers")
+            raise ValueError("demand_rates must be a number or list of numbers or defined by CSV")
             
         self.satisfied_demand = []
         self.excess_flow = []
+    
+    def _initialize_demand_rates(self, id, csv_file, start_year, start_month, 
+                               num_time_steps, demand_rates):
+        """
+        Initialize demand rates from either CSV or direct input.
+        
+        Args:
+            id (str): Node identifier for error messages
+            csv_file (str): Path to CSV file
+            start_year (int): Start year for data
+            start_month (int): Start month for data
+            num_time_steps (int): Number of time steps
+            demand_rates (list or float): Direct demand rates input
+            
+        Returns:
+            list: Initialized demand rates
+        """
+        # If all CSV parameters are provided, try to import data
+        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
+            try:
+                demand = self.import_demand_data(csv_file, start_year, start_month, num_time_steps)
+                
+                # Check if data is valid
+                if not (demand.empty or 
+                    demand['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
+                    len(demand['Demand [m^3/s]']) < num_time_steps):
+                    return demand['Demand [m^3/s]'].tolist()
+                
+                # Print warning for invalid data
+                print(f"Warning: Insufficient data in csv file for node '{id}'")
+                print(f"Requested period: {start_year}-{start_month:02d} to "
+                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
+                if not demand.empty:
+                    print(f"Available data range: {demand['Date'].min():%Y-%m} to {demand['Date'].max():%Y-%m}")
+            except Exception as e:
+                print(f"Warning: Demand from csv could not be used for node '{id}' due to error: {str(e)}")
+    
+    def import_demand_data(self, csv_file, start_year, start_month, num_time_steps):
+        """
+        Import demand data from a CSV file for a specified time period.
+        
+        Args:
+            csv_file (str): Path to the CSV file containing demand data
+            start_year (int): Starting year for the data
+            start_month (int): Starting month (1-12) for the data
+            num_time_steps (int): Number of time steps to import
+            
+        Returns:
+            DataFrame: Filtered DataFrame containing the requested data period
+        """
+        try:
+            # Read the CSV file into a pandas DataFrame
+            demand = pd.read_csv(csv_file, parse_dates=['Date'])
+            
+            if 'Date' not in demand.columns or 'Demand [m^3/s]' not in demand.columns:
+                raise ValueError("CSV file must contain 'Date' and 'Demand [m^3/s]' columns")
+        
+            # Filter the DataFrame to find the start point
+            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
+            end_date = start_date + pd.DateOffset(months=num_time_steps)
+            
+            return demand[(demand['Date'] >= start_date) & (demand['Date'] < end_date)]
+            
+        except FileNotFoundError:
+            raise ValueError(f"Demand data file not found: {csv_file}")
+        except Exception as e:
+            raise ValueError(f"Failed to import demand data: {str(e)}")
 
     def get_demand_rate(self, time_step):
         """
