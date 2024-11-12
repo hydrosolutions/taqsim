@@ -159,4 +159,5 @@ cython_debug/
 !Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv
 !Akdarya_H_V_A.csv
 !Kattakurgan_H_V_A.csv
+!DemandNode_Info.csv
 .DS_Store

@@ -1,0 +1,291 @@
+import csv
+import math
+import networkx as nx 
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
+
+def create_seasonal_ZRB_system():
+    """
+    Creates a test water system with a seasonal supply, a large reservoir,
+    a seasonal demand, and a sink node. The system runs for 10 years with monthly time steps.
+
+    Returns:
+        WaterSystem: The configured water system for testing.
+    """
+    # Set up the system with monthly time steps
+    dt = 30.44 * 24 * 3600  # Average month in seconds
+    num_time_steps = 12 * 2  # 5 years of monthly data
+    start_year = 2017
+    start_month = 1
+    system = WaterSystem(dt=dt)
+
+    # Create nodes
+    supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file="data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
+    # HydroWorks Nodes
+    HW_Ravadhoza = HydroWorks("HW-Ravadhoza", easting=363094.43,northing=4377810.64)
+    HW_AkKaraDarya = HydroWorks("HW-AkKaraDarya", easting=333156.64,northing=4395650.43)
+    HW_Damkodzha = HydroWorks("HW_Damkodzha", easting=284720.68, northing=4417759.40)
+    HW_Narpay = HydroWorks("HW-Narpay", easting=270403.55,northing=4424501.92)
+    HW_Confluence=HydroWorks("HW-Confluence", easting=239889.6,northing=4433214.0)
+    HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
+    
+    # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,utm_easting,utm_northing,longitude,latitude,csv_path)
+    Demand_info = pd.read_csv('./data/DemandNode_Info.csv', sep=',')
+    demand_nodes = []
+    for index, row in Demand_info.iterrows():
+        demand_node = DemandNode(
+            row['name'],
+            easting=row['utm_easting'],
+            northing=row['utm_northing'],
+            csv_file=f"./data/ETblue/{row['csv_path']}",
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps
+        )
+        demand_nodes.append(demand_node)
+    
+    # Unpack demand nodes into individual variables based on Demand_info['name'] row
+    for index, row in Demand_info.iterrows():
+        globals()[row['name']] = demand_nodes[index]
+        print(f"Created demand node: {row['name']}")
+
+    # Demand Thermal powerplant Navoi (25 m³/s)
+    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
+
+    # Reservoir
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
+    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
+    
+    # Sink Nodes
+    sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
+    sink_eskiankhor = SinkNode("EskiAnkhor", easting=286019.5,northing=4384078.7)
+    sink_downstream = SinkNode("Sink-Navoi", easting=153771,northing=4454402)
+
+    # Add nodes to the system
+    supply_node = [supply]  # List of supply nodes
+    reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
+    hydroworks = [HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
+    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant]  # List of demand nodes
+    sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
+
+    # Iterate through each category and add nodes to the system
+    for node in supply_node + demand_node + reservoir + hydroworks + sink_node:
+        system.add_node(node)
+
+    # Connect nodes with edges
+    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1350))
+    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=850))
+   
+    # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=125))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=70))
+    system.add_edge(Edge(Bulungur, sink_tuyatortor, capacity=55))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=70))
+    # Supply for Toyloq, Urgut, Samarqand
+    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
+    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
+    system.add_edge(Edge(Toyloq, Samarqand, capacity=80))
+    system.add_edge(Edge(Urgut, Samarqand, capacity=125))
+    system.add_edge(Edge(Samarqand, Pastdargom, capacity=205))
+    system.add_edge(Edge(Pastdargom, Nurobod, capacity=80))
+    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=60))
+    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=205))
+    # HW_AkKaraDarya
+    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
+    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
+    system.add_edge(Edge(Oqdaryo, Payariq, capacity=50))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=100))
+    system.add_edge(Edge(Oqdaryo, Ishtixon, capacity=230))
+    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=230))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=230))
+
+    # Damkodzha
+    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
+    system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
+    system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
+    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=54))
+    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=94))
+    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=94))
+
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
+
+    # HW_Narpay
+    system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
+    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80))
+    system.add_edge(Edge(HW_Narpay, Kattaqorgon, capacity=40))
+    system.add_edge(Edge(Narpay, Paxtachi, capacity=80))
+    # Downstream
+    system.add_edge(Edge(Paxtachi, Karmana, capacity=800))
+    system.add_edge(Edge(Karmana, sink_downstream  , capacity=80))
+    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=400))
+
+    # HW_Karmana
+    system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
+    system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
+    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=300))
+    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
+    system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
+    return system
+
+def save_water_balance_to_csv(water_system, filename):
+    """
+    Save the water balance table of a water system to a CSV file.
+    
+    Args:
+    water_system (WaterSystem): The water system to save the balance for.
+    filename (str): The name of the CSV file to save to.
+    """
+    balance_table = water_system.get_water_balance_table()
+    balance_table.to_csv(filename, index=False)
+    print(f"Water balance table saved to {filename}")
+
+def plot_water_balance_time_series(water_system, filename, columns_to_plot=None):
+    """
+    Create and save a single plot for the entire water system with dual y-axes.
+    
+    Args:
+    water_system (WaterSystem): The water system to plot.
+    filename (str): The name of the PNG file to save to.
+    columns_to_plot (list): Optional list of column names to plot. If None, all columns are plotted.
+    """
+    balance_table = water_system.get_water_balance_table()
+
+    if columns_to_plot is None:
+        columns_to_plot = [col for col in balance_table.columns if col != 'TimeStep']
+
+    fig, ax1 = plt.subplots(figsize=(12, 8))
+    ax2 = ax1.twinx()  # Create a second y-axis
+
+    plt.title('Water System Simulation Results')
+
+    colors = list(mcolors.TABLEAU_COLORS.values())  # Use predefined Tableau colors
+    line_styles = ['-', '--', ':', '-.']
+
+    color_index = 0
+    for column in columns_to_plot:
+        if column == 'TimeStep':
+            continue
+
+        color = colors[color_index % len(colors)]
+        line_style = line_styles[color_index % len(line_styles)]
+        color_index += 1
+
+        if 'Storage' in column:
+            # Plot storage volume on the right y-axis
+            ax2.plot(balance_table['TimeStep'], balance_table[column], 
+            color=color, linestyle=line_style, label=column)
+        elif 'ExcessVolume' in column:
+            ax2.plot(balance_table['TimeStep'], balance_table[column], 
+            color=color, linestyle=line_style, label=column)
+        else:
+            # Plot other columns on the left y-axis
+            ax1.plot(balance_table['TimeStep'], balance_table[column], 
+            color=color, linestyle=line_style, label=column)
+
+    ax1.set_xlabel('Time Step')
+    ax1.set_ylabel('Flow Rate (m³/s)')
+    ax2.set_ylabel('Volume (m³)')
+
+    # Combine legends from both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Water system plot saved to {filename}")
+
+def generate_seasonal_demand(num_time_steps):
+    """
+    Generates a list of seasonal demand rates.
+
+    Args:
+        num_time_steps (int): The number of time steps to generate demand for.
+
+    Returns:
+        list: A list of demand rates for each time step.
+    """
+    base_demand = 20  # m³/s
+    amplitude = 20    # m³/s
+    demand_rates = []
+    for t in range(num_time_steps):
+        month = t % 12
+        seasonal_factor = -math.cos(2 * math.pi * month / 12)  # Peak in summer, trough in winter
+        demand_rate = base_demand + amplitude * seasonal_factor
+        demand_rates.append(max(0, demand_rate))  # Ensure non-negative demand
+    return demand_rates
+
+def run_sample_tests():
+
+    print("\n" + "="*50 + "\n")
+
+    # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
+    ZRB_system = create_seasonal_ZRB_system()
+    print("ZRB system test:")
+    num_time_steps = 2*12
+    ZRB_system.simulate(num_time_steps)
+
+    vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
+    vis_ZRB.plot_node_flows(['MountainSource', 'Sink-Navoi'])
+    vis_ZRB.plot_node_flows(['RES-Kattakurgan', 'RES-Akdarya'])
+    vis_ZRB.plot_reservoir_volume()
+    vis_ZRB.plot_demand_satisfaction()
+    vis_ZRB.plot_demand_deficit_heatmap()
+    vis_ZRB.plot_supply_utilization()
+    vis_ZRB.plot_storage_spills()
+    vis_ZRB.plot_network_layout()
+    vis_ZRB.plot_water_levels()
+
+    # Extract and print results
+    reservoir_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))
+    demand_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], DemandNode))
+
+    print("\nReservoir Storage Levels (every 12 months):")
+    for year in range(10):
+        month = year * 12
+        storage = reservoir_node.get_storage(month)
+        print(f"Year {year + 1}: {storage:,.0f} m³")
+
+    print("\nDemand Satisfaction (every 12 months):")
+    for year in range(10):
+        month = year * 12
+        satisfied = demand_node.get_satisfied_demand(month)
+        total_demand = demand_node.get_demand_rate(month)
+        satisfaction_rate = (satisfied / total_demand) * 100 if total_demand > 0 else 100
+        print(f"Year {year + 1}: {satisfaction_rate:.2f}% ({satisfied:.2f} / {total_demand:.2f} m³/s)")
+
+    # Visualize the system
+    columns_to_plot = [
+        "HW-Ravadhoza_Inflow", 
+        "Sink-Navoi_Inflow",
+        #"D1_Inflow",
+        #"D1_Outflow",
+        #"D1_Demand",
+        #"D1_SatisfiedDemand",
+        #"RES-Kattakurgan_Inflow",
+        #"RES-Kattakurgan_Outflow",
+        #"RES-Kattakurgan_Storage",
+        #"RES-Kattakurgan_ExcessVolume",
+    ]
+
+    plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png", columns_to_plot=columns_to_plot)
+    save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
+
+    # Visualize Reservoirs
+    columns_to_plot = [
+        "RES-Kattakurgan_Inflow",
+        "RES-Kattakurgan_Outflow",
+        "RES-Kattakurgan_Storage",
+        "RES-Kattakurgan_ExcessVolume"
+    ]
+
+    plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_RES_Kattakurgan.png", columns_to_plot=columns_to_plot)
+
+# Run the sample tests
+if __name__ == "__main__":
+  run_sample_tests()
+  
+ 
