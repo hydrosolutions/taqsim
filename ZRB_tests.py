@@ -16,8 +16,8 @@ def create_seasonal_ZRB_system():
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    num_time_steps = 12 * 5  # 5 years of monthly data
-    start_year = 2015
+    num_time_steps = 12 * 2  # 5 years of monthly data
+    start_year = 2017
     start_month = 1
     system = WaterSystem(dt=dt)
 
@@ -201,12 +201,10 @@ def run_sample_tests():
     ZRB_system.simulate(num_time_steps)
 
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
-    vis_ZRB.plot_node_flows(['MountainSource', 'Sink-Navoi'])
-    vis_ZRB.plot_node_flows(['RES-Kattakurgan', 'RES-Akdarya'])
+    vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi'])
+    vis_ZRB.plot_node_inflows(['RES-Kattakurgan', 'RES-Akdarya'])
     vis_ZRB.plot_reservoir_volume()
     vis_ZRB.plot_demand_satisfaction()
-    vis_ZRB.plot_demand_deficit_heatmap()
-    vis_ZRB.plot_supply_utilization()
     vis_ZRB.plot_storage_spills()
     vis_ZRB.plot_network_layout()
     vis_ZRB.plot_water_levels()

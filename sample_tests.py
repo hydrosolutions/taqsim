@@ -410,7 +410,7 @@ def run_sample_tests():
     hydroworks_system_3_diversions.simulate(num_time_steps)
 
     visualizer=WaterSystemVisualizer(hydroworks_system_3_diversions, 'HW_3_diversions')
-    visualizer.plot_node_flows(['HydroWorks1', 'HydroWorks2', 'HydroWorks4'])
+    visualizer.plot_node_inflows(['HydroWorks1', 'HydroWorks2', 'HydroWorks4'])
     visualizer.plot_network_layout()
 
     plot_water_balance_time_series(hydroworks_system_3_diversions, "ts_plot_hydroworks_3_diversions_system.png")

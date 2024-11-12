@@ -87,7 +87,6 @@ Several sample test systems have been implemented:
 
 - Water Balance issues
 - Spillway: What happens to water when upstream inflow to hydroworks structure is larger than total outflow capacity of hydroworks structure? Have to build in spillway as in the case of the reservoir and heavily penalize spillway use at any time.
-- So far supply node data is importet from .csv only in ZRB_test file and not in module itself
 - Loss factor proportional to discharge or only dependent on canal length?
 
 ## Dependencies
@@ -96,5 +95,6 @@ Several sample test systems have been implemented:
 - Pandas
 - Math (edge.py)
 - scipy.interpolate
+- numpy
 
 This summary reflects the current state of the Water System Simulation Project, including the recent improvements to the visualization capabilities. It can be used to quickly brief someone on the project's status and capabilities.

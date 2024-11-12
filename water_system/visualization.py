@@ -6,6 +6,7 @@ It includes time series visualizations for flows, storage levels, and demands.
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import numpy as np
 import os
 import networkx as nx
 from datetime import datetime
@@ -51,7 +52,7 @@ class WaterSystemVisualizer:
         plt.close()
         return filepath
         
-    def plot_node_flows(self, node_ids):
+    def plot_node_inflows(self, node_ids):
         """
         Create a time series plot of inflows and outflows for specified nodes.
         
@@ -62,14 +63,10 @@ class WaterSystemVisualizer:
         
         for node_id in node_ids:
             inflow_col = f"{node_id}_Inflow"
-            outflow_col = f"{node_id}_Outflow"
             
             if inflow_col in self.df.columns:
                 plt.plot(self.df['TimeStep'], self.df[inflow_col], 
                         label=f"{node_id} Inflow", marker='o')
-            if outflow_col in self.df.columns:
-                plt.plot(self.df['TimeStep'], self.df[outflow_col], 
-                        label=f"{node_id} Outflow", marker='s')
         
         plt.xlabel('Time Step')
         plt.ylabel('Flow Rate [m³/s]')
@@ -118,7 +115,7 @@ class WaterSystemVisualizer:
             print("No demand nodes found in the system.")
             return
             
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(12, 10))
         
         # Color scheme for different demand nodes
         colors = [
@@ -226,34 +223,6 @@ class WaterSystemVisualizer:
         
         return abs_filepath, pct_filepath
         
-    def plot_supply_utilization(self):
-        """
-        Create a time series plot showing supply rates and actual outflows for supply nodes.
-        """
-        supply_cols = [col for col in self.df.columns if col.endswith('_SupplyRate')]
-        if not supply_cols:
-            print("No supply nodes found in the system.")
-            return
-            
-        plt.figure(figsize=(12, 6))
-        
-        for col in supply_cols:
-            node_id = col.replace('_SupplyRate', '')
-            outflow_col = f"{node_id}_Outflow"
-            
-            plt.plot(self.df['TimeStep'], self.df[col], 
-                    label=f"{node_id} Available", marker='o')
-            plt.plot(self.df['TimeStep'], self.df[outflow_col], 
-                    label=f"{node_id} Used", marker='s')
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Flow Rate [m³/s]')
-        plt.title('Supply Utilization Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        return self._save_plot("supply_utilization")
-
     def plot_storage_spills(self):
         """
         Create a time series plot showing storage node spills over time.
@@ -339,6 +308,436 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("water_levels")
+
+    def plot_edge_losses(self):
+        """
+        Create a time series plot showing water losses for all edges in the system.
+        Displays both absolute losses and loss percentages.
+        
+        Returns:
+            tuple: Paths to the saved absolute and percentage loss plot files
+        """
+        # Get all edge-related columns from the DataFrame
+        loss_cols = [col for col in self.df.columns if col.startswith('Edge_') and col.endswith('_Losses')]
+        loss_pct_cols = [col for col in self.df.columns if col.startswith('Edge_') and col.endswith('_LossPercent')]
+        
+        if not loss_cols:
+            print("No edge loss data found in the system.")
+            return None, None
+        
+        # Plot absolute losses
+        plt.figure(figsize=(12, 10))
+        
+        # Create color map for edges
+        colors = plt.cm.tab20(np.linspace(0, 1, len(loss_cols)))
+        
+        for idx, col in enumerate(loss_cols):
+            # Extract edge name from column name for label
+            edge_name = col.replace('Edge_', '').replace('_Losses', '')
+            edge_name = edge_name.replace('_to_', ' → ')
+            
+            plt.plot(self.df['TimeStep'], 
+                    self.df[col],
+                    label=edge_name,
+                    color=colors[idx],
+                    marker='o',
+                    linewidth=0.8,
+                    markersize=3,
+                    markerfacecolor='white',
+                    markeredgewidth=1)
+        
+        plt.xlabel('Time Step')
+        plt.ylabel('Water Loss [m³/s]')
+        plt.title('Absolute Water Losses Over Edges')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        
+        # Enhance legend
+        plt.legend(bbox_to_anchor=(1.05, 1),
+                loc='upper left',
+                borderaxespad=0.,
+                frameon=True,
+                fancybox=True,
+                shadow=True,
+                fontsize=10)
+        
+        plt.tight_layout()
+        abs_filepath = self._save_plot("edge_losses_absolute")
+        
+        # Plot loss percentages
+        plt.figure(figsize=(12, 10))
+        
+        for idx, col in enumerate(loss_pct_cols):
+            # Extract edge name from column name for label
+            edge_name = col.replace('Edge_', '').replace('_LossPercent', '')
+            edge_name = edge_name.replace('_to_', ' → ')
+            
+            plt.plot(self.df['TimeStep'], 
+                    self.df[col],
+                    label=edge_name,
+                    color=colors[idx],
+                    marker='o',
+                    linewidth=0.8,
+                    markersize=3,
+                    markerfacecolor='white',
+                    markeredgewidth=1)
+        
+        plt.xlabel('Time Step')
+        plt.ylabel('Water Loss [%]')
+        plt.title('Percentage Water Losses Over Edges')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        
+        # Add reference lines for significant loss percentages
+        plt.axhline(y=25, color='yellow', linestyle='--', alpha=0.5, label='25% Loss')
+        plt.axhline(y=50, color='orange', linestyle='--', alpha=0.5, label='50% Loss')
+        plt.axhline(y=75, color='red', linestyle='--', alpha=0.5, label='75% Loss')
+        
+        # Enhance legend
+        plt.legend(bbox_to_anchor=(1.05, 1),
+                loc='upper left',
+                borderaxespad=0.,
+                frameon=True,
+                fancybox=True,
+                shadow=True,
+                fontsize=10)
+        
+        plt.tight_layout()
+        pct_filepath = self._save_plot("edge_losses_percentage")
+        
+        return abs_filepath, pct_filepath
+
+    def plot_edge_flows(self):
+        """
+        Create time series plots showing inflows and outflows for all edges in the system.
+        Includes comparison with edge capacities and flow reduction due to losses.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Get all edge-related flow columns from the DataFrame
+        inflow_cols = [col for col in self.df.columns if col.startswith('Edge_') and col.endswith('_Inflow')]
+        
+        if not inflow_cols:
+            print("No edge flow data found in the system.")
+            return None
+        
+        # Calculate number of edges and set up subplots layout
+        n_edges = len(inflow_cols)
+        n_cols = min(2, n_edges)  # Maximum 2 columns
+        n_rows = (n_edges + n_cols - 1) // n_cols  # Ceiling division
+        
+        # Create figure with subplots
+        fig = plt.figure(figsize=(15, 5 * n_rows))
+        
+        # Create color scheme for consistent visualization
+        flow_colors = {
+            'inflow': '#2196F3',    # Blue for inflow
+            'outflow': '#4CAF50',   # Green for outflow
+            'capacity': '#FF9800'    # Orange for capacity
+        }
+        
+        # Plot each edge's flows in its own subplot
+        for idx, inflow_col in enumerate(inflow_cols):
+            # Create subplot
+            ax = plt.subplot(n_rows, n_cols, idx + 1)
+            
+            # Extract edge name and corresponding columns
+            edge_name = inflow_col.replace('Edge_', '').replace('_Inflow', '')
+            edge_name = edge_name.replace('_to_', ' → ')
+            outflow_col = inflow_col.replace('_Inflow', '_Outflow')
+            
+            # Get edge capacity from the water system graph
+            source, target = edge_name.replace(' → ', '_to_').split('_to_')
+            try:
+                edge_data = self.system.graph[source][target]['edge']
+                capacity = edge_data.capacity
+            except:
+                capacity = None
+            
+            # Plot flows
+            ax.plot(self.df['TimeStep'], 
+                    self.df[inflow_col],
+                    label='Inflow',
+                    color=flow_colors['inflow'],
+                    marker='o',
+                    linewidth=1.5,
+                    markersize=4,
+                    markerfacecolor='white')
+            
+            ax.plot(self.df['TimeStep'], 
+                    self.df[outflow_col],
+                    label='Outflow',
+                    color=flow_colors['outflow'],
+                    marker='s',
+                    linewidth=1.5,
+                    markersize=4,
+                    markerfacecolor='white')
+            
+            # Plot capacity line if available
+            if capacity is not None:
+                ax.axhline(y=capacity, 
+                        color=flow_colors['capacity'],
+                        linestyle='--',
+                        label=f'Capacity ({capacity} m³/s)')
+            
+            # Calculate and plot flow metrics
+            mean_inflow = self.df[inflow_col].mean()
+            mean_outflow = self.df[outflow_col].mean()
+            mean_loss = mean_inflow - mean_outflow
+            loss_percent = (mean_loss / mean_inflow * 100) if mean_inflow > 0 else 0
+            
+            # Add metrics text box
+            metrics_text = (
+                f'Mean Inflow: {mean_inflow:.2f} m³/s\n'
+                f'Mean Outflow: {mean_outflow:.2f} m³/s\n'
+                f'Mean Loss: {mean_loss:.2f} m³/s\n'
+                f'Loss Percentage: {loss_percent:.1f}%'
+            )
+            
+            ax.text(0.95, 0.95, metrics_text,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    horizontalalignment='right',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize subplot
+            ax.set_xlabel('Time Step')
+            ax.set_ylabel('Flow Rate [m³/s]')
+            ax.set_title(f'Flow Rates for Edge: {edge_name}')
+            ax.grid(True, linestyle='--', alpha=0.7)
+            ax.legend(loc='upper left')
+            
+            # Add shaded area between inflow and outflow to highlight losses
+            ax.fill_between(self.df['TimeStep'],
+                        self.df[inflow_col],
+                        self.df[outflow_col],
+                        alpha=0.2,
+                        color='red',
+                        label='Losses')
+        
+        # Adjust layout to prevent overlap
+        plt.tight_layout()
+        
+        return self._save_plot("edge_flows")
+
+    def plot_edge_flow_summary(self):
+        """
+        Create a summary plot showing the distribution of flows and losses across all edges.
+        Uses box plots to show flow variability and average loss percentages.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Get edge flow columns
+        edge_cols = [col for col in self.df.columns if col.startswith('Edge_')]
+        if not edge_cols:
+            print("No edge flow data found in the system.")
+            return None
+        
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12))
+        
+        # Prepare data for box plots
+        edge_names = []
+        inflow_data = []
+        outflow_data = []
+        loss_pcts = []
+        
+        for inflow_col in [col for col in edge_cols if col.endswith('_Inflow')]:
+            edge_name = inflow_col.replace('Edge_', '').replace('_Inflow', '')
+            edge_name = edge_name.replace('_to_', ' → ')
+            outflow_col = inflow_col.replace('_Inflow', '_Outflow')
+            
+            edge_names.append(edge_name)
+            inflow_data.append(self.df[inflow_col])
+            outflow_data.append(self.df[outflow_col])
+            
+            # Calculate loss percentages
+            loss_pct = ((self.df[inflow_col] - self.df[outflow_col]) / 
+                    self.df[inflow_col] * 100).mean()
+            loss_pcts.append(loss_pct)
+        
+        # Plot flow distributions
+        bp1 = ax1.boxplot([inflow_data[i] for i in range(len(edge_names))],
+                        positions=range(0, len(edge_names)*2, 2),
+                        patch_artist=True,
+                        boxprops=dict(facecolor='lightblue', color='blue'),
+                        medianprops=dict(color='blue'),
+                        flierprops=dict(marker='o', markerfacecolor='lightblue'))
+        
+        bp2 = ax1.boxplot([outflow_data[i] for i in range(len(edge_names))],
+                        positions=range(1, len(edge_names)*2, 2),
+                        patch_artist=True,
+                        boxprops=dict(facecolor='lightgreen', color='green'),
+                        medianprops=dict(color='green'),
+                        flierprops=dict(marker='o', markerfacecolor='lightgreen'))
+        
+        # Customize flow distribution plot
+        ax1.set_xticks(range(0, len(edge_names)*2, 2))
+        ax1.set_xticklabels(edge_names, rotation=45, ha='right')
+        ax1.set_ylabel('Flow Rate [m³/s]')
+        ax1.set_title('Flow Rate Distributions by Edge')
+        ax1.legend([bp1["boxes"][0], bp2["boxes"][0]], ['Inflow', 'Outflow'])
+        ax1.grid(True, axis='y', linestyle='--', alpha=0.7)
+        
+        # Plot average loss percentages
+        bars = ax2.bar(edge_names, loss_pcts)
+        
+        # Color bars based on loss percentage
+        for bar, loss_pct in zip(bars, loss_pcts):
+            if loss_pct <= 25:
+                bar.set_color('lightgreen')
+            elif loss_pct <= 50:
+                bar.set_color('yellow')
+            elif loss_pct <= 75:
+                bar.set_color('orange')
+            else:
+                bar.set_color('red')
+        
+        # Customize loss percentage plot
+        ax2.set_xticklabels(edge_names, rotation=45, ha='right')
+        ax2.set_ylabel('Average Loss Percentage [%]')
+        ax2.set_title('Average Water Loss Percentage by Edge')
+        ax2.grid(True, axis='y', linestyle='--', alpha=0.7)
+        
+        # Add reference lines for loss percentages
+        for pct in [25, 50, 75]:
+            ax2.axhline(y=pct, color='gray', linestyle='--', alpha=0.5)
+            ax2.text(ax2.get_xlim()[1], pct, f'{pct}%', 
+                    verticalalignment='bottom', horizontalalignment='right')
+        
+        plt.tight_layout()
+        
+        return self._save_plot("edge_flow_summary")
+
+    def plot_reservoir_flows_and_volume(self):
+        """
+        Create plots showing inflows, outflows, and storage volume for each reservoir (storage node).
+        Uses twin axes to show flows and volume on different scales.
+        
+        Returns:
+            list: Paths to the saved plot files for each reservoir
+        """
+        # Get all storage nodes from the system
+        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], StorageNode)]
+        
+        if not storage_nodes:
+            print("No storage nodes found in the system.")
+            return []
+        
+        plot_paths = []
+        
+        # Create a separate plot for each reservoir
+        for node_id, node in storage_nodes:
+            # Create figure with primary and secondary y-axes
+            fig, ax1 = plt.subplots(figsize=(12, 6))
+            ax2 = ax1.twinx()
+            
+            # Get column names for this reservoir
+            inflow_col = f"{node_id}_Inflow"
+            outflow_col = f"{node_id}_Outflow"
+            storage_col = f"{node_id}_Storage"
+            excess_vol_col = f"{node_id}_ExcessVolume"
+            
+            # Define colors for different data series
+            colors = {
+                'inflow': '#2196F3',    # Blue
+                'outflow': '#4CAF50',   # Green
+                'storage': '#FF9800',    # Orange
+                'excess': '#F44336',     # Red
+                'capacity': '#9C27B0'    # Purple
+            }
+            
+            # Plot flows on primary y-axis
+            ln1 = ax1.plot(self.df['TimeStep'], self.df[inflow_col], 
+                        color=colors['inflow'], label='Inflow',
+                        marker='o', linewidth=1.5, markersize=4, markerfacecolor='white')
+            ln2 = ax1.plot(self.df['TimeStep'], self.df[outflow_col], 
+                        color=colors['outflow'], label='Outflow',
+                        marker='s', linewidth=1.5, markersize=4, markerfacecolor='white')
+            
+            # Plot storage volume on secondary y-axis
+            ln3 = ax2.plot(self.df['TimeStep'], self.df[storage_col], 
+                        color=colors['storage'], label='Storage Volume',
+                        marker='^', linewidth=1.5, markersize=4, markerfacecolor='white')
+            
+            # Plot capacity line on secondary y-axis
+            ln4 = ax2.axhline(y=node.capacity, color=colors['capacity'], 
+                            linestyle='--', label=f'Capacity ({node.capacity:,.0f} m³)')
+            
+            # Plot excess volume if any exists
+            if excess_vol_col in self.df.columns and self.df[excess_vol_col].max() > 0:
+                ln5 = ax1.plot(self.df['TimeStep'], self.df[excess_vol_col], 
+                            color=colors['excess'], label='Excess Volume',
+                            marker='x', linewidth=1.5, markersize=4)
+                lines = ln1 + ln2 + ln3 + [ln4] + ln5
+            else:
+                lines = ln1 + ln2 + ln3 + [ln4]
+            
+            # Calculate and add key statistics
+            mean_inflow = self.df[inflow_col].mean()
+            mean_outflow = self.df[outflow_col].mean()
+            mean_storage = self.df[storage_col].mean()
+            min_storage = self.df[storage_col].min()
+            max_storage = self.df[storage_col].max()
+            storage_utilization = (mean_storage / node.capacity) * 100
+            
+            stats_text = (
+                f'Mean Inflow: {mean_inflow:.2f} m³/s\n'
+                f'Mean Outflow: {mean_outflow:.2f} m³/s\n'
+                f'Mean Storage: {mean_storage:,.0f} m³\n'
+                f'Min Storage: {min_storage:,.0f} m³\n'
+                f'Max Storage: {max_storage:,.0f} m³\n'
+                f'Storage Utilization: {storage_utilization:.1f}%'
+            )
+            
+            # Add stats text box
+            plt.text(0.02, 0.98, stats_text,
+                    transform=ax1.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize axes
+            ax1.set_xlabel('Time Step')
+            ax1.set_ylabel('Flow Rate [m³/s]')
+            ax2.set_ylabel('Storage Volume [m³]')
+            
+            # Format y-axis labels with thousand separators
+            ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
+            
+            # Add light grid
+            ax1.grid(True, linestyle='--', alpha=0.3)
+            
+            # Set title
+            plt.title(f'Reservoir Flows and Storage Volume - {node_id}')
+            
+            # Combine legends from both axes
+            labels = [line.get_label() for line in lines]
+            ax1.legend(lines, labels, loc='upper right', bbox_to_anchor=(1, 0.9))
+            
+            # Add shaded regions for storage zones if HVA data is available
+            if hasattr(node, 'hva_data') and node.hva_data is not None:
+                # Get volume ranges
+                ranges = node.get_interpolation_ranges()
+                if ranges and 'volume_range' in ranges:
+                    min_vol = ranges['volume_range']['min']
+                    ax2.axhspan(0, min_vol, color='red', alpha=0.1, label='Dead Storage')
+                    ax2.axhspan(min_vol, node.capacity * 0.25, color='orange', alpha=0.1, label='Conservation')
+                    ax2.axhspan(node.capacity * 0.25, node.capacity * 0.75, color='green', alpha=0.1, label='Normal Operation')
+                    ax2.axhspan(node.capacity * 0.75, node.capacity, color='blue', alpha=0.1, label='Flood Control')
+            
+            # Adjust layout
+            plt.tight_layout()
+            
+            # Save the plot
+            plot_path = self._save_plot(f"reservoir_flows_and_volume_{node_id}")
+            plot_paths.append(plot_path)
+            
+        return plot_paths
 
     def plot_network_layout(self):
         """
@@ -428,14 +827,13 @@ class WaterSystemVisualizer:
                 loss_percent = (losses / inflow * 100) if inflow > 0 else 0
                 edge_labels[(u, v)] = (f'In: {inflow:.1f}m³/s\n'
                                     f'Out: {outflow:.1f}m³/s\n'
-                                    f'Loss: {edge.loss_factor} [/km]\n'
                                     f'Cap: {edge.capacity}m³/s\n'
                                     f'L: {edge.length:.1f} km\n')
             else:
                 edge_labels[(u, v)] = f'Cap: {edge.capacity}'
         
         nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
-                                font_size=10, ax=ax)
+                                font_size=8, ax=ax)
         
         plt.axis('off')
         plt.tight_layout()
