@@ -814,8 +814,8 @@ class WaterSystemVisualizer:
             else:
                 labels[node] = f"{node}\n{node_instance.__class__.__name__}"
         
-        nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=12, ax=ax)
-        
+        nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=14, ax=ax)
+        """
         # Update edge labels to show flows and losses
         edge_labels = {}
         for u, v, d in self.system.graph.edges(data=True):
@@ -834,7 +834,7 @@ class WaterSystemVisualizer:
         
         nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
                                 font_size=8, ax=ax)
-        
+        """
         plt.axis('off')
         plt.tight_layout()
         
