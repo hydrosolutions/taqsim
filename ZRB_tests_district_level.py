@@ -1,12 +1,10 @@
-import csv
-import math
 import networkx as nx 
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
 
-def create_seasonal_ZRB_system():
+def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     """
     Creates a test water system with a seasonal supply, a large reservoir,
     a seasonal demand, and a sink node. The system runs for 10 years with monthly time steps.
@@ -16,9 +14,6 @@ def create_seasonal_ZRB_system():
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    num_time_steps = 12 * 2  # 5 years of monthly data
-    start_year = 2017
-    start_month = 1
     system = WaterSystem(dt=dt)
 
     # Create nodes
@@ -99,7 +94,7 @@ def create_seasonal_ZRB_system():
     system.add_edge(Edge(Payariq, Ishtixon, capacity=100))
     system.add_edge(Edge(Oqdaryo, Ishtixon, capacity=230))
     system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=230))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=230))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=20))
 
     # Damkodzha
     system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
@@ -109,7 +104,7 @@ def create_seasonal_ZRB_system():
     system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=94))
     system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=94))
 
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=10))
 
     # HW_Narpay
     system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
@@ -198,37 +193,25 @@ def plot_water_balance_time_series(water_system, filename, columns_to_plot=None)
     plt.close()
     print(f"Water system plot saved to {filename}")
 
-def generate_seasonal_demand(num_time_steps):
-    """
-    Generates a list of seasonal demand rates.
-
-    Args:
-        num_time_steps (int): The number of time steps to generate demand for.
-
-    Returns:
-        list: A list of demand rates for each time step.
-    """
-    base_demand = 20  # m³/s
-    amplitude = 20    # m³/s
-    demand_rates = []
-    for t in range(num_time_steps):
-        month = t % 12
-        seasonal_factor = -math.cos(2 * math.pi * month / 12)  # Peak in summer, trough in winter
-        demand_rate = base_demand + amplitude * seasonal_factor
-        demand_rates.append(max(0, demand_rate))  # Ensure non-negative demand
-    return demand_rates
-
 def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
 
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
-    ZRB_system = create_seasonal_ZRB_system()
+    start_year = 2017
+    start_month = 1
+    num_time_steps = 12 * 5  # 5 years of monthly data
+    ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
     print("ZRB system test:")
-    num_time_steps = 2*12
     ZRB_system.simulate(num_time_steps)
+    print("Simulation complete")
 
+    print('ZRB system test: Visualizing the system')
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
+    vis_ZRB.plot_reservoir_flows_and_volume()
+    vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
+    vis_ZRB.plot_network_layout()
+    """
     vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
     vis_ZRB.plot_reservoir_volume()
     vis_ZRB.plot_demand_satisfaction()
@@ -240,19 +223,21 @@ def run_sample_tests():
     vis_ZRB.plot_edge_flows()
     vis_ZRB.plot_edge_flow_summary()
     vis_ZRB.plot_reservoir_flows_and_volume()
+    """
+    print("Visualizations complete")
 
     # Extract and print results
     reservoir_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], StorageNode))
     demand_node = next(data['node'] for _, data in ZRB_system.graph.nodes(data=True) if isinstance(data['node'], DemandNode))
 
     print("\nReservoir Storage Levels (every 12 months):")
-    for year in range(10):
+    for year in range(num_time_steps // 12):
         month = year * 12
         storage = reservoir_node.get_storage(month)
         print(f"Year {year + 1}: {storage:,.0f} m³")
 
     print("\nDemand Satisfaction (every 12 months):")
-    for year in range(10):
+    for year in range(num_time_steps // 12):
         month = year * 12
         satisfied = demand_node.get_satisfied_demand(month)
         total_demand = demand_node.get_demand_rate(month)

@@ -313,8 +313,8 @@ class DemandNode(Node):
                 # Check if data is valid
                 if not (demand.empty or 
                     demand['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                    len(demand['Demand [m^3/s]']) < num_time_steps):
-                    return demand['Demand [m^3/s]'].tolist()
+                    len(demand['ETblue [m^3/s]']) < num_time_steps):
+                    return demand['ETblue [m^3/s]'].tolist()
                 
                 # Print warning for invalid data
                 print(f"Warning: Insufficient data in csv file for node '{id}'")
@@ -342,8 +342,8 @@ class DemandNode(Node):
             # Read the CSV file into a pandas DataFrame
             demand = pd.read_csv(csv_file, parse_dates=['Date'])
             
-            if 'Date' not in demand.columns or 'Demand [m^3/s]' not in demand.columns:
-                raise ValueError("CSV file must contain 'Date' and 'Demand [m^3/s]' columns")
+            if 'Date' not in demand.columns or 'ETblue [m^3/s]' not in demand.columns:
+                raise ValueError("CSV file must contain 'Date' and 'ETblue [m^3/s]' columns")
         
             # Filter the DataFrame to find the start point
             start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
