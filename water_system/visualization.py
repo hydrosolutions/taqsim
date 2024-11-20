@@ -839,3 +839,315 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("network_layout")  
+
+    def plot_water_balance(self):
+        """
+        Create water balance visualization using side-by-side bars.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        if not hasattr(self, 'image_dir'):
+            self.image_dir = os.path.join('.', 'figures')
+            os.makedirs(self.image_dir, exist_ok=True)
+        
+        df = self.system.get_water_balance()
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(15, 8))
+        
+        # Width of bars
+        bar_width = 0.35
+        
+        # Define colors
+        colors = {
+            'source': '#2196F3',           # Blue
+            'supplied demand': '#4CAF50',   # Green
+            'sink': '#f44336',             # Red
+            'edge losses': '#FF9800',       # Orange
+            'reservoir spills': '#9C27B0',  # Purple
+            'storage_change': '#795548'     # Brown
+        }
+        
+        time_steps = df['time_step']
+        
+        # Create positive bars (sources)
+        source_bars = ax.bar(time_steps, df['source'], 
+                           bar_width, label='Source',
+                           color=colors['source'], alpha=0.7)
+        
+        # Create stacked negative bars (sinks)
+        components = ['supplied demand', 'sink', 'edge losses', 
+                     'reservoir spills', 'storage_change']
+        labels = ['Supplied Demand', 'Sink', 'Edge Losses', 
+                 'Reservoir Spills', 'Storage Change']
+        
+        bottom = np.zeros(len(df))
+        bars = []
+        for comp, label in zip(components, labels):
+            bars.append(ax.bar(time_steps + bar_width, df[comp], 
+                             bar_width, bottom=bottom,
+                             label=label, color=colors[comp], alpha=0.7))
+            bottom += df[comp]
+            
+        # Add balance error as a line
+        ax.plot(time_steps + bar_width/2, df['balance_error'],
+               label='Balance Error', color='black',
+               linestyle='--', linewidth=1, marker='o')
+        
+        # Customize plot
+        ax.set_xlabel('Time Step')
+        ax.set_ylabel('Volume (m³)')
+        ax.set_title('Water Balance Components')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Adjust layout and save
+        plt.tight_layout()
+        plot_path = os.path.join(self.image_dir, f"{self.name}_water_balance.png")
+        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
+        plt.close()
+        
+        # Print summary statistics
+        print("\nWater Balance Summary")
+        print("=" * 50)
+        
+        # Total volumes
+        print("\nTotal Volumes:")
+        total_source = df['source'].sum()
+        print(f"Total Source: {total_source:,.0f} m³")
+        
+        components_sum = {
+            'Supplied Demand': df['supplied demand'].sum(),
+            'Sink Outflow': df['sink'].sum(),
+            'Edge Losses': df['edge losses'].sum(),
+            'Reservoir Spills': df['reservoir spills'].sum()
+        }
+        
+        for comp, value in components_sum.items():
+            print(f"Total {comp}: {value:,.0f} m³ ({value/total_source*100:.1f}%)")
+        
+        # Storage
+        print("\nStorage:")
+        if len(df) > 0:
+            print(f"Initial Storage: {df['storage_start'].iloc[0]:,.0f} m³")
+            print(f"Final Storage: {df['storage_end'].iloc[-1]:,.0f} m³")
+            print(f"Net Storage Change: {df['storage_end'].iloc[-1] - df['storage_start'].iloc[0]:,.0f} m³")
+        
+        # Balance error statistics
+        print("\nBalance Error Statistics:")
+        error_stats = df['balance_error'].describe()
+        print(f"Mean Error: {error_stats['mean']:,.2f} m³")
+        print(f"Max Error: {error_stats['max']:,.2f} m³")
+        print(f"Min Error: {error_stats['min']:,.2f} m³")
+        print(f"Std Error: {error_stats['std']:,.2f} m³")
+        
+        return plot_path
+    
+    def plot_cumulative_volumes(self):
+        """
+        Create a plot showing the cumulative volumes of all water balance components,
+        including storage change.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        if not hasattr(self, 'image_dir'):
+            self.image_dir = os.path.join('.', 'figures')
+            os.makedirs(self.image_dir, exist_ok=True)
+        
+        df = self.system.get_water_balance()
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Define components and their properties
+        components = {
+            'source': {
+                'color': '#2196F3',  # Blue
+                'label': 'Source'
+            },
+            'supplied demand': {
+                'color': '#4CAF50',  # Green
+                'label': 'Supplied Demand'
+            },
+            'sink': {
+                'color': '#f44336',  # Red
+                'label': 'Sink'
+            },
+            'edge losses': {
+                'color': '#FF9800',  # Orange
+                'label': 'Edge Losses'
+            },
+            'reservoir spills': {
+                'color': '#9C27B0',  # Purple
+                'label': 'Reservoir Spills'
+            },
+            'storage_change': {
+                'color': '#795548',  # Brown
+                'label': 'Storage Change'
+            }
+        }
+        
+        # Calculate and plot cumulative volumes for main components
+        for comp, properties in components.items():
+            if comp != 'storage_change':  # Handle storage_change separately
+                cumulative = df[comp].cumsum()
+                ax.plot(df['time_step'], cumulative,
+                       label=properties['label'],
+                       color=properties['color'],
+                       linewidth=2,
+                       marker='o',
+                       markersize=4)
+        
+        # Handle storage change separately with dashed line
+        cumulative_storage = df['storage_change'].cumsum()
+        ax.plot(df['time_step'], cumulative_storage,
+               label='Storage Change',
+               color=components['storage_change']['color'],
+               linewidth=2,
+               linestyle='--',
+               marker='s',
+               markersize=4)
+        
+        # Customize plot
+        ax.set_xlabel('Time Step')
+        ax.set_ylabel('Cumulative Volume (m³)')
+        ax.set_title('Cumulative Water Balance Components')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.grid(True, alpha=0.3)
+        
+        # Add text box with final volumes
+        if len(df) > 0:
+            text_str = "Final Volumes:\n"
+            total_source = df['source'].sum()
+            
+            # Add all components including storage change
+            for comp, properties in components.items():
+                total = df[comp].sum()
+                percentage = (total / total_source * 100) if total_source > 0 else 0
+                
+                # Format numbers with appropriate sign
+                if comp == 'storage_change':
+                    text_str += f"{properties['label']}: {total:+,.0f} m³ ({percentage:+.1f}%)\n"
+                else:
+                    text_str += f"{properties['label']}: {total:,.0f} m³ ({percentage:.1f}%)\n"
+            
+            # Add storage start and end values
+            text_str += f"\nStorage Start: {df['storage_start'].iloc[0]:,.0f} m³\n"
+            text_str += f"Storage End: {df['storage_end'].iloc[-1]:,.0f} m³"
+            
+            plt.text(1.05, 0.5, text_str,
+                    transform=ax.transAxes,
+                    bbox=dict(facecolor='white', alpha=0.8),
+                    verticalalignment='center')
+        
+        # Add horizontal line at y=0
+        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Adjust layout and save
+        plt.tight_layout()
+        plot_path = os.path.join(self.image_dir, f"{self.name}_cumulative_volumes.png")
+        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
+        plt.close()
+        
+        return plot_path
+    
+    def print_water_balance_summary(self):
+        """
+        Print a comprehensive summary of the water balance results.
+        Includes volumes, relative contributions, storage changes and balance error statistics.
+        """
+        df = self.system.get_water_balance()
+        
+        print(f"\nWater Balance Summary for {self.name}")
+        print("=" * 50)
+        
+        if len(df) == 0:
+            print("No data available - simulation may not have been run yet.")
+            return
+            
+        def print_section(title):
+            print(f"\n{title}")
+            print("-" * len(title))
+        
+        # Time information
+        print_section("Simulation Period")
+        print(f"Number of timesteps: {len(df)}")
+        print(f"Timestep duration: {self.system.dt:,.0f} seconds")
+        
+        # Source volumes
+        print_section("Source Volumes")
+        total_source = df['source'].sum()
+        print(f"Total source volume: {total_source:,.0f} m³")
+        
+        # Component volumes and percentages
+        print_section("Component Volumes")
+        components = {
+            'Supplied Demand': 'supplied demand',
+            'Sink Outflow': 'sink',
+            'Edge Losses': 'edge losses',
+            'Reservoir Spills': 'reservoir spills',
+        }
+        
+        for label, comp in components.items():
+            total = df[comp].sum()
+            percentage = (total / total_source * 100) if total_source > 0 else 0
+            print(f"{label:15s}: {total:15,.0f} m³ ({percentage:6.1f}%)")
+        
+        # Storage changes
+        print_section("Storage")
+        print(f"Initial storage:     {df['storage_start'].iloc[0]:15,.0f} m³")
+        print(f"Final storage:       {df['storage_end'].iloc[-1]:15,.0f} m³")
+        total_storage_change = df['storage_change'].sum()
+        storage_percentage = (total_storage_change / total_source * 100) if total_source > 0 else 0
+        print(f"Net storage change:  {total_storage_change:15,.0f} m³ ({storage_percentage:6.1f}%)")
+        
+        # Balance error statistics
+        print_section("Balance Error Statistics")
+        error_stats = df['balance_error'].describe()
+        
+        error_metrics = {
+            'Mean': error_stats['mean'],
+            'Std Dev': error_stats['std'],
+            'Minimum': error_stats['min'],
+            'Maximum': error_stats['max']
+        }
+        
+        # Calculate relative errors
+        total_flux = df['source'].sum()
+        for label, value in error_metrics.items():
+            rel_error = (value / total_source * 100) if total_source > 0 else 0
+            print(f"{label:8s}: {value:15,.2f} m³ ({rel_error:6.2f}%)")
+        
+        # Additional statistics
+        print_section("Maximum Values")
+        components = {
+            'Source': 'source',
+            'Supplied': 'supplied demand',
+            'Sink': 'sink',
+            'Losses': 'edge losses',
+            'Spills': 'reservoir spills'
+        }
+        
+        for label, comp in components.items():
+            max_value = df[comp].max()
+            timestep = df.loc[df[comp].idxmax(), 'time_step']
+            print(f"{label:10s}: {max_value:15,.0f} m³ at timestep {timestep:3.0f}")
+        
+        # Conservation check
+        print_section("Conservation Check")
+        total_in = total_source
+        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills'])
+        total_stored = total_storage_change
+        
+        print(f"Total in:          {total_in:15,.0f} m³")
+        print(f"Total out:         {total_out:15,.0f} m³")
+        print(f"Net storage:       {total_stored:15,.0f} m³")
+        
+        balance = total_in - total_out - total_stored
+        rel_balance = (balance / total_in * 100) if total_in > 0 else 0
+        print(f"Balance residual:  {balance:15,.0f} m³ ({rel_balance:6.2f}%)")
+        
+        print("\n" + "=" * 50)

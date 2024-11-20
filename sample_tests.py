@@ -341,7 +341,7 @@ def generate_seasonal_demand(num_time_steps):
     return demand_rates
 
 def run_sample_tests():
-    
+    """
     print("\n" + "="*50 + "\n")
 
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
@@ -421,7 +421,7 @@ def run_sample_tests():
     save_water_balance_to_csv(complex_system, "balance_table_complex_system.csv")
     vis=WaterSystemVisualizer(complex_system, 'complex')
     vis.plot_network_layout()
-    
+    """
     print("\n" + "="*50 + "\n")
 
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -441,6 +441,9 @@ def run_sample_tests():
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
     vis=WaterSystemVisualizer(seasonal_system, 'seasonal_reservoir')
     vis.plot_network_layout()
+    vis.plot_cumulative_volumes()
+    vis.plot_water_balance()
+    vis.print_water_balance_summary()
     
 # Run the sample tests
 if __name__ == "__main__":
