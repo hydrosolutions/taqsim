@@ -50,8 +50,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
 
     # Reservoir
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
-    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=0)
+    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=0)
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
@@ -132,7 +132,7 @@ def save_water_balance_to_csv(water_system, filename):
     water_system (WaterSystem): The water system to save the balance for.
     filename (str): The name of the CSV file to save to.
     """
-    balance_table = water_system.get_water_balance_table()
+    balance_table = water_system.get_water_balance()
     balance_table.to_csv(filename, index=False)
     print(f"Water balance table saved to {filename}")
 
@@ -207,11 +207,12 @@ def run_sample_tests():
     print("Simulation complete")
 
     print('ZRB system test: Visualizing the system')
+    """
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
     vis_ZRB.plot_reservoir_flows_and_volume()
     vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
     vis_ZRB.plot_network_layout()
-    """
+  
     vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
     vis_ZRB.plot_reservoir_volume()
     vis_ZRB.plot_demand_satisfaction()

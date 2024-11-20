@@ -250,11 +250,11 @@ def save_water_balance_to_csv(water_system, filename):
     water_system (WaterSystem): The water system to save the balance for.
     filename (str): The name of the CSV file to save to.
     """
-    balance_table = water_system.get_water_balance_table()
+    balance_table = water_system.get_water_balance()
     balance_table.to_csv(filename, index=False)
     print(f"Water balance table saved to {filename}")
 
-def plot_water_balance_time_series(water_system, filename, columns_to_plot=None):
+def plot_water_balance_time_series(water_system, filename):
     """
     Create and save a single plot for the entire water system with dual y-axes.
     
@@ -263,13 +263,12 @@ def plot_water_balance_time_series(water_system, filename, columns_to_plot=None)
     filename (str): The name of the PNG file to save to.
     columns_to_plot (list): Optional list of column names to plot. If None, all columns are plotted.
     """
-    balance_table = water_system.get_water_balance_table()
+    balance_table = water_system.get_water_balance()
 
-    if columns_to_plot is None:
-        columns_to_plot = [col for col in balance_table.columns if col != 'TimeStep']
+    
+    columns_to_plot = [col for col in balance_table.columns if col != 'time_step']
 
     fig, ax1 = plt.subplots(figsize=(12, 8))
-    ax2 = ax1.twinx()  # Create a second y-axis
 
     plt.title('Water System Simulation Results')
 
@@ -278,33 +277,23 @@ def plot_water_balance_time_series(water_system, filename, columns_to_plot=None)
 
     color_index = 0
     for column in columns_to_plot:
-        if column == 'TimeStep':
+        if column == 'time_step' or column == 'storage_start' or column == 'storage_end' or column == 'demands':
             continue
 
         color = colors[color_index % len(colors)]
         line_style = line_styles[color_index % len(line_styles)]
         color_index += 1
 
-        if 'Storage' in column:
-            # Plot storage volume on the right y-axis
-            ax2.plot(balance_table['TimeStep'], balance_table[column], 
-            color=color, linestyle=line_style, label=column)
-        elif 'ExcessVolume' in column:
-            ax2.plot(balance_table['TimeStep'], balance_table[column], 
-            color=color, linestyle=line_style, label=column)
-        else:
-            # Plot other columns on the left y-axis
-            ax1.plot(balance_table['TimeStep'], balance_table[column], 
-            color=color, linestyle=line_style, label=column)
+        # Plot other columns on the left y-axis
+        ax1.plot(balance_table['time_step'], balance_table[column], 
+        color=color, linestyle=line_style, label=column)
 
     ax1.set_xlabel('Time Step')
-    ax1.set_ylabel('Flow Rate (m³/s)')
-    ax2.set_ylabel('Volume (m³)')
+    ax1.set_ylabel('Volume (m³)')
 
     # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax1.legend(lines1, labels1, bbox_to_anchor=(1.05, 1), loc='upper left')
 
     plt.tight_layout()
     plt.savefig(filename, dpi=300, bbox_inches='tight')
@@ -362,15 +351,7 @@ def run_sample_tests():
     super_simple_system.simulate(num_time_steps)
 
     # Visualize the system
-    columns_to_plot = [
-    "Source_Outflow",
-    "Agriculture_Inflow",
-    "Agriculture_SatisfiedDemand",
-    "Agriculture_Outflow",
-    "Sink_Inflow"
-    ]
-
-    plot_water_balance_time_series(super_simple_system, "ts_plot_super_simple_system.png", columns_to_plot=columns_to_plot)
+    plot_water_balance_time_series(super_simple_system, "ts_plot_super_simple_system.png")
     save_water_balance_to_csv(super_simple_system, "balance_table_super_simple_system.csv")
     vis=WaterSystemVisualizer(super_simple_system, 'super_simple')
     vis.plot_network_layout()
@@ -384,19 +365,7 @@ def run_sample_tests():
     simple_system.simulate(num_time_steps)
 
     # Visualize the system
-    columns_to_plot = [
-    "Source_Outflow",
-    "MainReservoir_Outflow",
-    "Agriculture_Inflow",
-    "Urban_Inflow",
-    "Agriculture_SatisfiedDemand",
-    "Urban_SatisfiedDemand",
-    "Agriculture_Outflow",
-    "Urban_Outflow",
-    "Sink_Inflow"
-    ]
-
-    plot_water_balance_time_series(simple_system, "ts_plot_simple_system.png", columns_to_plot=columns_to_plot)
+    plot_water_balance_time_series(simple_system, "ts_plot_simple_system.png")
     save_water_balance_to_csv(simple_system, "balance_table_simple_system.csv")
     vis=WaterSystemVisualizer(simple_system, 'simple')
     vis.plot_network_layout()
@@ -409,9 +378,8 @@ def run_sample_tests():
     num_time_steps = 12
     hydroworks_system_3_diversions.simulate(num_time_steps)
 
-    visualizer=WaterSystemVisualizer(hydroworks_system_3_diversions, 'HW_3_diversions')
-    visualizer.plot_node_inflows(['HydroWorks1', 'HydroWorks2', 'HydroWorks4'])
-    visualizer.plot_network_layout()
+    vis=WaterSystemVisualizer(hydroworks_system_3_diversions, 'HW_3_diversions')
+    vis.plot_network_layout()
 
     plot_water_balance_time_series(hydroworks_system_3_diversions, "ts_plot_hydroworks_3_diversions_system.png")
     save_water_balance_to_csv(hydroworks_system_3_diversions, "balance_table_hydroworks_3_diversions_system.csv")
@@ -425,18 +393,7 @@ def run_sample_tests():
     simple_system_with_diversion.simulate(num_time_steps)
 
     # Visualize the system
-    columns_to_plot = [
-    "Source_Outflow",
-    "MainReservoir_Outflow",
-    "Diversion_Inflow",
-    "Urban_Inflow",
-    "Urban_SatisfiedDemand",
-    "Diversion_Outflow",
-    "Urban_Outflow",
-    "Sink_Inflow"
-    ]
-
-    plot_water_balance_time_series(simple_system_with_diversion, "ts_plot_simple_system_with_diversion.png", columns_to_plot=columns_to_plot)
+    plot_water_balance_time_series(simple_system_with_diversion, "ts_plot_simple_system_with_diversion.png")
     save_water_balance_to_csv(simple_system_with_diversion, "balance_table_simple_system_with_diversion.csv")
     vis=WaterSystemVisualizer(simple_system_with_diversion, 'simple_w_diversion')
     vis.plot_network_layout()
@@ -469,31 +426,21 @@ def run_sample_tests():
 
     # Test: Seasonal Reservoir. Fully seasonal system.
     seasonal_system = create_seasonal_reservoir_system()
-    num_time_steps = 12 * 2  # 2 years of monthly data
+    num_time_steps = 2*12  # 2 years of monthly data
 
     print("Running Seasonal Reservoir Test")
 
     seasonal_system.simulate(num_time_steps)
     # Generate water balance table
-    balance_table = seasonal_system.get_water_balance_table()
+    balance_table = seasonal_system.get_water_balance()
     balance_table.to_csv("balance_table_seasonal_reservoir_system.csv", index=False)
-    print("\nWater balance table saved to 'balance_table)_seasonal_reservoir_system.csv'")
+    print("\nWater balance table saved to 'balance_table_seasonal_reservoir_system.csv'")
 
     # Visualize the system
-    columns_to_plot = [
-    "LargeReservoir_Inflow",
-    "LargeReservoir_Outflow",
-    "LargeReservoir_Storage",
-    "LargeReservoir_ExcessVolume",
-    "SeasonalDemand_Demand",
-    "SeasonalDemand_SatisfiedDemand"
-    ]
-
-    plot_water_balance_time_series(seasonal_system, "ts_plot_seasonal_reservoir_system.png", columns_to_plot)
+    plot_water_balance_time_series(seasonal_system, "ts_plot_seasonal_reservoir_system.png")
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
-    vis=WaterSystemVisualizer(seasonal_system, 'seasonal')
+    vis=WaterSystemVisualizer(seasonal_system, 'seasonal_reservoir')
     vis.plot_network_layout()
-    vis.plot_demand_satisfaction()
     
 # Run the sample tests
 if __name__ == "__main__":

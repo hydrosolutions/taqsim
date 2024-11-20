@@ -22,7 +22,7 @@ class Edge:
         losses (list): A list of total losses for each time step.
     """
 
-    def __init__(self, source, target, capacity, length=None, loss_factor=0.005):
+    def __init__(self, source, target, capacity, length=None, loss_factor=0.01):
         """
         Initialize an Edge object.
 

@@ -496,7 +496,7 @@ class StorageNode(Node):
         
         # Initialize storage attributes
         self.storage = [initial_storage]
-        self.spillway_register = [0]
+        self.spillway_register = []
         self.water_level = [self.get_level_from_volume(initial_storage)]
 
     def _initialize_interpolators(self):
