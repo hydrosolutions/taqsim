@@ -2,6 +2,8 @@ import networkx as nx
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import webbrowser
+import os
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
 
 def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
@@ -50,8 +52,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
 
     # Reservoir
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=0)
-    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=0)
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
+    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7)
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
@@ -195,28 +197,27 @@ def run_sample_tests():
     print("Simulation complete")
 
     print('ZRB system test: Visualizing the system')
-   
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
-    vis_ZRB.plot_water_balance()
-    vis_ZRB.plot_cumulative_volumes()
-    vis_ZRB.print_water_balance_summary()
     """
-    vis_ZRB.plot_reservoir_flows_and_volume()
     vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
-    vis_ZRB.plot_network_layout()
-  
-    vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
-    vis_ZRB.plot_reservoir_volume()
     vis_ZRB.plot_demand_satisfaction()
     vis_ZRB.plot_demand_deficit_heatmap()
     vis_ZRB.plot_storage_spills()
-    vis_ZRB.plot_network_layout()
     vis_ZRB.plot_water_levels()
-    vis_ZRB.plot_edge_losses()
     vis_ZRB.plot_edge_flows()
     vis_ZRB.plot_edge_flow_summary()
-    vis_ZRB.plot_reservoir_flows_and_volume()
-    """
+    vis_ZRB.plot_network_layout()
+    vis_ZRB.plot_water_balance()
+    vis_ZRB.plot_cumulative_volumes()
+    vis_ZRB.print_water_balance_summary()
+
+    print('ZRB system test: Visualization finished')
+    
+    """    
+    html_file = vis_ZRB.create_interactive_network_visualization()
+    print(f"Interactive visualization saved to: {html_file}")
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')
+    
     print("Visualizations complete")
 
     plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png")

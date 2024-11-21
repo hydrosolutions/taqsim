@@ -8,6 +8,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 import os
+import json
 import networkx as nx
 from datetime import datetime
 from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks
@@ -76,34 +77,6 @@ class WaterSystemVisualizer:
         
         nodes_str = "_".join(node_ids)
         return self._save_plot("flows", nodes_str)
-        
-    def plot_reservoir_volume(self):
-        """
-        Create a time series plot of storage levels for all storage nodes.
-        """
-        storage_cols = [col for col in self.df.columns if col.endswith('_Storage')]
-        if not storage_cols:
-            print("No storage nodes found in the system.")
-            return
-            
-        plt.figure(figsize=(12, 6))
-        
-        for col in storage_cols:
-            node_id = col.replace('_Storage', '')
-            node_data = self.system.graph.nodes[node_id]['node']
-            
-            plt.plot(self.df['TimeStep'], self.df[col], 
-                    label=f"{node_id} Storage", marker='o')
-            plt.axhline(y=node_data.capacity, linestyle='--', 
-                       label=f"{node_id} Capacity")
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Storage Volume [m³]')
-        plt.title('Storage Levels Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        return self._save_plot("reservoir_volume")
         
     def plot_demand_satisfaction(self):
         """
@@ -308,102 +281,6 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("water_levels")
-
-    def plot_edge_losses(self):
-        """
-        Create a time series plot showing water losses for all edges in the system.
-        Displays both absolute losses and loss percentages.
-        
-        Returns:
-            tuple: Paths to the saved absolute and percentage loss plot files
-        """
-        # Get all edge-related columns from the DataFrame
-        loss_cols = [col for col in self.df.columns if col.startswith('Edge_') and col.endswith('_Losses')]
-        loss_pct_cols = [col for col in self.df.columns if col.startswith('Edge_') and col.endswith('_LossPercent')]
-        
-        if not loss_cols:
-            print("No edge loss data found in the system.")
-            return None, None
-        
-        # Plot absolute losses
-        plt.figure(figsize=(12, 10))
-        
-        # Create color map for edges
-        colors = plt.cm.tab20(np.linspace(0, 1, len(loss_cols)))
-        
-        for idx, col in enumerate(loss_cols):
-            # Extract edge name from column name for label
-            edge_name = col.replace('Edge_', '').replace('_Losses', '')
-            edge_name = edge_name.replace('_to_', ' → ')
-            
-            plt.plot(self.df['TimeStep'], 
-                    self.df[col],
-                    label=edge_name,
-                    color=colors[idx],
-                    marker='o',
-                    linewidth=0.8,
-                    markersize=3,
-                    markerfacecolor='white',
-                    markeredgewidth=1)
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Water Loss [m³/s]')
-        plt.title('Absolute Water Losses Over Edges')
-        plt.grid(True, linestyle='--', alpha=0.7)
-        
-        # Enhance legend
-        plt.legend(bbox_to_anchor=(1.05, 1),
-                loc='upper left',
-                borderaxespad=0.,
-                frameon=True,
-                fancybox=True,
-                shadow=True,
-                fontsize=10)
-        
-        plt.tight_layout()
-        abs_filepath = self._save_plot("edge_losses_absolute")
-        
-        # Plot loss percentages
-        plt.figure(figsize=(12, 10))
-        
-        for idx, col in enumerate(loss_pct_cols):
-            # Extract edge name from column name for label
-            edge_name = col.replace('Edge_', '').replace('_LossPercent', '')
-            edge_name = edge_name.replace('_to_', ' → ')
-            
-            plt.plot(self.df['TimeStep'], 
-                    self.df[col],
-                    label=edge_name,
-                    color=colors[idx],
-                    marker='o',
-                    linewidth=0.8,
-                    markersize=3,
-                    markerfacecolor='white',
-                    markeredgewidth=1)
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Water Loss [%]')
-        plt.title('Percentage Water Losses Over Edges')
-        plt.grid(True, linestyle='--', alpha=0.7)
-        
-        # Add reference lines for significant loss percentages
-        plt.axhline(y=25, color='yellow', linestyle='--', alpha=0.5, label='25% Loss')
-        plt.axhline(y=50, color='orange', linestyle='--', alpha=0.5, label='50% Loss')
-        plt.axhline(y=75, color='red', linestyle='--', alpha=0.5, label='75% Loss')
-        
-        # Enhance legend
-        plt.legend(bbox_to_anchor=(1.05, 1),
-                loc='upper left',
-                borderaxespad=0.,
-                frameon=True,
-                fancybox=True,
-                shadow=True,
-                fontsize=10)
-        
-        plt.tight_layout()
-        pct_filepath = self._save_plot("edge_losses_percentage")
-        
-        return abs_filepath, pct_filepath
 
     def plot_edge_flows(self):
         """
@@ -610,134 +487,6 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("edge_flow_summary")
-
-    def plot_reservoir_flows_and_volume(self):
-        """
-        Create plots showing inflows, outflows, and storage volume for each reservoir (storage node).
-        Uses twin axes to show flows and volume on different scales.
-        
-        Returns:
-            list: Paths to the saved plot files for each reservoir
-        """
-        # Get all storage nodes from the system
-        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
-                        if isinstance(data['node'], StorageNode)]
-        
-        if not storage_nodes:
-            print("No storage nodes found in the system.")
-            return []
-        
-        plot_paths = []
-        
-        # Create a separate plot for each reservoir
-        for node_id, node in storage_nodes:
-            # Create figure with primary and secondary y-axes
-            fig, ax1 = plt.subplots(figsize=(12, 6))
-            ax2 = ax1.twinx()
-            
-            # Get column names for this reservoir
-            inflow_col = f"{node_id}_Inflow"
-            outflow_col = f"{node_id}_Outflow"
-            storage_col = f"{node_id}_Storage"
-            excess_vol_col = f"{node_id}_ExcessVolume"
-            
-            # Define colors for different data series
-            colors = {
-                'inflow': '#2196F3',    # Blue
-                'outflow': '#4CAF50',   # Green
-                'storage': '#FF9800',    # Orange
-                'excess': '#F44336',     # Red
-                'capacity': '#9C27B0'    # Purple
-            }
-            
-            # Plot flows on primary y-axis
-            ln1 = ax1.plot(self.df['TimeStep'], self.df[inflow_col], 
-                        color=colors['inflow'], label='Inflow',
-                        marker='o', linewidth=1.5, markersize=4, markerfacecolor='white')
-            ln2 = ax1.plot(self.df['TimeStep'], self.df[outflow_col], 
-                        color=colors['outflow'], label='Outflow',
-                        marker='s', linewidth=1.5, markersize=4, markerfacecolor='white')
-            
-            # Plot storage volume on secondary y-axis
-            ln3 = ax2.plot(self.df['TimeStep'], self.df[storage_col], 
-                        color=colors['storage'], label='Storage Volume',
-                        marker='^', linewidth=1.5, markersize=4, markerfacecolor='white')
-            
-            # Plot capacity line on secondary y-axis
-            ln4 = ax2.axhline(y=node.capacity, color=colors['capacity'], 
-                            linestyle='--', label=f'Capacity ({node.capacity:,.0f} m³)')
-            
-            # Plot excess volume if any exists
-            if excess_vol_col in self.df.columns and self.df[excess_vol_col].max() > 0:
-                ln5 = ax1.plot(self.df['TimeStep'], self.df[excess_vol_col], 
-                            color=colors['excess'], label='Excess Volume',
-                            marker='x', linewidth=1.5, markersize=4)
-                lines = ln1 + ln2 + ln3 + [ln4] + ln5
-            else:
-                lines = ln1 + ln2 + ln3 + [ln4]
-            
-            # Calculate and add key statistics
-            mean_inflow = self.df[inflow_col].mean()
-            mean_outflow = self.df[outflow_col].mean()
-            mean_storage = self.df[storage_col].mean()
-            min_storage = self.df[storage_col].min()
-            max_storage = self.df[storage_col].max()
-            storage_utilization = (mean_storage / node.capacity) * 100
-            
-            stats_text = (
-                f'Mean Inflow: {mean_inflow:.2f} m³/s\n'
-                f'Mean Outflow: {mean_outflow:.2f} m³/s\n'
-                f'Mean Storage: {mean_storage:,.0f} m³\n'
-                f'Min Storage: {min_storage:,.0f} m³\n'
-                f'Max Storage: {max_storage:,.0f} m³\n'
-                f'Storage Utilization: {storage_utilization:.1f}%'
-            )
-            
-            # Add stats text box
-            plt.text(0.02, 0.98, stats_text,
-                    transform=ax1.transAxes,
-                    verticalalignment='top',
-                    bbox=dict(boxstyle='round',
-                            facecolor='white',
-                            alpha=0.8))
-            
-            # Customize axes
-            ax1.set_xlabel('Time Step')
-            ax1.set_ylabel('Flow Rate [m³/s]')
-            ax2.set_ylabel('Storage Volume [m³]')
-            
-            # Format y-axis labels with thousand separators
-            ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format(int(x), ',')))
-            
-            # Add light grid
-            ax1.grid(True, linestyle='--', alpha=0.3)
-            
-            # Set title
-            plt.title(f'Reservoir Flows and Storage Volume - {node_id}')
-            
-            # Combine legends from both axes
-            labels = [line.get_label() for line in lines]
-            ax1.legend(lines, labels, loc='upper right', bbox_to_anchor=(1, 0.9))
-            
-            # Add shaded regions for storage zones if HVA data is available
-            if hasattr(node, 'hva_data') and node.hva_data is not None:
-                # Get volume ranges
-                ranges = node.get_interpolation_ranges()
-                if ranges and 'volume_range' in ranges:
-                    min_vol = ranges['volume_range']['min']
-                    ax2.axhspan(0, min_vol, color='red', alpha=0.1, label='Dead Storage')
-                    ax2.axhspan(min_vol, node.capacity * 0.25, color='orange', alpha=0.1, label='Conservation')
-                    ax2.axhspan(node.capacity * 0.25, node.capacity * 0.75, color='green', alpha=0.1, label='Normal Operation')
-                    ax2.axhspan(node.capacity * 0.75, node.capacity, color='blue', alpha=0.1, label='Flood Control')
-            
-            # Adjust layout
-            plt.tight_layout()
-            
-            # Save the plot
-            plot_path = self._save_plot(f"reservoir_flows_and_volume_{node_id}")
-            plot_paths.append(plot_path)
-            
-        return plot_paths
 
     def plot_network_layout(self):
         """
@@ -1151,3 +900,490 @@ class WaterSystemVisualizer:
         print(f"Balance residual:  {balance:15,.0f} m³ ({rel_balance:6.2f}%)")
         
         print("\n" + "=" * 50)
+
+    def plot_network_timesteps(self, timesteps=None, min_edge_width=1, max_edge_width=20):
+        """
+        Create network layout plots for specified timesteps, where edge widths represent flow rates.
+        Nodes are shown with minimal labels and a legend indicates node types.
+        
+        Args:
+            timesteps (list, optional): List of timesteps to visualize. If None, plots all timesteps.
+            min_edge_width (float): Minimum edge width in the visualization. Defaults to 1.
+            max_edge_width (float): Maximum edge width in the visualization. Defaults to 10.
+            
+        Returns:
+            list: Paths to the saved plot files
+        """
+        # If no timesteps specified, plot all timesteps
+        if timesteps is None:
+            timesteps = range(self.system.time_steps)
+        elif isinstance(timesteps, int):
+            timesteps = [timesteps]
+            
+        # Get node positions based on easting and northing
+        pos = {}
+        for node, data in self.system.graph.nodes(data=True):
+            node_instance = data['node']
+            pos[node] = (node_instance.easting, node_instance.northing)
+
+        # Define node styling with descriptive names for legend
+        node_styles = {
+            SupplyNode: {'color': 'skyblue', 'shape': 's', 'name': 'Supply Node'},
+            StorageNode: {'color': 'lightgreen', 'shape': 's', 'name': 'Storage Node'},
+            DemandNode: {'color': 'salmon', 'shape': 'o', 'name': 'Demand Node'},
+            SinkNode: {'color': 'lightgray', 'shape': 's', 'name': 'Sink Node'},
+            HydroWorks: {'color': 'orange', 'shape': 'o', 'name': 'Hydroworks'}
+        }
+        
+        node_size = 1000  # Reduced node size
+        plot_paths = []
+        
+        # Find maximum flow rate across all timesteps for edge width scaling
+        max_flow = 0
+        for _, _, edge_data in self.system.graph.edges(data=True):
+            edge = edge_data['edge']
+            if edge.outflow:  # Check if edge has flow data
+                max_flow = max(max_flow, max(edge.outflow))
+        
+        # Create a plot for each timestep
+        for t in timesteps:
+            # Create figure and axis
+            fig, ax = plt.subplots(figsize=(15, 12))
+            plt.title(f'Water System Network - Timestep {t}', pad=20)
+            
+            # Draw nodes for each type
+            for node_type, style in node_styles.items():
+                node_list = [node for node, data in self.system.graph.nodes(data=True) 
+                            if isinstance(data['node'], node_type)]
+                nx.draw_networkx_nodes(self.system.graph, pos, 
+                                    nodelist=node_list,
+                                    node_color=style['color'],
+                                    node_shape=style['shape'],
+                                    node_size=node_size,
+                                    alpha=0.8,
+                                    ax=ax)
+            
+            # Draw edges with widths based on flow rates
+            edge_colors = []
+            edge_widths = []
+            edge_labels = {}
+            
+            for u, v, data in self.system.graph.edges(data=True):
+                edge = data['edge']
+                if t < len(edge.outflow):
+                    flow = edge.outflow[t]
+                    # Scale edge width between min_edge_width and max_edge_width
+                    width = (((flow / max_flow) * (max_edge_width - min_edge_width)) 
+                            + min_edge_width if max_flow > 0 else min_edge_width)
+                    
+                    # Color edges based on flow percentage of capacity
+                    flow_pct = (flow / edge.capacity) if edge.capacity > 0 else 0
+                    if flow_pct < 0.33:
+                        color = 'lightblue'
+                    elif flow_pct < 0.66:
+                        color = 'blue'
+                    else:
+                        color = 'darkblue'
+                        
+                    edge_colors.append(color)
+                    edge_widths.append(width)
+                    edge_labels[(u, v)] = f'{flow:.1f} m³/s'
+                else:
+                    edge_colors.append('gray')
+                    edge_widths.append(min_edge_width)
+                    edge_labels[(u, v)] = '0'
+            
+            # Draw edges
+            nx.draw_networkx_edges(self.system.graph, pos,
+                                edge_color=edge_colors,
+                                width=edge_widths,
+                                arrows=True,
+                                arrowsize=20,
+                                ax=ax)
+            
+            # Draw simple node labels (just node IDs)
+            labels = {node: node for node in self.system.graph.nodes()}
+            nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=8)
+            
+            # Draw edge labels
+            edge_label_pos = nx.draw_networkx_edge_labels(
+                self.system.graph, pos,
+                edge_labels=edge_labels,
+                font_size=7
+            )
+            
+            # Create legend for node types and edge colors
+            legend_elements = []
+            
+            # Add node type legend elements
+            for style in node_styles.values():
+                legend_elements.append(
+                    plt.scatter([], [], 
+                            c=style['color'],
+                            marker=style['shape'],
+                            s=100,
+                            label=style['name'])
+                )
+            
+            # Add edge color legend elements
+            legend_elements.extend([
+                plt.Line2D([0], [0], color='lightblue', lw=2, label='< 33% capacity'),
+                plt.Line2D([0], [0], color='blue', lw=2, label='33-66% capacity'),
+                plt.Line2D([0], [0], color='darkblue', lw=2, label='> 66% capacity')
+            ])
+            
+            # Add legend with both node types and edge colors
+            ax.legend(handles=legend_elements,
+                    loc='center left',
+                    bbox_to_anchor=(1, 0.5),
+                    title='Network Elements',
+                    frameon=True,
+                    fancybox=True,
+                    shadow=True)
+            
+            plt.axis('off')
+            plt.tight_layout()
+            
+            # Save plot
+            plot_path = self._save_plot(f"network_flow_t{t}")
+            plot_paths.append(plot_path)
+            plt.close()
+        
+        return plot_paths
+    
+    def create_interactive_network_visualization(self):
+        """
+        Create an interactive visualization of the water system network as a React component.
+        Network shows flows changing over time with an interactive time slider.
+        
+        Returns:
+            str: Path to the saved HTML file containing the interactive visualization
+        """
+        # Collect node data
+        nodes = []
+        for node_id, data in self.system.graph.nodes(data=True):
+            node = data['node']
+            node_type = type(node)
+            
+            # Determine node style based on type
+            color = {
+                SupplyNode: 'rgb(135, 206, 235)',  # skyblue
+                StorageNode: 'rgb(144, 238, 144)',  # lightgreen
+                DemandNode: 'rgb(250, 128, 114)',   # salmon
+                SinkNode: 'rgb(211, 211, 211)',     # lightgray
+                HydroWorks: 'rgb(255, 165, 0)'      # orange
+            }.get(node_type, 'gray')
+            
+            shape = 'circle' if node_type in [DemandNode, HydroWorks] else 'square'
+            
+            nodes.append({
+                'id': node_id,
+                'easting': float(node.easting),
+                'northing': float(node.northing),
+                'color': color,
+                'shape': shape
+            })
+        
+        # Collect edge data
+        edges = []
+        max_flow = 0
+        
+        for u, v, data in self.system.graph.edges(data=True):
+            edge = data['edge']
+            flows = [float(f) for f in edge.outflow] if edge.outflow else []
+            if flows:
+                max_flow = max(max_flow, max(flows))
+            
+            edges.append({
+                'source': u,
+                'target': v,
+                'capacity': float(edge.capacity),
+                'flows': flows
+            })
+        
+        # Create network data object
+        network_data = {
+            'nodes': nodes,
+            'edges': edges,
+            'maxFlow': max_flow,
+            'timeSteps': self.system.time_steps
+        }
+        
+        # Convert network data to JSON string
+        network_data_json = json.dumps(network_data)
+        
+        # Load the HTML template from a separate file
+        html_template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Interactive Water System Network</title>
+        <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+        <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+        <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="text/babel">
+            // Network data
+            const networkData = NETWORK_DATA_PLACEHOLDER;
+            
+            const NetworkGraph = ({data, width = 1000, height = 800}) => {
+                const [currentTimestep, setCurrentTimestep] = React.useState(0);
+                const [isPlaying, setIsPlaying] = React.useState(false);
+                const [playSpeed, setPlaySpeed] = React.useState(1000);
+
+                const { nodes, edges, maxFlow, timeSteps } = data;
+
+                if (!nodes || !edges || nodes.length === 0) {
+                    return (
+                        <div className="flex items-center justify-center w-full h-full min-h-[400px] bg-gray-50 rounded-lg border">
+                            <p className="text-gray-500">No network data available</p>
+                        </div>
+                    );
+                }
+
+                // Calculate scales
+                const eastings = nodes.map(n => n.easting);
+                const northings = nodes.map(n => n.northing);
+                const minEasting = Math.min(...eastings);
+                const maxEasting = Math.max(...eastings);
+                const minNorthing = Math.min(...northings);
+                const maxNorthing = Math.max(...northings);
+
+                const padding = 0.1;
+                const eastingRange = maxEasting - minEasting;
+                const northingRange = maxNorthing - minNorthing;
+                const paddedMinEasting = minEasting - eastingRange * padding;
+                const paddedMaxEasting = maxEasting + eastingRange * padding;
+                const paddedMinNorthing = minNorthing - northingRange * padding;
+                const paddedMaxNorthing = maxNorthing + northingRange * padding;
+
+                const scaleX = x => ((x - paddedMinEasting) / (paddedMaxEasting - paddedMinEasting)) * width;
+                const scaleY = y => height - ((y - paddedMinNorthing) / (paddedMaxNorthing - paddedMinNorthing)) * height;
+
+                const getEdgeProperties = edge => {
+                    const flow = edge.flows[currentTimestep] || 0;
+                    const minWidth = 1;
+                    const maxWidth = 50;
+                    const width = flow > 0 ? ((flow / maxFlow) * (maxWidth - minWidth)) + minWidth : minWidth;
+
+                    const flowPercent = edge.capacity > 0 ? flow / edge.capacity : 0;
+                    let color;
+                    if (flowPercent < 0.33) color = '#BFDBFE';
+                    else if (flowPercent < 0.66) color = '#2563EB';
+                    else color = '#1E3A8A';
+
+                    return { width, color, flow };
+                };
+
+                React.useEffect(() => {
+                    let interval;
+                    if (isPlaying) {
+                        interval = setInterval(() => {
+                            setCurrentTimestep(prev => {
+                                if (prev >= timeSteps - 1) {
+                                    setIsPlaying(false);
+                                    return 0;
+                                }
+                                return prev + 1;
+                            });
+                        }, playSpeed);
+                    }
+                    return () => clearInterval(interval);
+                }, [isPlaying, playSpeed, timeSteps]);
+
+                return (
+                    <div className="flex flex-col gap-4 p-4 w-full bg-white rounded-lg shadow">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-xl font-bold">Water System Network - Timestep {currentTimestep}</h2>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setCurrentTimestep(0)}
+                                    className="p-2 rounded hover:bg-gray-100"
+                                >
+                                    Reset
+                                </button>
+                                <button 
+                                    onClick={() => setIsPlaying(!isPlaying)}
+                                    className="p-2 rounded hover:bg-gray-100"
+                                >
+                                    {isPlaying ? 'Pause' : 'Play'}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                            <input
+                                type="range"
+                                min="0"
+                                max={timeSteps - 1}
+                                value={currentTimestep}
+                                onChange={e => {
+                                    setCurrentTimestep(Number(e.target.value));
+                                    setIsPlaying(false);
+                                }}
+                                className="w-full"
+                            />
+                        </div>
+
+                        <div className="flex gap-4">
+                            <svg width={width} height={height} className="border rounded">
+                                {/* Draw edges */}
+                                {edges.map((edge, i) => {
+                                    const source = nodes.find(n => n.id === edge.source);
+                                    const target = nodes.find(n => n.id === edge.target);
+                                    const { width: strokeWidth, color, flow } = getEdgeProperties(edge);
+                                    
+                                    const x1 = scaleX(source.easting);
+                                    const y1 = scaleY(source.northing);
+                                    const x2 = scaleX(target.easting);
+                                    const y2 = scaleY(target.northing);
+
+                                    // Calculate curved path
+                                    const dx = x2 - x1;
+                                    const dy = y2 - y1;
+                                    const angle = Math.atan2(dy, dx);
+                                    const length = Math.sqrt(dx * dx + dy * dy);
+                                    
+                                    const midX = (x1 + x2) / 2;
+                                    const midY = (y1 + y2) / 2;
+                                    const curveOffset = length * 0.2;
+                                    const ctrlX = midX - curveOffset * Math.sin(angle);
+                                    const ctrlY = midY + curveOffset * Math.cos(angle);
+
+                                    return (
+                                        <g key={i}>
+                                            <path
+                                                d={`M ${x1} ${y1} L ${x2} ${y2}`}
+                                                stroke={color}
+                                                strokeWidth={strokeWidth}
+                                                fill="none"
+                                                markerEnd="url(#arrowhead)"
+                                            />
+                                            <text
+                                                x={midX}
+                                                y={midY}
+                                                dy={-10}
+                                                textAnchor="middle"
+                                                fill="black"
+                                                fontSize="12"
+                                            >
+                                                {flow.toFixed(1)} m³/s
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+
+                                {/* Draw nodes */}
+                                {nodes.map((node, i) => {
+                                    const x = scaleX(node.easting);
+                                    const y = scaleY(node.northing);
+                                    const size = 20;
+
+                                    return (
+                                        <g key={i}>
+                                            {node.shape === 'circle' ? (
+                                                <circle
+                                                    cx={x}
+                                                    cy={y}
+                                                    r={size / 2}
+                                                    fill={node.color}
+                                                    stroke="black"
+                                                    strokeWidth="1"
+                                                />
+                                            ) : (
+                                                <rect
+                                                    x={x - size / 2}
+                                                    y={y - size / 2}
+                                                    width={size}
+                                                    height={size}
+                                                    fill={node.color}
+                                                    stroke="black"
+                                                    strokeWidth="1"
+                                                />
+                                            )}
+                                            <text
+                                                x={x}
+                                                y={y + size}
+                                                textAnchor="middle"
+                                                fill="black"
+                                                fontSize="12"
+                                            >
+                                                {node.id}
+                                            </text>
+                                        </g>
+                                    );
+                                })}
+                            </svg>
+
+                            <div className="border rounded p-4 bg-gray-50">
+                                <h3 className="font-bold mb-2">Legend</h3>
+                                <div className="space-y-2">
+                                    <div>
+                                        <h4 className="text-sm font-semibold">Node Types</h4>
+                                        <div className="space-y-1">
+                                            {[
+                                                { type: 'Supply Node', color: 'rgb(135, 206, 235)', shape: 'square' },
+                                                { type: 'Storage Node', color: 'rgb(144, 238, 144)', shape: 'square' },
+                                                { type: 'Demand Node', color: 'rgb(250, 128, 114)', shape: 'circle' },
+                                                { type: 'Sink Node', color: 'rgb(211, 211, 211)', shape: 'square' },
+                                                { type: 'Hydroworks', color: 'rgb(255, 165, 0)', shape: 'circle' }
+                                            ].map((item, i) => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <div 
+                                                        className="w-4 h-4 rounded"
+                                                        style={{ backgroundColor: item.color }}
+                                                    />
+                                                    <span className="text-sm">{item.type}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-semibold">Flow Capacity</h4>
+                                        <div className="space-y-1">
+                                            {[
+                                                { type: '< 33% capacity', color: '#BFDBFE' },
+                                                { type: '33-66% capacity', color: '#2563EB' },
+                                                { type: '> 66% capacity', color: '#1E3A8A' }
+                                            ].map((item, i) => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <div 
+                                                        className="w-8 h-1 rounded"
+                                                        style={{ backgroundColor: item.color }}
+                                                    />
+                                                    <span className="text-sm">{item.type}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // Render the app
+            ReactDOM.render(
+                <NetworkGraph data={networkData} />,
+                document.getElementById('root')
+            );
+        </script>
+    </body>
+    </html>
+    """
+        
+        # Replace the placeholder with actual data
+        html_content = html_template.replace('NETWORK_DATA_PLACEHOLDER', network_data_json)
+        
+        # Save the HTML file
+        filename = f"{self.name}_interactive_network.html" if self.name else "water_system_network.html"
+        filepath = os.path.join(self.image_dir, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        return filepath

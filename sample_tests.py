@@ -3,6 +3,8 @@ import math
 import networkx as nx 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import webbrowser
+import os
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
 
 def debug_hydroworks_flow():
@@ -222,10 +224,10 @@ def create_seasonal_reservoir_system():
     system = WaterSystem(dt=dt)
 
     # Create nodes
-    supply = SupplyNode("MountainSource", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=1)
-    reservoir = StorageNode("LargeReservoir", csv_path='./data/Akdarya_H_V_A.csv', initial_storage=5e7, easting=2, northing=1)  # 1 billion m³ capacity, start half full
-    demand = DemandNode("SeasonalDemand", demand_rates=generate_seasonal_demand(num_time_steps), easting=3, northing=1)
-    sink = SinkNode("RiverMouth", easting=4, northing=1)
+    supply = SupplyNode("MountainSource", supply_rates=generate_seasonal_supply(num_time_steps), easting=0, northing=0)
+    reservoir = StorageNode("LargeReservoir", csv_path='./data/Akdarya_H_V_A.csv', initial_storage=5e7, easting=1, northing=0.5)  # 1 billion m³ capacity, start half full
+    demand = DemandNode("SeasonalDemand", demand_rates=generate_seasonal_demand(num_time_steps), easting=2, northing=0.5)
+    sink = SinkNode("RiverMouth", easting=3, northing=1)
 
     reservoir.get_volume_from_level(2)
 
@@ -440,10 +442,13 @@ def run_sample_tests():
     plot_water_balance_time_series(seasonal_system, "ts_plot_seasonal_reservoir_system.png")
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
     vis=WaterSystemVisualizer(seasonal_system, 'seasonal_reservoir')
-    vis.plot_network_layout()
-    vis.plot_cumulative_volumes()
-    vis.plot_water_balance()
     vis.print_water_balance_summary()
+    vis.plot_water_levels()
+
+    html_file=vis.create_interactive_network_visualization()
+    print(f"Interactive visualization saved to: {html_file}")
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')
+    
     
 # Run the sample tests
 if __name__ == "__main__":
