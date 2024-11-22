@@ -258,7 +258,7 @@ class DemandNode(Node):
     """
 
     def __init__(self, id, demand_rates=None, easting=None, northing=None,
-                 csv_file=None, start_year=None, start_month=None, num_time_steps=None):
+                 csv_file=None, start_year=None, start_month=None, num_time_steps=None, field_efficiency=1):
         """
         Initialize a DemandNode object.
 
@@ -269,6 +269,13 @@ class DemandNode(Node):
         """
         super().__init__(id, easting, northing)
 
+        # Validate field efficiency
+        if not isinstance(field_efficiency, (int, float)):
+            raise ValueError("Field efficiency must be a number")
+        if field_efficiency <= 0 or field_efficiency > 1:
+            raise ValueError("Field efficiency must be between 0 and 1")
+        self.field_efficiency = field_efficiency
+
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
             self.demand_rates = self._initialize_demand_rates(
                 id, csv_file, start_year, start_month, num_time_steps, demand_rates
@@ -276,13 +283,13 @@ class DemandNode(Node):
         elif isinstance(demand_rates, (int, float)):
             if demand_rates < 0:
                 raise ValueError("Demand rate cannot be negative")
-            self.demand_rates = [demand_rates]
+            self.demand_rates = [demand_rates/self.field_efficiency]
         elif isinstance(demand_rates, list):
             if not all(isinstance(rate, (int, float)) for rate in demand_rates):
                 raise ValueError("All demand rates must be numeric values")
             if any(rate < 0 for rate in demand_rates):
                 raise ValueError("Demand rates cannot be negative")
-            self.demand_rates = demand_rates
+            self.demand_rates = [rate/self.field_efficiency for rate in demand_rates]
         else:
             raise ValueError("demand_rates must be a number or list of numbers or defined by CSV")
             
@@ -314,7 +321,7 @@ class DemandNode(Node):
                 if not (demand.empty or 
                     demand['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
                     len(demand['ETblue [m^3/s]']) < num_time_steps):
-                    return demand['ETblue [m^3/s]'].tolist()
+                    return [rate/self.field_efficiency for rate in demand['ETblue [m^3/s]'].tolist()]
                 
                 # Print warning for invalid data
                 print(f"Warning: Insufficient data in csv file for node '{id}'")

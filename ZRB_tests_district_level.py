@@ -39,7 +39,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             csv_file=f"./data/ETblue/{row['csv_path']}",
             start_year=start_year,
             start_month=start_month,
-            num_time_steps=num_time_steps
+            num_time_steps=num_time_steps,
+            field_efficiency=0.8
         )
         demand_nodes.append(demand_node)
     
@@ -198,10 +199,12 @@ def run_sample_tests():
 
     print('ZRB system test: Visualizing the system')
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
+    vis_ZRB.print_water_balance_summary()
+
     """
     vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
-    vis_ZRB.plot_demand_satisfaction()
     vis_ZRB.plot_demand_deficit_heatmap()
+    vis_ZRB.plot_demand_satisfaction()
     vis_ZRB.plot_storage_spills()
     vis_ZRB.plot_water_levels()
     vis_ZRB.plot_edge_flows()
@@ -209,7 +212,7 @@ def run_sample_tests():
     vis_ZRB.plot_network_layout()
     vis_ZRB.plot_water_balance()
     vis_ZRB.plot_cumulative_volumes()
-    vis_ZRB.print_water_balance_summary()
+    
 
     print('ZRB system test: Visualization finished')
     
@@ -219,7 +222,7 @@ def run_sample_tests():
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
     
     print("Visualizations complete")
-
+    
     plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png")
     save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
 
