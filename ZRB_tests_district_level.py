@@ -58,7 +58,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("EskiAnkhor", easting=286019.5,northing=4384078.7)
+    sink_eskiankhor = SinkNode("EskiAnkhor", easting=272551,northing=4361872)
     sink_downstream = SinkNode("Sink-Navoi", easting=153771,northing=4454402)
 
     # Add nodes to the system
@@ -77,24 +77,24 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=850))
    
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=125))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=70))
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=125, length=50.1))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=70, length=152.8))
     system.add_edge(Edge(Bulungur, sink_tuyatortor, capacity=55))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=70))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=70, length=97.7))
     # Supply for Toyloq, Urgut, Samarqand
-    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
-    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
-    system.add_edge(Edge(Toyloq, Samarqand, capacity=80))
+    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80, length=32.6))
+    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125, length=99.0))
+    system.add_edge(Edge(Toyloq, Samarqand, capacity=80, length=42.6))
     system.add_edge(Edge(Urgut, Samarqand, capacity=125))
-    system.add_edge(Edge(Samarqand, Pastdargom, capacity=205))
+    system.add_edge(Edge(Samarqand, Pastdargom, capacity=205, length=280.5))
     system.add_edge(Edge(Pastdargom, Nurobod, capacity=80))
     system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=60))
     system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=205))
     # HW_AkKaraDarya
-    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
+    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230, length=64.3))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
     system.add_edge(Edge(Oqdaryo, Payariq, capacity=50))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=100))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=100, length=63.0))
     system.add_edge(Edge(Oqdaryo, Ishtixon, capacity=230))
     system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=230))
     system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=20))
@@ -103,7 +103,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
     system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
     system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=54))
+    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=54, length=159.9))
     system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=94))
     system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=94))
 
@@ -111,9 +111,9 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # HW_Narpay
     system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
-    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80))
+    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80, length=53.3))
     system.add_edge(Edge(HW_Narpay, Kattaqorgon, capacity=40))
-    system.add_edge(Edge(Narpay, Paxtachi, capacity=80))
+    system.add_edge(Edge(Narpay, Paxtachi, capacity=80, length=78.9))
     # Downstream
     system.add_edge(Edge(Paxtachi, Karmana, capacity=800))
     system.add_edge(Edge(Karmana, sink_downstream  , capacity=80))
@@ -191,7 +191,7 @@ def run_sample_tests():
     # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
     start_year = 2017
     start_month = 1
-    num_time_steps = 12 * 5  # 5 years of monthly data
+    num_time_steps = 12 * 3  # 5 years of monthly data
     ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
     print("ZRB system test:")
     ZRB_system.simulate(num_time_steps)
