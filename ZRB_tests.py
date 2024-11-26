@@ -203,6 +203,7 @@ def run_sample_tests():
     print('ZRB system test: Visualizing the system')
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
     vis_ZRB.print_water_balance_summary()
+    vis_ZRB.plot_storage_spills()
 
     """
     vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])

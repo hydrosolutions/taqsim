@@ -68,10 +68,10 @@ def create_complex_system():
     system.add_edge(Edge(supply2, hydrowork1, capacity=100))
     system.add_edge(Edge(hydrowork1, reservoir1, capacity=80))
     system.add_edge(Edge(hydrowork1, reservoir2, capacity=120))
-    system.add_edge(Edge(reservoir1, hydrowork2, capacity=80))
+    system.add_edge(Edge(reservoir1, hydrowork2, capacity=40))
     system.add_edge(Edge(hydrowork2, agriculture1, capacity=60))
     system.add_edge(Edge(hydrowork2, urban1, capacity=40))
-    system.add_edge(Edge(reservoir2, hydrowork3, capacity=120))
+    system.add_edge(Edge(reservoir2, hydrowork3, capacity=60))
     system.add_edge(Edge(hydrowork3, agriculture2, capacity=60))
     system.add_edge(Edge(hydrowork3, urban2, capacity=30))
     system.add_edge(Edge(hydrowork3, industry, capacity=30))
@@ -236,7 +236,8 @@ def run_sample_tests():
     vis.plot_water_levels()
     vis.print_water_balance_summary()
     vis.plot_edge_flow_summary()
-    
+    vis.plot_storage_spills()
+
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')

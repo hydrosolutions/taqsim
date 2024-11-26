@@ -198,32 +198,157 @@ class WaterSystemVisualizer:
         
     def plot_storage_spills(self):
         """
-        Create a time series plot showing storage node spills over time.
+        Create time series plots showing storage dynamics including volumes, elevations, spills, 
+        and evaporation losses for each storage node over time in separate subplots.
+        
+        Returns:
+            str: Path to the saved plot file
         """
-        spill_cols = [col for col in self.df.columns if col.endswith('_ExcessVolume')]
-        if not spill_cols:
+        # Find storage nodes in the system
+        storage_cols = [(col, col.replace('_Storage', '')) for col in self.df.columns 
+                        if col.endswith('_Storage')]
+        
+        if not storage_cols:
             print("No storage nodes found in the system.")
-            return
+            return None
             
-        plt.figure(figsize=(12, 6))
+        # Get unique node names
+        unique_nodes = sorted(set(node for _, node in storage_cols))
+        n_nodes = len(unique_nodes)
         
-        for col in spill_cols:
-            node_id = col.replace('_ExcessVolume', '')
-            plt.plot(self.df['TimeStep'], self.df[col], 
-                    label=f"{node_id} Spills", marker='o')
+        # Create figure with subplots
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
         
-        plt.xlabel('Time Step')
-        plt.ylabel('Excess Volume [m³]')
-        plt.title('Storage Node Spills Over Time')
-        plt.grid(True)
-        plt.legend()
+        # Color scheme
+        colors = {
+            'storage': '#2196F3',     # Blue for storage volume
+            'spills': '#f44336',      # Red for spills
+            'evaporation': '#FF9800', # Orange for evaporation losses
+            'elevation': '#4CAF50'    # Green for water surface elevation
+        }
         
-        return self._save_plot("storage_spills")
+        # Plot for each storage node
+        for idx, node_name in enumerate(unique_nodes):
+            ax = axes[idx]
+            
+            # Plot storage volume
+            storage_col = f"{node_name}_Storage"
+            storage = self.df[storage_col]
+            ax.plot(self.df['TimeStep'], storage, 
+                color=colors['storage'],
+                label='Storage Volume',
+                linewidth=2)
+            
+            # Plot spills if available
+            spill_col = f"{node_name}_ExcessVolume"
+            if spill_col in self.df.columns:
+                spills = self.df[spill_col]
+                ax.plot(self.df['TimeStep'], spills,
+                    color=colors['spills'],
+                    label='Spillway Volume',
+                    linestyle='--',
+                    linewidth=1.5)
+            
+            # Plot evaporation losses from water balance table
+            evap_col = f"{node_name}_EvaporationLoss"
+            if evap_col in self.df.columns:
+                evap_losses = self.df[evap_col]
+                ax.plot(self.df['TimeStep'], evap_losses,
+                    color=colors['evaporation'],
+                    label='Evaporation Loss',
+                    linestyle=':',
+                    linewidth=1.5)
+            
+            # Create second y-axis for elevation
+            ax2 = ax.twinx()
+            elev_col = f"{node_name}_Elevation"
+            if elev_col in self.df.columns:
+                elevations = self.df[elev_col]
+                ax2.plot(self.df['TimeStep'], elevations,
+                        color=colors['elevation'],
+                        label='Water Surface Elevation',
+                        linestyle='-.',
+                        linewidth=1.5)
+                ax2.set_ylabel('Elevation [m.a.s.l]', color=colors['elevation'])
+                ax2.tick_params(axis='y', labelcolor=colors['elevation'])
+            
+            # Add reservoir capacity line
+            for _, node_data in self.system.graph.nodes(data=True):
+                if isinstance(node_data['node'], StorageNode) and node_data['node'].id == node_name:
+                    capacity = node_data['node'].capacity
+                    ax.axhline(y=capacity, 
+                            color='gray', 
+                            linestyle='--', 
+                            alpha=0.5,
+                            label='Reservoir Capacity')
+                    ax.text(ax.get_xlim()[1], capacity, 
+                        f'Capacity: {capacity:,.0f} m³',
+                        verticalalignment='bottom',
+                        horizontalalignment='right')
+            
+            # Add summary statistics in text box
+            stats_text = (
+                f"Statistics:\n"
+                f"Mean Storage: {storage.mean():,.0f} m³\n"
+                f"Max Storage: {storage.max():,.0f} m³\n"
+                f"Min Storage: {storage.min():,.0f} m³\n"
+            )
+            
+            if spill_col in self.df.columns:
+                spill_volume = spills.sum()
+                stats_text += f"Total Spill Volume: {spill_volume:,.0f} m³\n"
+            
+            if evap_col in self.df.columns:
+                total_evap = evap_losses.sum()
+                stats_text += f"Total Evaporation Loss: {total_evap:,.0f} m³\n"
+            
+            if elev_col in self.df.columns:
+                stats_text += (f"Mean Elevation: {elevations.mean():.1f} m\n"
+                            f"Max Elevation: {elevations.max():.1f} m\n"
+                            f"Min Elevation: {elevations.min():.1f} m")
+            
+            ax.text(0.02, 0.98, stats_text,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize subplot
+            ax.set_title(f'{node_name} Storage Dynamics')
+            if idx == n_nodes - 1:  # Only add xlabel to bottom subplot
+                ax.set_xlabel('Time Step')
+            ax.set_ylabel('Volume [m³]')
+            ax.grid(True, alpha=0.3)
+            
+            # Combine legends from both axes
+            lines1, labels1 = ax.get_legend_handles_labels()
+            if elev_col in self.df.columns:
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax.legend(lines1 + lines2, labels1 + labels2,
+                        bbox_to_anchor=(1.05, 1),
+                        loc='upper left',
+                        borderaxespad=0.,
+                        frameon=True,
+                        fancybox=True,
+                        shadow=True)
+            else:
+                ax.legend(bbox_to_anchor=(1.05, 1),
+                        loc='upper left',
+                        borderaxespad=0.,
+                        frameon=True,
+                        fancybox=True,
+                        shadow=True)
+        
+        plt.tight_layout()
+        return self._save_plot("storage_dynamics")
 
     def plot_water_levels(self):
         """
         Create a time series plot showing water levels for all storage nodes that have hva data.
-        Also shows the bottom and maximum elevation for reference.
+        Also shows the minimum and maximum waterlevel for reference.
         """
         storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
                         if isinstance(data['node'], StorageNode) and data['node'].hva_data is not None]
@@ -239,11 +364,8 @@ class WaterSystemVisualizer:
             water_levels = node.water_level if hasattr(node, 'water_level') else []
             
             if water_levels:
-                # Convert water levels to absolute elevations
-                elevations = [node.get_elevation_from_level(level) for level in water_levels]
-                
                 # Plot water level time series
-                plt.plot(range(len(elevations)), elevations, 
+                plt.plot(range(len(water_levels)), water_levels, 
                         label=f"{node_id} Water Level", 
                         marker='o',
                         linewidth=0.8,
@@ -251,32 +373,32 @@ class WaterSystemVisualizer:
                         markerfacecolor='white',
                         markeredgewidth=1)
                 
-                # Plot bottom and maximum elevations as reference lines
-                plt.axhline(y=node.hva_data['bottom_elevation'], 
-                          linestyle='--', 
-                          color='gray', 
-                          alpha=0.5,
-                          label=f"{node_id} Bottom Elevation")
-                          
-                plt.axhline(y=node.hva_data['max_elevation'], 
-                          linestyle=':', 
-                          color='red', 
-                          alpha=0.5,
-                          label=f"{node_id} Maximum Elevation")
+                # Plot minimum and maximum waterlevels as reference lines
+                plt.axhline(y=node.hva_data['min_waterlevel'], 
+                        linestyle='--', 
+                        color='gray', 
+                        alpha=0.5,
+                        label=f"{node_id} Minimum Waterlevel")
+                        
+                plt.axhline(y=node.hva_data['max_waterlevel'], 
+                        linestyle=':', 
+                        color='red', 
+                        alpha=0.5,
+                        label=f"{node_id} Maximum Waterlevel")
         
         plt.xlabel('Time Step')
-        plt.ylabel('Elevation [m.a.s.l.]')  # meters above sea level
+        plt.ylabel('Waterlevel [m]')
         plt.title('Reservoir Water Levels Over Time')
         plt.grid(True, linestyle='--', alpha=0.7)
         
         # Enhance legend
         plt.legend(bbox_to_anchor=(1.05, 1), 
-                  loc='upper left',
-                  borderaxespad=0.,
-                  frameon=True,
-                  fancybox=True,
-                  shadow=True,
-                  fontsize=10)
+                loc='upper left',
+                borderaxespad=0.,
+                frameon=True,
+                fancybox=True,
+                shadow=True,
+                fontsize=10)
         
         plt.tight_layout()
         
