@@ -39,8 +39,10 @@ def create_seasonal_ZRB_system():
     D6 = DemandNode("Irrigation-Karmana-Konimex", demand_rates=generate_seasonal_demand(num_time_steps),easting=183378,northing=4462461)
     D7 = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
     # Reservoir
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",csv_path='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7)
-    RES_AkDarya = StorageNode("RES-Akdarya", csv_path='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6)
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7,
+                                 evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
+    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=5e6,
+                              evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
     
     print('Reservoir Information: ')
     print(f'Akdarya: {RES_AkDarya.get_reservoir_info()}')

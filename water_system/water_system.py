@@ -253,6 +253,7 @@ class WaterSystem:
                 'storage_end': 0.0,  # Storage at end of timestep
                 'storage_change': 0.0,  # Change in storage (current - previous)
                 'reservoir spills': 0.0,    # Reservoir spills
+                'reservoir ET losses': 0.0,    # Reservoir evaporation losses
                 'source': 0.0,    # Supply node contributions
                 'sink': 0.0,   # Sink node outflows
                 'edge losses': 0.0,    # Edge losses
@@ -290,6 +291,7 @@ class WaterSystem:
                         # Calculate storage change (current - previous)
                         storage_change = node.storage[t+1] - node.storage[t]
                         volumes['storage_change'] += storage_change
+                        volumes['reservoir ET losses'] += node.evaporation_losses[t]
                     else:  # Last timestep
                         # Set storage change to 0 for last timestep
                         volumes['storage_change'] += 0
@@ -319,6 +321,7 @@ class WaterSystem:
                 - volumes['sink']
                 - volumes['edge losses']
                 - volumes['reservoir spills']
+                - volumes['reservoir ET losses']
                 - volumes['storage_change']
             )
             

@@ -432,19 +432,25 @@ class StorageNode(Node):
         capacity (float): Maximum storage capacity [m³]
         storage (list): Record of storage levels for each time step [m³]
         hva_data (dict): Dictionary containing the height-volume-area relationships
-            from GEE data (Adrian Kreiner)
+        evaporation (list): List of monthly evaporation rates [mm/month]
+        evaporation_losses (list): Record of volume lost to evaporation each timestep [m³]
     """
 
-    def __init__(self, id, csv_path, initial_storage=0, easting=None, northing=None):
+    def __init__(self, id, hva_file, initial_storage=0, easting=None, northing=None, 
+                 evaporation_file=None, start_year=None, start_month=None, num_time_steps=None):
         """
         Initialize a StorageNode object.
 
         Args:
             id (str): Unique identifier for the node
-            capacity (float): Maximum storage capacity [m³]
+            hva_file (str): Path to CSV file containing height-volume-area relationships
             initial_storage (float, optional): Initial storage volume. Defaults to 0.
             easting (float, optional): Easting coordinate
             northing (float, optional): Northing coordinate
+            evaporation_file (str, optional): Path to CSV file containing monthly evaporation rates [mm/month]
+            start_year (int, optional): Starting year for evaporation data
+            start_month (int, optional): Starting month (1-12) for evaporation data
+            num_time_steps (int, optional): Number of time steps to import from evaporation data
         """
         # Call parent class (Node) initialization
         super().__init__(id, easting, northing)
@@ -454,8 +460,26 @@ class StorageNode(Node):
         self._level_to_volume = None
         self._volume_to_level = None
         self._level_to_area = None
+        self.evaporation_losses = []
 
-        # Load hegth-volume-area data
+        # Load height-volume-area data
+        self._load_hva_data(hva_file)
+        # Initialize evaporation rates
+        self.evaporation_rates = self._initialize_evaporation_rates(
+            id, evaporation_file, start_year, start_month, num_time_steps
+        )
+
+        # Validate initial storage against capacity
+        if initial_storage > self.capacity:
+            raise ValueError(f"Initial storage ({initial_storage} m³) exceeds maximum capacity ({self.capacity} m³)")
+        
+        # Initialize storage attributes
+        self.storage = [initial_storage]
+        self.spillway_register = []
+        self.water_level = [self.get_level_from_volume(initial_storage)]
+
+    def _load_hva_data(self, csv_path):
+        """Load and validate height-volume-area relationship data."""
         try:
             # Read and validate CSV
             df = pd.read_csv(csv_path, sep=';')
@@ -495,16 +519,81 @@ class StorageNode(Node):
             self._initialize_interpolators()
             
         except Exception as e:
-            raise ValueError(f"Error loading CSV file: {str(e)}")
+            raise ValueError(f"Error loading HVA data from CSV file: {str(e)}")
 
-        # Validate initial storage against capacity
-        if initial_storage > self.capacity:
-            raise ValueError(f"Initial storage ({initial_storage} m³) exceeds maximum capacity ({self.capacity} m³)")
+    def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
+        """
+        Initialize evaporation rates from CSV file.
         
-        # Initialize storage attributes
-        self.storage = [initial_storage]
-        self.spillway_register = []
-        self.water_level = [self.get_level_from_volume(initial_storage)]
+        Args:
+            id (str): Node identifier for error messages
+            evaporation_file (str): Path to evaporation data CSV
+            start_year (int): Start year for data
+            start_month (int): Start month for data
+            num_time_steps (int): Number of time steps
+            
+        Returns:
+            list: Initialized evaporation rates or None if not configured
+        """
+        # If no evaporation file provided, return None
+        if evaporation_file is None:
+            return None
+
+        # If all parameters are provided, try to import data
+        if all(param is not None for param in [evaporation_file, start_year, start_month, num_time_steps]):
+            try:
+                evap_data = self.import_evaporation_data(evaporation_file, start_year, start_month, num_time_steps)
+                
+                # Check if data is valid
+                if not (evap_data.empty or 
+                    evap_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
+                    len(evap_data['Evaporation']) < num_time_steps):
+                    return evap_data['Evaporation'].tolist()
+                
+                # Print warning for invalid data
+                print(f"Warning: No evaporation rates will be applied for node '{id}' due to insufficient data")
+                print(f"Requested period: {start_year}-{start_month:02d} to "
+                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
+                if not evap_data.empty:
+                    print(f"Available data range: {evap_data['Date'].min():%Y-%m} to {evap_data['Date'].max():%Y-%m}")
+                return None
+                
+            except Exception as e:
+                print(f"Warning: Failed to load evaporation data for node '{id}': {str(e)}")
+                return None
+        
+        return None
+
+    def import_evaporation_data(self, evaporation_file, start_year, start_month, num_time_steps):
+        """
+        Import evaporation data from a CSV file for a specified time period.
+        
+        Args:
+            evaporation_file (str): Path to the CSV file containing evaporation data
+            start_year (int): Starting year for the data
+            start_month (int): Starting month (1-12) for the data
+            num_time_steps (int): Number of time steps to import
+            
+        Returns:
+            DataFrame: Filtered DataFrame containing the requested data period
+        """
+        try:
+            # Read the CSV file into a pandas DataFrame
+            evap_df = pd.read_csv(evaporation_file, parse_dates=['Date'])
+            
+            if 'Date' not in evap_df.columns or 'Evaporation' not in evap_df.columns:
+                raise ValueError("CSV file must contain 'Date' and 'Evaporation' columns")
+        
+            # Filter the DataFrame to find the start point
+            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
+            end_date = start_date + pd.DateOffset(months=num_time_steps)
+            
+            return evap_df[(evap_df['Date'] >= start_date) & (evap_df['Date'] < end_date)]
+            
+        except FileNotFoundError:
+            raise ValueError(f"Evaporation data file not found: {evaporation_file}")
+        except Exception as e:
+            raise ValueError(f"Failed to import evaporation data: {str(e)}")
 
     def _initialize_interpolators(self):
         """Initialize interpolation functions for height-volume-area relationships."""
@@ -654,12 +743,26 @@ class StorageNode(Node):
             }
         }
     
+    def get_evaporation_loss(self, time_step):
+        """
+        Get the evaporation loss for a specific time step.
+
+        Args:
+            time_step (int): The time step for which to retrieve the evaporation loss.
+
+        Returns:
+            float: The evaporation loss in m³ for the specified time step, or 0 if not available.
+        """
+        if time_step < len(self.evaporation_losses):
+            return self.evaporation_losses[time_step]
+        return 0
+
     def update(self, time_step, dt):
         """
         Update the StorageNode's state for the given time step.
 
-        This method calculates the new storage level based on inflows and outflows,
-        and distributes available water to outflow edges.
+        This method calculates the new storage level based on inflows, outflows,
+        and evaporation losses, and distributes available water to outflow edges.
 
         Args:
             time_step (int): The current time step of the simulation.
@@ -671,7 +774,17 @@ class StorageNode(Node):
             
             # Convert flow rates (m³/s) to volumes (m³) for the time step
             inflow_volume = inflow * dt
-            available_water = previous_storage + inflow_volume
+            
+            # Calculate evaporation loss
+            previous_water_level = self.get_level_from_volume(previous_storage)
+            new_water_level = min((previous_water_level - (self.evaporation_rates[time_step] / 1000)),self.hva_data['bottom_elevation'] )  # Convert mm to m
+
+            evap_loss = previous_storage-self.get_volume_from_level(new_water_level)
+            self.evaporation_losses.append(evap_loss)
+            
+             # Calculate available water after evaporation
+            available_water = previous_storage + inflow_volume -evap_loss
+            available_water = max(0, available_water)  # Ensure non-negative storage
             
             # Calculate total requested outflow
             requested_outflow = sum(edge.capacity for edge in self.outflow_edges.values())

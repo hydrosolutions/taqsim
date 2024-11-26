@@ -838,6 +838,7 @@ class WaterSystemVisualizer:
             'Sink Outflow': 'sink',
             'Edge Losses': 'edge losses',
             'Reservoir Spills': 'reservoir spills',
+            'Reservoir ET Losses': 'reservoir ET losses',
         }
         
         for label, comp in components.items():
@@ -877,7 +878,8 @@ class WaterSystemVisualizer:
             'Supplied': 'supplied demand',
             'Sink': 'sink',
             'Losses': 'edge losses',
-            'Spills': 'reservoir spills'
+            'Spills': 'reservoir spills',
+            'Reservoir ET': 'reservoir ET losses'
         }
         
         for label, comp in components.items():
@@ -888,7 +890,7 @@ class WaterSystemVisualizer:
         # Conservation check
         print_section("Conservation Check")
         total_in = total_source
-        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills'])
+        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 'reservoir ET losses'])
         total_stored = total_storage_change
         
         print(f"Total in:          {total_in:15,.0f} m³")

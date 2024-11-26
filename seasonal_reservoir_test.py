@@ -35,14 +35,18 @@ def create_complex_system():
     Creates a more complex water system with multiple supplies, storages, and demands.
     """
     dt = 30.44 * 24 * 3600 # Average month in seconds
+    start_year=2017
+    start_month=1
     num_time_steps = 36 # 3 years of monthly data
     system = WaterSystem(dt)
 
     supply1 = SupplyNode("MountainSupply", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=3.5)
     supply2 = SupplyNode("ValleySupply", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=2.5)
     
-    reservoir1 = StorageNode("MountainReservoir", csv_path='./data/Akdarya_H_V_A.csv', easting=2, northing=2)
-    reservoir2 = StorageNode("ValleyReservoir", csv_path='./data/Akdarya_H_V_A.csv', easting=2, northing=4)
+    reservoir1 = StorageNode("MountainReservoir", hva_file='./data/Akdarya_H_V_A.csv', easting=2, northing=2, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
+                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
+    reservoir2 = StorageNode("ValleyReservoir", hva_file='./data/Akdarya_H_V_A.csv', easting=2, northing=4, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
+                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
     
     hydrowork1 = HydroWorks("HydroWork1", easting=1.5, northing=3)
     hydrowork2 = HydroWorks("HydroWork2", easting=2.5, northing=2)
@@ -65,17 +69,17 @@ def create_complex_system():
     system.add_edge(Edge(hydrowork1, reservoir1, capacity=80))
     system.add_edge(Edge(hydrowork1, reservoir2, capacity=120))
     system.add_edge(Edge(reservoir1, hydrowork2, capacity=80))
-    system.add_edge(Edge(hydrowork2, agriculture1, capacity=30))
-    system.add_edge(Edge(hydrowork2, urban1, capacity=20))
+    system.add_edge(Edge(hydrowork2, agriculture1, capacity=60))
+    system.add_edge(Edge(hydrowork2, urban1, capacity=40))
     system.add_edge(Edge(reservoir2, hydrowork3, capacity=120))
-    system.add_edge(Edge(hydrowork3, agriculture2, capacity=30))
-    system.add_edge(Edge(hydrowork3, urban2, capacity=15))
-    system.add_edge(Edge(hydrowork3, industry, capacity=15))
-    system.add_edge(Edge(agriculture1, sink, capacity=30))
-    system.add_edge(Edge(agriculture2, sink, capacity=30))
-    system.add_edge(Edge(urban1, sink, capacity=20))
-    system.add_edge(Edge(urban2, sink, capacity=15))
-    system.add_edge(Edge(industry, sink, capacity=15))
+    system.add_edge(Edge(hydrowork3, agriculture2, capacity=60))
+    system.add_edge(Edge(hydrowork3, urban2, capacity=30))
+    system.add_edge(Edge(hydrowork3, industry, capacity=30))
+    system.add_edge(Edge(agriculture1, sink, capacity=60))
+    system.add_edge(Edge(agriculture2, sink, capacity=60))
+    system.add_edge(Edge(urban1, sink, capacity=40))
+    system.add_edge(Edge(urban2, sink, capacity=30))
+    system.add_edge(Edge(industry, sink, capacity=30))
 
     return system
 
@@ -89,12 +93,15 @@ def create_seasonal_reservoir_system():
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    num_time_steps = 12 * 10  # 10 years of monthly data
+    num_time_steps = 12 * 5  # 10 years of monthly data
     system = WaterSystem(dt=dt)
+    start_year=2017
+    start_month=1
 
     # Create nodes
     supply = SupplyNode("MountainSource", supply_rates=generate_seasonal_supply(num_time_steps), easting=0, northing=0)
-    reservoir = StorageNode("LargeReservoir", csv_path='./data/Akdarya_H_V_A.csv', initial_storage=5e7, easting=1, northing=0.5)  # 1 billion m³ capacity, start half full
+    reservoir = StorageNode("LargeReservoir", hva_file='./data/Akdarya_H_V_A.csv', initial_storage=5e7, easting=1, northing=0.5, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
+                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
     demand = DemandNode("SeasonalDemand", demand_rates=generate_seasonal_demand(num_time_steps), easting=2, northing=0.5)
     sink = SinkNode("RiverMouth", easting=3, northing=1)
 
@@ -212,7 +219,7 @@ def generate_seasonal_demand(num_time_steps):
     return demand_rates
 
 def run_sample_tests():
-    
+
     print("\n" + "="*50 + "\n")
     
     # Test: Complex System. This is a complex system to test many to many connections.
@@ -233,7 +240,7 @@ def run_sample_tests():
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    """
+
     print("\n" + "="*50 + "\n")
 
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -257,8 +264,7 @@ def run_sample_tests():
 
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    """
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')   
     
 # Run the sample tests
 if __name__ == "__main__":
