@@ -64,10 +64,10 @@ def create_complex_system():
     for node in nodes:
         system.add_node(node)
 
-    system.add_edge(Edge(supply1, hydrowork1, capacity=100))
-    system.add_edge(Edge(supply2, hydrowork1, capacity=100))
-    system.add_edge(Edge(hydrowork1, reservoir1, capacity=80))
-    system.add_edge(Edge(hydrowork1, reservoir2, capacity=120))
+    system.add_edge(Edge(supply1, hydrowork1, capacity=200))
+    system.add_edge(Edge(supply2, hydrowork1, capacity=200))
+    system.add_edge(Edge(hydrowork1, reservoir1, capacity=40))
+    system.add_edge(Edge(hydrowork1, reservoir2, capacity=100))
     system.add_edge(Edge(reservoir1, hydrowork2, capacity=40))
     system.add_edge(Edge(hydrowork2, agriculture1, capacity=60))
     system.add_edge(Edge(hydrowork2, urban1, capacity=40))
@@ -241,7 +241,7 @@ def run_sample_tests():
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-
+    """
     print("\n" + "="*50 + "\n")
 
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -266,7 +266,7 @@ def run_sample_tests():
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')   
-    
+    """
 # Run the sample tests
 if __name__ == "__main__":
   run_sample_tests()

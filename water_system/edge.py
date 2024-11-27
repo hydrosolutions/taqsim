@@ -5,7 +5,7 @@ This module defines the Edge class, which represents a connection between two no
 The Edge class is responsible for managing the flow of water between nodes and enforcing capacity constraints.
 """
 
-from .structure import SupplyNode
+from .structure import SupplyNode, StorageNode
 
 class Edge:
     """
@@ -22,7 +22,7 @@ class Edge:
         losses (list): A list of total losses for each time step.
     """
 
-    def __init__(self, source, target, capacity, length=None, loss_factor=0.001):
+    def __init__(self, source, target, capacity, length=None, loss_factor=0):
         """
         Initialize an Edge object.
 
@@ -74,21 +74,19 @@ class Edge:
         """
         Update the flow of the edge for the given time step, accounting for losses.
 
-        If a flow value is provided, it is used (capped at the edge's capacity).
-        If the source is a SupplyNode, the flow is set to the minimum of the supply rate and the edge's capacity.
-        Otherwise, the flow is set to 0.
-
         Args:
-            time_step (int): The current time step of the simulation.
-            flow (float, optional): The flow value to set for this time step. Defaults to None.
+            time_step (int): The current time step of the simulation
+            flow (float, optional): The flow value to set for this time step
         """
         try:
             if flow is not None:
+                # Use provided flow (already calculated by source node)
                 if flow < 0:
                     print(f"Warning: Negative flow value ({flow}) provided, setting to 0")
                     flow = 0
                 input_flow = min(flow, self.capacity)
             elif isinstance(self.source, SupplyNode):
+                # Special case for SupplyNodes which don't pre-calculate their outflows
                 try:
                     supply_rate = self.source.get_supply_rate(time_step)
                     input_flow = min(supply_rate, self.capacity)
@@ -100,27 +98,17 @@ class Edge:
             
             # Record the inflow before losses
             self.inflow.append(input_flow)
-        
-        # Calculate remaining flow after losses
-            try:
-                remaining_flow, losses = self.calculate_edge_losses(input_flow)
-                
-                # Print warning for significant losses
-                if losses > 0.5 * input_flow:  # Warning if more than 50% loss
-                    print(f"Warning: Significant losses detected: {(losses/input_flow)*100:.1f}% of input flow")
-                
-            except Exception as e:
-                print(f"Warning: Failed to calculate losses: {str(e)}. Assuming no losses.")
-                remaining_flow = input_flow
-                losses = 0
-        # Record the flow after losses and the total losses
-            self.outflow.append(remaining_flow)  # Changed from flow to outflow
+            
+            # Calculate and record losses
+            remaining_flow, losses = self.calculate_edge_losses(input_flow)
+            self.outflow.append(remaining_flow)
             self.losses.append(losses)
-    
+
         except Exception as e:
             print(f"Error updating edge flow: {str(e)}. Flow values may be incorrect.")
-            # Try to maintain data consistency even in case of error
-            self.inflow.a
+            self.inflow.append(0)
+            self.outflow.append(0)
+            self.losses.append(0)
 
     def get_edge_inflow(self, time_step):
         """

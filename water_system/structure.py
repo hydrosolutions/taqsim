@@ -6,6 +6,7 @@ SupplyNode, SinkNode, DemandNode, StorageNode, and HydroWorks.
 Each node type has its own behavior for handling water inflows and outflows.
 """
 import pandas as pd
+import numpy as np
 from scipy.interpolate import interp1d
 
 class Node:
@@ -444,7 +445,8 @@ class StorageNode(Node):
     """
 
     def __init__(self, id, hva_file, initial_storage=0, easting=None, northing=None, 
-                 evaporation_file=None, start_year=None, start_month=None, num_time_steps=None):
+                 evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
+                 release_params=None):
         """
         Initialize a StorageNode object.
 
@@ -458,6 +460,13 @@ class StorageNode(Node):
             start_year (int, optional): Starting year for evaporation data
             start_month (int, optional): Starting month (1-12) for evaporation data
             num_time_steps (int, optional): Number of time steps to import from evaporation data
+            release_params (dict, optional): Parameters for release function {
+                'h1': float,  # Low reservoir level [m]
+                'h2': float,  # High reservoir level [m]
+                'w': float,   # Constant release [m³/s]
+                'm1': float,  # Slope for low level [rad]
+                'm2': float   # Slope for high level [rad]
+            }
         """
         # Call parent class (Node) initialization
         super().__init__(id, easting, northing)
@@ -476,6 +485,10 @@ class StorageNode(Node):
             id, evaporation_file, start_year, start_month, num_time_steps
         )
 
+
+        # Set release parameters with validation
+        self.set_release_params(release_params)
+
         # Validate initial storage against capacity
         if initial_storage > self.capacity:
             raise ValueError(f"Initial storage ({initial_storage} m³) exceeds maximum capacity ({self.capacity} m³)")
@@ -485,6 +498,75 @@ class StorageNode(Node):
         self.spillway_register = []
         self.water_level = [self.get_level_from_volume(initial_storage)]
 
+    def set_release_params(self, params):
+        """
+        Set and validate release function parameters.
+        
+        Args:
+            params (dict): Release function parameters
+        
+        Raises:
+            ValueError: If parameters are invalid
+        """
+        if params is None:
+            # Default parameters (no buffer or flood control zones and constant release)
+            self.release_params = {
+                'h1': self.hva_data['min_waterlevel'],    # Low level: inactive to buffer zone
+                'h2': self.hva_data['max_waterlevel'],    # High level:flood control zone
+                'w':  sum(edge.capacity for edge in self.outflow_edges.values()), # max capacity constant release
+                'm1': 1.57,  # nearly π/2 radians (90 degrees)
+                'm2': 1.57   # nearly π/2 radians (90 degrees)
+            }
+        else:
+            # Validate parameters
+            required_params = ['h1', 'h2', 'w', 'm1', 'm2']
+            if not all(key in params for key in required_params):
+                missing = [key for key in required_params if key not in params]
+                raise ValueError(f"Missing release parameters: {missing}")
+            
+            if params['h1'] >= params['h2']:
+                raise ValueError("h1 must be less than h2")
+            
+            if params['w'] < 0:
+                raise ValueError("Constant release w must be non-negative")
+            
+            if not (0 <= params['m1'] < 1.571):  # 0 to π/2
+                raise ValueError("m1 must be between 0 and π/2 radians")
+            
+            if not (0 <= params['m2'] < 1.571):  # 0 to π/2
+                raise ValueError("m2 must be between 0 and π/2 radians")
+            
+            self.release_params = params
+
+    def calculate_release(self, waterlevel):
+        """
+        Calculate the reservoir release based on current water level.
+        
+        Args:
+            water_level (float): Current water level [m]
+            
+        Returns:
+            float: Calculated release rate [m³/s]
+        """
+        h1 = self.release_params['h1']
+        h2 = self.release_params['h2']
+        w = self.release_params['w']
+        m1 = self.release_params['m1']
+        m2 = self.release_params['m2']
+        
+        release = sum(edge.capacity for edge in self.outflow_edges.values())
+
+        if waterlevel < self.hva_data['max_waterlevel']:
+            release = w + (waterlevel-h2)* np.tan(m2)
+        if waterlevel <= h2:
+            release = w
+        if (waterlevel-h1)* np.tan(m1) < w:
+            release = (waterlevel-h1)* np.tan(m1)
+        if waterlevel < h1:
+            release = 0
+       
+        return release
+        
     def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
         """
         Initialize evaporation rates from CSV file.
@@ -709,19 +791,22 @@ class StorageNode(Node):
             available_water = previous_storage + inflow_volume -evap_loss
             available_water = max(0, available_water)  # Ensure non-negative storage
             
-            # Calculate total requested outflow
-            requested_outflow = sum(edge.capacity for edge in self.outflow_edges.values())
+            # Calculate current water level and desired release
+            current_level = self.get_level_from_volume(available_water)
+            target_release_rate = self.calculate_release(current_level)
             
-            # Convert requested outflow to volume
-            requested_outflow_volume = requested_outflow * dt
-            
+            # Convert release rate to volume
+            requested_outflow_volume = target_release_rate * dt
+
             # Limit actual outflow to available water
             actual_outflow_volume = min(available_water, requested_outflow_volume)
             
+             # Calculate total outflow capacity
+            total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
             # Distribute actual outflow among edges proportionally
-            if requested_outflow_volume > 0:
+            if actual_outflow_volume > 0:
                 for edge in self.outflow_edges.values():
-                    edge_flow_volume = (edge.capacity / requested_outflow) * actual_outflow_volume
+                    edge_flow_volume = (edge.capacity / total_capacity) * actual_outflow_volume
                     edge_flow_rate = edge_flow_volume / dt
                     edge.update(time_step, edge_flow_rate)
             else:
