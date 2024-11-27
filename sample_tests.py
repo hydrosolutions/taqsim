@@ -233,7 +233,6 @@ def run_sample_tests():
     vis.plot_network_layout()
     vis.plot_demand_deficit_heatmap()
     vis.plot_demand_satisfaction()
-    vis.plot_water_levels()
     vis.print_water_balance_summary()
     vis.plot_edge_flow_summary()
     vis.plot_storage_spills()
@@ -241,7 +240,7 @@ def run_sample_tests():
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    """
+    
     print("\n" + "="*50 + "\n")
 
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -261,12 +260,11 @@ def run_sample_tests():
     print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
     vis=WaterSystemVisualizer(seasonal_system, 'seasonal_reservoir')
     vis.print_water_balance_summary()
-    vis.plot_water_levels()
 
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')   
-    """
+    
 # Run the sample tests
 if __name__ == "__main__":
   run_sample_tests()

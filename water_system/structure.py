@@ -510,9 +510,10 @@ class StorageNode(Node):
         """
         if params is None:
             # Default parameters (no buffer or flood control zones and constant release)
+            level_range = self.hva_data['max_waterlevel'] - self.hva_data['min_waterlevel']
             self.release_params = {
-                'h1': self.hva_data['min_waterlevel'],    # Low level: inactive to buffer zone
-                'h2': self.hva_data['max_waterlevel'],    # High level:flood control zone
+                'h1': self.hva_data['min_waterlevel']+0.2*level_range,    # Low level: inactive to buffer zone
+                'h2': self.hva_data['min_waterlevel']+0.9*level_range,    # High level:flood control zone
                 'w':  sum(edge.capacity for edge in self.outflow_edges.values()), # max capacity constant release
                 'm1': 1.57,  # nearly π/2 radians (90 degrees)
                 'm2': 1.57   # nearly π/2 radians (90 degrees)
@@ -556,6 +557,18 @@ class StorageNode(Node):
         
         release = sum(edge.capacity for edge in self.outflow_edges.values())
 
+        if waterlevel < h1:
+            return 0
+        elif (waterlevel-h1)* np.tan(m1) < w:
+            return (waterlevel-h1)* np.tan(m1)
+        elif waterlevel <= h2:
+            return w
+        elif waterlevel < self.hva_data['max_waterlevel']:
+            return w + (waterlevel-h2)* np.tan(m2)
+        else:
+            return release
+        
+        """
         if waterlevel < self.hva_data['max_waterlevel']:
             release = w + (waterlevel-h2)* np.tan(m2)
         if waterlevel <= h2:
@@ -566,7 +579,7 @@ class StorageNode(Node):
             release = 0
        
         return release
-        
+        """
     def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
         """
         Initialize evaporation rates from CSV file.
@@ -782,7 +795,7 @@ class StorageNode(Node):
             
             # Calculate evaporation loss
             previous_water_level = self.get_level_from_volume(previous_storage)
-            new_water_level = min((previous_water_level - (self.evaporation_rates[time_step] / 1000)),self.hva_data['min_waterlevel'] )  # Convert mm to m
+            new_water_level = max((previous_water_level - (self.evaporation_rates[time_step] / 1000)),self.hva_data['min_waterlevel'] )  # Convert mm to m
 
             evap_loss = previous_storage-self.get_volume_from_level(new_water_level)
             self.evaporation_losses.append(evap_loss)

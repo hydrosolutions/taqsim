@@ -174,32 +174,7 @@ class WaterSystemVisualizer:
         plt.savefig(filepath, bbox_inches='tight', dpi=300)
         plt.close()
         return filepath
-        
-    def plot_node_inflows(self, node_ids):
-        """
-        Create a time series plot of inflows and outflows for specified nodes.
-        
-        Args:
-            node_ids (list): List of node IDs to include in the visualization
-        """
-        plt.figure(figsize=(12, 6))
-        
-        for node_id in node_ids:
-            inflow_col = f"{node_id}_Inflow"
-            
-            if inflow_col in self.df.columns:
-                plt.plot(self.df['TimeStep'], self.df[inflow_col], 
-                        label=f"{node_id} Inflow", marker='o')
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Flow Rate [m³/s]')
-        plt.title('Node Flows Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        nodes_str = "_".join(node_ids)
-        return self._save_plot("flows", nodes_str)
-        
+          
     def plot_demand_satisfaction(self):
         """
         Create a time series plot comparing demanded vs satisfied demand for all demand nodes.
@@ -317,66 +292,7 @@ class WaterSystemVisualizer:
         pct_filepath = self._save_plot("deficit_heatmap_percentage")
         
         return abs_filepath, pct_filepath
-        
-    def plot_water_levels(self):
-        """
-        Create a time series plot showing water levels for all storage nodes that have hva data.
-        Also shows the minimum and maximum waterlevel for reference.
-        """
-        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
-                        if isinstance(data['node'], StorageNode) and data['node'].hva_data is not None]
-        
-        if not storage_nodes:
-            print("No storage nodes with survey data found in the system.")
-            return
-            
-        plt.figure(figsize=(12, 6))
-        
-        for node_id, node in storage_nodes:
-            # Get the water levels time series
-            water_levels = node.water_level if hasattr(node, 'water_level') else []
-            
-            if water_levels:
-                # Plot water level time series
-                plt.plot(range(len(water_levels)), water_levels, 
-                        label=f"{node_id} Water Level", 
-                        marker='o',
-                        linewidth=0.8,
-                        markersize=3,
-                        markerfacecolor='white',
-                        markeredgewidth=1)
-                
-                # Plot minimum and maximum waterlevels as reference lines
-                plt.axhline(y=node.hva_data['min_waterlevel'], 
-                        linestyle='--', 
-                        color='gray', 
-                        alpha=0.5,
-                        label=f"{node_id} Minimum Waterlevel")
-                        
-                plt.axhline(y=node.hva_data['max_waterlevel'], 
-                        linestyle=':', 
-                        color='red', 
-                        alpha=0.5,
-                        label=f"{node_id} Maximum Waterlevel")
-        
-        plt.xlabel('Time Step')
-        plt.ylabel('Waterlevel [m]')
-        plt.title('Reservoir Water Levels Over Time')
-        plt.grid(True, linestyle='--', alpha=0.7)
-        
-        # Enhance legend
-        plt.legend(bbox_to_anchor=(1.05, 1), 
-                loc='upper left',
-                borderaxespad=0.,
-                frameon=True,
-                fancybox=True,
-                shadow=True,
-                fontsize=10)
-        
-        plt.tight_layout()
-        
-        return self._save_plot("water_levels")
-
+     
     def plot_edge_flows(self):
         """
         Create time series plots showing inflows and outflows for all edges in the system.
@@ -659,7 +575,7 @@ class WaterSystemVisualizer:
                 labels[node] = f"{node}\n{node_instance.__class__.__name__}"
         
         nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=14, ax=ax)
-        """
+        
         # Update edge labels to show flows and losses
         edge_labels = {}
         for u, v, d in self.system.graph.edges(data=True):
@@ -678,121 +594,12 @@ class WaterSystemVisualizer:
         
         nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
                                 font_size=8, ax=ax)
-        """
+        
         plt.axis('off')
         plt.tight_layout()
         
         return self._save_plot("network_layout")  
- 
-    def plot_cumulative_volumes(self):
-        """
-        Create a plot showing the cumulative volumes of all water balance components,
-        including storage change.
-        
-        Returns:
-            str: Path to the saved plot file
-        """
-        if not hasattr(self, 'image_dir'):
-            self.image_dir = os.path.join('.', 'figures')
-            os.makedirs(self.image_dir, exist_ok=True)
-        
-        df = self.system.get_water_balance()
-        
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
-        # Define components and their properties
-        components = {
-            'source': {
-                'color': '#2196F3',  # Blue
-                'label': 'Source'
-            },
-            'supplied demand': {
-                'color': '#4CAF50',  # Green
-                'label': 'Supplied Demand'
-            },
-            'sink': {
-                'color': '#f44336',  # Red
-                'label': 'Sink'
-            },
-            'edge losses': {
-                'color': '#FF9800',  # Orange
-                'label': 'Edge Losses'
-            },
-            'reservoir spills': {
-                'color': '#9C27B0',  # Purple
-                'label': 'Reservoir Spills'
-            },
-            'storage_change': {
-                'color': '#795548',  # Brown
-                'label': 'Storage Change'
-            }
-        }
-        
-        # Calculate and plot cumulative volumes for main components
-        for comp, properties in components.items():
-            if comp != 'storage_change':  # Handle storage_change separately
-                cumulative = df[comp].cumsum()
-                ax.plot(df['time_step'], cumulative,
-                       label=properties['label'],
-                       color=properties['color'],
-                       linewidth=2,
-                       marker='o',
-                       markersize=4)
-        
-        # Handle storage change separately with dashed line
-        cumulative_storage = df['storage_change'].cumsum()
-        ax.plot(df['time_step'], cumulative_storage,
-               label='Storage Change',
-               color=components['storage_change']['color'],
-               linewidth=2,
-               linestyle='--',
-               marker='s',
-               markersize=4)
-        
-        # Customize plot
-        ax.set_xlabel('Time Step')
-        ax.set_ylabel('Cumulative Volume (m³)')
-        ax.set_title('Cumulative Water Balance Components')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax.grid(True, alpha=0.3)
-        
-        # Add text box with final volumes
-        if len(df) > 0:
-            text_str = "Final Volumes:\n"
-            total_source = df['source'].sum()
-            
-            # Add all components including storage change
-            for comp, properties in components.items():
-                total = df[comp].sum()
-                percentage = (total / total_source * 100) if total_source > 0 else 0
-                
-                # Format numbers with appropriate sign
-                if comp == 'storage_change':
-                    text_str += f"{properties['label']}: {total:+,.0f} m³ ({percentage:+.1f}%)\n"
-                else:
-                    text_str += f"{properties['label']}: {total:,.0f} m³ ({percentage:.1f}%)\n"
-            
-            # Add storage start and end values
-            text_str += f"\nStorage Start: {df['storage_start'].iloc[0]:,.0f} m³\n"
-            text_str += f"Storage End: {df['storage_end'].iloc[-1]:,.0f} m³"
-            
-            plt.text(1.05, 0.5, text_str,
-                    transform=ax.transAxes,
-                    bbox=dict(facecolor='white', alpha=0.8),
-                    verticalalignment='center')
-        
-        # Add horizontal line at y=0
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-        
-        # Adjust layout and save
-        plt.tight_layout()
-        plot_path = os.path.join(self.image_dir, f"{self.name}_cumulative_volumes.png")
-        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
-        plt.close()
-        
-        return plot_path
-    
+
     def print_water_balance_summary(self):
         """
         Print a comprehensive summary of the water balance results.
@@ -1546,178 +1353,182 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         return self._save_plot("storage_dynamics")
 
-    def plot_storage_dynamics(self):
+    def plot_reservoir_dynamics(self):
         """
-        Create time series plots showing storage dynamics including volumes, elevations, spills, 
-        evaporation losses, and release rates for each storage node over time in separate subplots.
+        Create a comparison plot showing inflow, outflow, and volume for all reservoirs.
         
         Returns:
             str: Path to the saved plot file
         """
         # Find storage nodes in the system
-        storage_cols = [(col, col.replace('_Storage', '')) for col in self.df.columns 
-                        if col.endswith('_Storage')]
+        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], StorageNode)]
         
-        if not storage_cols:
+        if not storage_nodes:
             print("No storage nodes found in the system.")
             return None
             
-        # Get unique node names
-        unique_nodes = sorted(set(node for _, node in storage_cols))
-        n_nodes = len(unique_nodes)
-        
         # Create figure with subplots
+        n_nodes = len(storage_nodes)
         fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
         if n_nodes == 1:
             axes = [axes]
         
         # Color scheme
         colors = {
-            'storage': '#2196F3',     # Blue for storage volume
-            'spills': '#f44336',      # Red for spills
-            'evaporation': '#FF9800', # Orange for evaporation losses
-            'elevation': '#4CAF50',   # Green for water surface elevation
-            'release': '#9C27B0'      # Purple for release rates
+            'inflow': '#2196F3',    # Blue
+            'outflow': '#4CAF50',   # Green
+            'volume': '#9C27B0'     # Purple
         }
         
-        # Plot for each storage node
-        for idx, node_name in enumerate(unique_nodes):
-            ax = axes[idx]
+        time_steps = range(self.system.time_steps)
+        
+        # Plot for each reservoir
+        for idx, (node_id, node) in enumerate(storage_nodes):
+            ax1 = axes[idx]
+            ax2 = ax1.twinx()  # Create second y-axis for volume
             
-            # Plot storage volume
-            storage_col = f"{node_name}_Storage"
-            storage = self.df[storage_col]
-            ax.plot(self.df['TimeStep'], storage, 
-                color=colors['storage'],
-                label='Storage Volume',
-                linewidth=2)
+            # Calculate total inflow for each timestep
+            inflows = [sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+                    for t in time_steps]
             
-            # Plot spills if available
-            spill_col = f"{node_name}_ExcessVolume"
-            if spill_col in self.df.columns:
-                spills = self.df[spill_col]
-                ax.plot(self.df['TimeStep'], spills,
-                    color=colors['spills'],
-                    label='Spillway Volume',
-                    linestyle='--',
-                    linewidth=1.5)
+            # Calculate total outflow for each timestep
+            outflows = [sum(edge.get_edge_inflow(t) for edge in node.outflow_edges.values())
+                    for t in time_steps]
             
-            # Plot evaporation losses from water balance table
-            evap_col = f"{node_name}_EvaporationLoss"
-            if evap_col in self.df.columns:
-                evap_losses = self.df[evap_col]
-                ax.plot(self.df['TimeStep'], evap_losses,
-                    color=colors['evaporation'],
-                    label='Evaporation Loss',
-                    linestyle=':',
-                    linewidth=1.5)
+            # Get volumes (excluding last entry which is for next timestep)
+            volumes = node.storage[:-1]
             
-            # Create second y-axis for elevation and release rates
-            ax2 = ax.twinx()
+            # Plot flows on left y-axis
+            ax1.plot(time_steps, inflows, color=colors['inflow'], 
+                    label='Inflow', linewidth=2)
+            ax1.plot(time_steps, outflows, color=colors['outflow'], 
+                    label='Outflow', linewidth=2)
             
-            # Plot water surface elevation
-            elev_col = f"{node_name}_Elevation"
-            if elev_col in self.df.columns:
-                elevations = self.df[elev_col]
-                ax2.plot(self.df['TimeStep'], elevations,
-                        color=colors['elevation'],
-                        label='Water Surface Elevation',
-                        linestyle='-.',
-                        linewidth=1.5)
-                
-            # Plot release rates
-            # Get the storage node instance and calculate release rates
-            for _, node_data in self.system.graph.nodes(data=True):
-                if isinstance(node_data['node'], StorageNode) and node_data['node'].id == node_name:
-                    storage_node = node_data['node']
-                    release_rates = [storage_node.calculate_release(level) for level in storage_node.water_level[:-1]]
-                    ax2.plot(self.df['TimeStep'], release_rates,
-                            color=colors['release'],
-                            label='Release Rate',
-                            linestyle=':',
-                            linewidth=1.5)
-                    
-                    # Add release function parameters to stats text
-                    if hasattr(storage_node, 'release_params'):
-                        params = storage_node.release_params
-                        release_text = (
-                            f"\nRelease Parameters:\n"
-                            f"h1: {params['h1']:.1f} m\n"
-                            f"h2: {params['h2']:.1f} m\n"
-                            f"w: {params['w']:.1f} m³/s\n"
-                            f"m1: {params['m1']:.3f} rad\n"
-                            f"m2: {params['m2']:.3f} rad"
-                        )
-                    else:
-                        release_text = ""
+            # Plot volume on right y-axis
+            ax2.plot(time_steps, volumes, color=colors['volume'], 
+                    label='Volume', linewidth=2, linestyle='--')
             
-            # Add reservoir capacity line
-            for _, node_data in self.system.graph.nodes(data=True):
-                if isinstance(node_data['node'], StorageNode) and node_data['node'].id == node_name:
-                    capacity = node_data['node'].capacity
-                    ax.axhline(y=capacity, 
-                            color='gray', 
-                            linestyle='--', 
-                            alpha=0.5,
-                            label='Reservoir Capacity')
-                    ax.text(ax.get_xlim()[1], capacity, 
-                        f'Capacity: {capacity:,.0f} m³',
-                        verticalalignment='bottom',
-                        horizontalalignment='right')
-            
-            # Add summary statistics in text box
+            # Calculate statistics
             stats_text = (
                 f"Statistics:\n"
-                f"Mean Storage: {storage.mean():,.0f} m³\n"
-                f"Max Storage: {storage.max():,.0f} m³\n"
-                f"Min Storage: {storage.min():,.0f} m³\n"
+                f"Mean Inflow: {np.mean(inflows):.2f} m³/s\n"
+                f"Mean Outflow: {np.mean(outflows):.2f} m³/s\n"
+                f"Mean Volume: {np.mean(volumes):,.0f} m³\n"
+                f"Max Volume: {np.max(volumes):,.0f} m³\n"
+                f"Min Volume: {np.min(volumes):,.0f} m³\n"
+                f"Volume Change: {volumes[-1] - volumes[0]:,.0f} m³"
             )
             
-            if spill_col in self.df.columns:
-                spill_volume = spills.sum()
-                stats_text += f"Total Spill Volume: {spill_volume:,.0f} m³\n"
-            
-            if evap_col in self.df.columns:
-                total_evap = evap_losses.sum()
-                stats_text += f"Total Evaporation Loss: {total_evap:,.0f} m³\n"
-            
-            if elev_col in self.df.columns:
-                stats_text += (
-                    f"Mean Elevation: {elevations.mean():.1f} m\n"
-                    f"Max Elevation: {elevations.max():.1f} m\n"
-                    f"Min Elevation: {elevations.min():.1f} m"
-                )
-                
-            stats_text += release_text
-            
-            ax.text(0.02, 0.98, stats_text,
-                    transform=ax.transAxes,
+            # Add statistics text box
+            ax1.text(0.02, 0.98, stats_text,
+                    transform=ax1.transAxes,
                     verticalalignment='top',
                     bbox=dict(boxstyle='round',
                             facecolor='white',
                             alpha=0.8))
             
-            # Customize subplot
-            ax.set_title(f'{node_name} Storage Dynamics')
-            if idx == n_nodes - 1:  # Only add xlabel to bottom subplot
-                ax.set_xlabel('Time Step')
-            ax.set_ylabel('Volume [m³]')
-            ax2.set_ylabel('Release Rate [m³/s]')
-            ax.grid(True, alpha=0.3)
+            # Customize axes
+            ax1.set_xlabel('Time Step')
+            ax1.set_ylabel('Flow Rate [m³/s]')
+            ax2.set_ylabel('Volume [m³]')
+            ax1.set_title(f'{node_id} Dynamics')
+            ax1.grid(True, alpha=0.3)
             
-            # Combine legends from both axes
-            lines1, labels1 = ax.get_legend_handles_labels()
+            # Add legends
+            lines1, labels1 = ax1.get_legend_handles_labels()
             lines2, labels2 = ax2.get_legend_handles_labels()
-            ax.legend(lines1 + lines2, labels1 + labels2,
-                    bbox_to_anchor=(1.05, 1),
-                    loc='upper left',
-                    borderaxespad=0.,
-                    frameon=True,
-                    fancybox=True,
-                    shadow=True)
+            ax1.legend(lines1 + lines2, labels1 + labels2,
+                    loc='center right',
+                    bbox_to_anchor=(1.3, 0.5))
         
         plt.tight_layout()
-        return self._save_plot("storage_dynamics_2")
+        return self._save_plot("reservoir_dynamics")
+
+    def plot_release_function(self, storage_node):
+        """
+        Create a plot showing the release function for a storage node.
+        
+        Args:
+            storage_node: StorageNode object with release parameters
+            
+        Returns:
+            str: Path to the saved plot file
+        """
+        if not hasattr(storage_node, 'release_params'):
+            print("Storage node does not have release parameters defined.")
+            return None
+            
+        params = storage_node.release_params
+        
+        # Generate water levels for plotting
+        min_level = max(0, params['h1'] - 2)
+        max_level = params['h2'] + 2
+        levels = np.linspace(min_level, max_level, 200)
+        
+        # Calculate releases for each level
+        releases = []
+        for h in levels:
+            if h <= params['h1']:
+                release = 0
+            elif (h-params['h1'])* np.tan(params['m1']) < params['w']:
+                release = (h-params['h1'])* np.tan(params['m1'])
+            elif h <= params['h2']:
+                release = params['w']
+            else:
+                release = params['w'] + (h-params['h2'])* np.tan(params['m2'])
+            
+            releases.append(release)
+        
+        # Create plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Plot release function
+        ax.plot(levels, releases, 'b-', linewidth=2, label='Release Function')
+        
+        # Add vertical lines for h1 and h2
+        ax.axvline(x=params['h1'], color='r', linestyle='--', alpha=0.5, label='h₁')
+        ax.axvline(x=params['h2'], color='g', linestyle='--', alpha=0.5, label='h₂')
+        
+        # Add horizontal line for base release w
+        ax.axhline(y=params['w'], color='gray', linestyle=':', alpha=0.5, label='w')
+        
+        # Add annotations for slopes
+        mid_h1_h2 = (params['h1'] + params['h2']) / 2
+        mid_release = params['w'] + params['m1'] * (mid_h1_h2 - params['h1'])
+        ax.text(mid_h1_h2, mid_release, f'm₁ = {params["m1"]:.3f}', 
+                rotation=np.degrees(np.arctan(params['m1'])))
+        
+        h_high = params['h2'] + 1
+        release_high = params['w'] + params['m1'] * (params['h2'] - params['h1']) + params['m2']
+        ax.text(h_high, release_high, f'm₂ = {params["m2"]:.3f}',
+                rotation=np.degrees(np.arctan(params['m2'])))
+        
+        # Customize plot
+        ax.set_xlabel('Water Level [m]')
+        ax.set_ylabel('Release Rate [m³/s]')
+        ax.set_title(f'Release Function for {storage_node.id}')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        
+        # Add text box with parameters
+        param_text = (
+            f"Release Parameters:\n"
+            f"h₁ = {params['h1']:.1f} m\n"
+            f"h₂ = {params['h2']:.1f} m\n"
+            f"w = {params['w']:.1f} m³/s\n"
+            f"m₁ = {params['m1']:.3f} rad\n"
+            f"m₂ = {params['m2']:.3f} rad"
+        )
+        ax.text(0.02, 0.98, param_text,
+                transform=ax.transAxes,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round',
+                        facecolor='white',
+                        alpha=0.8))
+        
+        plt.tight_layout()
+        return self._save_plot(f"release_function_{storage_node.id}")
 
     def plot_water_balance(self):
         """

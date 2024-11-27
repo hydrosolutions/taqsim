@@ -55,7 +55,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # Reservoir
     release_params_kattakurgan = {
-        'h1': 505.0,
+        'h1': 500.0,
         'h2': 511.0,
         'w': 5.0,
         'm1': 1.5,
@@ -64,17 +64,17 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     release_params_akdarya = {
         'h1': 486.0,
         'h2': 496.0,
-        'w': 1.0,
+        'w': 5.0,
         'm1': 1.5,
         'm2': 1.5,
     }
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e7,
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e8,
                                  evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan)
-    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
+    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=6e7, 
                               evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya)
-    
+
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
@@ -220,30 +220,31 @@ def run_sample_tests():
     print('ZRB system test: Visualizing the system')
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
     vis_ZRB.print_water_balance_summary()
-    vis_ZRB.plot_storage_dynamics()
     vis_ZRB.plot_storage_spills()
+    vis_ZRB.plot_reservoir_dynamics()
+
+    # Get the storage node from the system's graph
+    storage_node = ZRB_system.graph.nodes['RES-Akdarya']['node']
+    vis_ZRB.plot_release_function(storage_node)
+    storage_node = ZRB_system.graph.nodes['RES-Kattakurgan']['node']
+    vis_ZRB.plot_release_function(storage_node)
+    vis_ZRB.plot_network_layout()
     """
-    vis_ZRB.plot_node_inflows(['HW-Ravadhoza', 'Sink-Navoi', 'TuyaTortor', 'EskiAnkhor'])
     vis_ZRB.plot_demand_deficit_heatmap()
     vis_ZRB.plot_demand_satisfaction()
     vis_ZRB.plot_storage_spills()
-    vis_ZRB.plot_water_levels()
     vis_ZRB.plot_edge_flows()
     vis_ZRB.plot_edge_flow_summary()
     vis_ZRB.plot_network_layout()
     vis_ZRB.plot_water_balance()
-    vis_ZRB.plot_cumulative_volumes()
     
-    """
-    
-
     print('ZRB system test: Visualization finished')
     
 
     html_file = vis_ZRB.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    
+    """
     print("Visualizations complete")
     
     plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png")
