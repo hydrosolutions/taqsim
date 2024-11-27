@@ -27,7 +27,7 @@ class WaterSystemVisualizer:
         """
         self.system = water_system
         self.name = name
-        self.df = water_system.get_water_balance_table()
+        self.df = self.get_water_balance_table()
         
         # Create images directory if it doesn't exist
         self.image_dir = os.path.join('.', 'figures')
@@ -36,6 +36,128 @@ class WaterSystemVisualizer:
         # Generate timestamp for unique filenames
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
+    def get_water_balance_table(self):
+            """
+            Generate a table with water balance data for all nodes across all time steps,
+            including transmission losses.
+
+            Returns:
+                pd.DataFrame: A pandas DataFrame containing the water balance data.
+            """
+            # Return empty DataFrame if no time steps have been simulated
+            if self.system.time_steps == 0:
+                return pd.DataFrame({'TimeStep': []})
+
+            # Initialize lists for columns and data
+            node_columns = []
+            edge_columns = []
+            data = []
+
+            # Generate column names for nodes
+            for node_id, node_data in self.system.graph.nodes(data=True):
+                node = node_data['node']
+                
+                # Common columns for all node types
+                base_columns = [
+                    f"{node_id}_Inflow",
+                    f"{node_id}_Outflow",
+                ]
+
+                # Add type-specific columns
+                if isinstance(node, SupplyNode):
+                    type_columns = [f"{node_id}_SupplyRate"]
+                elif isinstance(node, StorageNode):
+                    type_columns = [
+                        f"{node_id}_Storage",
+                        f"{node_id}_StorageChange",
+                        f"{node_id}_ExcessVolume"
+                    ]
+                elif isinstance(node, DemandNode):
+                    type_columns = [
+                        f"{node_id}_Demand",
+                        f"{node_id}_SatisfiedDemand",
+                        f"{node_id}_Deficit"
+                    ]
+                else:
+                    type_columns = []
+
+                node_columns.extend(base_columns + type_columns)
+
+            # Generate column names for edges
+            for u, v, d in self.system.graph.edges(data=True):
+                edge_columns.extend([
+                    f"Edge_{u}_to_{v}_Inflow",
+                    f"Edge_{u}_to_{v}_Outflow",
+                    f"Edge_{u}_to_{v}_Losses",
+                    f"Edge_{u}_to_{v}_LossPercent"
+                ])
+
+            # Combine all columns
+            all_columns = ['TimeStep'] + node_columns + edge_columns
+
+            # Initialize data list with dictionaries
+            data = []
+            for time_step in range(self.system.time_steps):
+                row_data = {'TimeStep': time_step}
+                
+                # Initialize all columns with 0
+                for col in node_columns + edge_columns:
+                    row_data[col] = 0.0
+                    
+                # Populate node data
+                for node_id, node_data in self.system.graph.nodes(data=True):
+                    node = node_data['node']
+                    try:
+                        inflow = sum(edge.get_edge_outflow(time_step) for edge in node.inflow_edges.values())
+                        outflow = sum(edge.get_edge_inflow(time_step) for edge in node.outflow_edges.values())
+
+                        row_data[f"{node_id}_Inflow"] = inflow
+                        row_data[f"{node_id}_Outflow"] = outflow
+
+                        if isinstance(node, SupplyNode):
+                            row_data[f"{node_id}_SupplyRate"] = node.get_supply_rate(time_step)
+                        elif isinstance(node, StorageNode):
+                            row_data[f"{node_id}_Storage"] = node.storage[time_step+1]
+                            storage_change = (node.storage[time_step+1] - node.storage[time_step] 
+                                            if time_step > 0 else node.storage[0])
+                            row_data[f"{node_id}_StorageChange"] = storage_change
+                            row_data[f"{node_id}_ExcessVolume"] = node.spillway_register[time_step]
+                        elif isinstance(node, DemandNode):
+                            row_data[f"{node_id}_Demand"] = node.get_demand_rate(time_step)
+                            row_data[f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
+                            row_data[f"{node_id}_Deficit"] = (node.get_demand_rate(time_step) - 
+                                                            node.satisfied_demand[time_step])
+                    except Exception as e:
+                        print(f"Warning: Error processing node {node_id} at time step {time_step}: {str(e)}")
+
+                # Populate edge data
+                for u, v, d in self.system.graph.edges(data=True):
+                    edge = d['edge']
+                    try:
+                        if time_step < len(edge.inflow):
+                            inflow = edge.inflow[time_step]
+                            outflow = edge.outflow[time_step]
+                            losses = edge.losses[time_step]
+                            loss_percent = (losses / inflow * 100) if inflow > 0 else 0
+                            
+                            row_data[f"Edge_{u}_to_{v}_Inflow"] = inflow
+                            row_data[f"Edge_{u}_to_{v}_Outflow"] = outflow
+                            row_data[f"Edge_{u}_to_{v}_Losses"] = losses
+                            row_data[f"Edge_{u}_to_{v}_LossPercent"] = loss_percent
+                    except Exception as e:
+                        print(f"Warning: Error processing edge {u}->{v} at time step {time_step}: {str(e)}")
+
+                data.append(row_data)
+
+            # Create DataFrame
+            try:
+                df = pd.DataFrame(data, columns=all_columns)
+                return df
+            except Exception as e:
+                print(f"Error creating DataFrame: {str(e)}")
+                # Return minimal DataFrame with just TimeStep column
+                return pd.DataFrame({'TimeStep': range(self.system.time_steps)})
+
     def _save_plot(self, plot_type, additional_info=""):
         """
         Helper method to save plots with consistent naming.
@@ -196,155 +318,6 @@ class WaterSystemVisualizer:
         
         return abs_filepath, pct_filepath
         
-    def plot_storage_spills(self):
-        """
-        Create time series plots showing storage dynamics including volumes, elevations, spills, 
-        and evaporation losses for each storage node over time in separate subplots.
-        
-        Returns:
-            str: Path to the saved plot file
-        """
-        # Find storage nodes in the system
-        storage_cols = [(col, col.replace('_Storage', '')) for col in self.df.columns 
-                        if col.endswith('_Storage')]
-        
-        if not storage_cols:
-            print("No storage nodes found in the system.")
-            return None
-            
-        # Get unique node names
-        unique_nodes = sorted(set(node for _, node in storage_cols))
-        n_nodes = len(unique_nodes)
-        
-        # Create figure with subplots
-        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
-        if n_nodes == 1:
-            axes = [axes]
-        
-        # Color scheme
-        colors = {
-            'storage': '#2196F3',     # Blue for storage volume
-            'spills': '#f44336',      # Red for spills
-            'evaporation': '#FF9800', # Orange for evaporation losses
-            'elevation': '#4CAF50'    # Green for water surface elevation
-        }
-        
-        # Plot for each storage node
-        for idx, node_name in enumerate(unique_nodes):
-            ax = axes[idx]
-            
-            # Plot storage volume
-            storage_col = f"{node_name}_Storage"
-            storage = self.df[storage_col]
-            ax.plot(self.df['TimeStep'], storage, 
-                color=colors['storage'],
-                label='Storage Volume',
-                linewidth=2)
-            
-            # Plot spills if available
-            spill_col = f"{node_name}_ExcessVolume"
-            if spill_col in self.df.columns:
-                spills = self.df[spill_col]
-                ax.plot(self.df['TimeStep'], spills,
-                    color=colors['spills'],
-                    label='Spillway Volume',
-                    linestyle='--',
-                    linewidth=1.5)
-            
-            # Plot evaporation losses from water balance table
-            evap_col = f"{node_name}_EvaporationLoss"
-            if evap_col in self.df.columns:
-                evap_losses = self.df[evap_col]
-                ax.plot(self.df['TimeStep'], evap_losses,
-                    color=colors['evaporation'],
-                    label='Evaporation Loss',
-                    linestyle=':',
-                    linewidth=1.5)
-            
-            # Create second y-axis for elevation
-            ax2 = ax.twinx()
-            elev_col = f"{node_name}_Elevation"
-            if elev_col in self.df.columns:
-                elevations = self.df[elev_col]
-                ax2.plot(self.df['TimeStep'], elevations,
-                        color=colors['elevation'],
-                        label='Water Surface Elevation',
-                        linestyle='-.',
-                        linewidth=1.5)
-                ax2.set_ylabel('Elevation [m.a.s.l]', color=colors['elevation'])
-                ax2.tick_params(axis='y', labelcolor=colors['elevation'])
-            
-            # Add reservoir capacity line
-            for _, node_data in self.system.graph.nodes(data=True):
-                if isinstance(node_data['node'], StorageNode) and node_data['node'].id == node_name:
-                    capacity = node_data['node'].capacity
-                    ax.axhline(y=capacity, 
-                            color='gray', 
-                            linestyle='--', 
-                            alpha=0.5,
-                            label='Reservoir Capacity')
-                    ax.text(ax.get_xlim()[1], capacity, 
-                        f'Capacity: {capacity:,.0f} m³',
-                        verticalalignment='bottom',
-                        horizontalalignment='right')
-            
-            # Add summary statistics in text box
-            stats_text = (
-                f"Statistics:\n"
-                f"Mean Storage: {storage.mean():,.0f} m³\n"
-                f"Max Storage: {storage.max():,.0f} m³\n"
-                f"Min Storage: {storage.min():,.0f} m³\n"
-            )
-            
-            if spill_col in self.df.columns:
-                spill_volume = spills.sum()
-                stats_text += f"Total Spill Volume: {spill_volume:,.0f} m³\n"
-            
-            if evap_col in self.df.columns:
-                total_evap = evap_losses.sum()
-                stats_text += f"Total Evaporation Loss: {total_evap:,.0f} m³\n"
-            
-            if elev_col in self.df.columns:
-                stats_text += (f"Mean Elevation: {elevations.mean():.1f} m\n"
-                            f"Max Elevation: {elevations.max():.1f} m\n"
-                            f"Min Elevation: {elevations.min():.1f} m")
-            
-            ax.text(0.02, 0.98, stats_text,
-                    transform=ax.transAxes,
-                    verticalalignment='top',
-                    bbox=dict(boxstyle='round',
-                            facecolor='white',
-                            alpha=0.8))
-            
-            # Customize subplot
-            ax.set_title(f'{node_name} Storage Dynamics')
-            if idx == n_nodes - 1:  # Only add xlabel to bottom subplot
-                ax.set_xlabel('Time Step')
-            ax.set_ylabel('Volume [m³]')
-            ax.grid(True, alpha=0.3)
-            
-            # Combine legends from both axes
-            lines1, labels1 = ax.get_legend_handles_labels()
-            if elev_col in self.df.columns:
-                lines2, labels2 = ax2.get_legend_handles_labels()
-                ax.legend(lines1 + lines2, labels1 + labels2,
-                        bbox_to_anchor=(1.05, 1),
-                        loc='upper left',
-                        borderaxespad=0.,
-                        frameon=True,
-                        fancybox=True,
-                        shadow=True)
-            else:
-                ax.legend(bbox_to_anchor=(1.05, 1),
-                        loc='upper left',
-                        borderaxespad=0.,
-                        frameon=True,
-                        fancybox=True,
-                        shadow=True)
-        
-        plt.tight_layout()
-        return self._save_plot("storage_dynamics")
-
     def plot_water_levels(self):
         """
         Create a time series plot showing water levels for all storage nodes that have hva data.
@@ -710,112 +683,7 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("network_layout")  
-
-    def plot_water_balance(self):
-        """
-        Create water balance visualization using side-by-side bars.
-        
-        Returns:
-            str: Path to the saved plot file
-        """
-        if not hasattr(self, 'image_dir'):
-            self.image_dir = os.path.join('.', 'figures')
-            os.makedirs(self.image_dir, exist_ok=True)
-        
-        df = self.system.get_water_balance()
-        
-        # Create figure
-        fig, ax = plt.subplots(figsize=(15, 8))
-        
-        # Width of bars
-        bar_width = 0.35
-        
-        # Define colors
-        colors = {
-            'source': '#2196F3',           # Blue
-            'supplied demand': '#4CAF50',   # Green
-            'sink': '#f44336',             # Red
-            'edge losses': '#FF9800',       # Orange
-            'reservoir spills': '#9C27B0',  # Purple
-            'storage_change': '#795548'     # Brown
-        }
-        
-        time_steps = df['time_step']
-        
-        # Create positive bars (sources)
-        source_bars = ax.bar(time_steps, df['source'], 
-                           bar_width, label='Source',
-                           color=colors['source'], alpha=0.7)
-        
-        # Create stacked negative bars (sinks)
-        components = ['supplied demand', 'sink', 'edge losses', 
-                     'reservoir spills', 'storage_change']
-        labels = ['Supplied Demand', 'Sink', 'Edge Losses', 
-                 'Reservoir Spills', 'Storage Change']
-        
-        bottom = np.zeros(len(df))
-        bars = []
-        for comp, label in zip(components, labels):
-            bars.append(ax.bar(time_steps + bar_width, df[comp], 
-                             bar_width, bottom=bottom,
-                             label=label, color=colors[comp], alpha=0.7))
-            bottom += df[comp]
-            
-        # Add balance error as a line
-        ax.plot(time_steps + bar_width/2, df['balance_error'],
-               label='Balance Error', color='black',
-               linestyle='--', linewidth=1, marker='o')
-        
-        # Customize plot
-        ax.set_xlabel('Time Step')
-        ax.set_ylabel('Volume (m³)')
-        ax.set_title('Water Balance Components')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax.grid(True, alpha=0.3, axis='y')
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-        
-        # Adjust layout and save
-        plt.tight_layout()
-        plot_path = os.path.join(self.image_dir, f"{self.name}_water_balance.png")
-        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
-        plt.close()
-        
-        # Print summary statistics
-        print("\nWater Balance Summary")
-        print("=" * 50)
-        
-        # Total volumes
-        print("\nTotal Volumes:")
-        total_source = df['source'].sum()
-        print(f"Total Source: {total_source:,.0f} m³")
-        
-        components_sum = {
-            'Supplied Demand': df['supplied demand'].sum(),
-            'Sink Outflow': df['sink'].sum(),
-            'Edge Losses': df['edge losses'].sum(),
-            'Reservoir Spills': df['reservoir spills'].sum()
-        }
-        
-        for comp, value in components_sum.items():
-            print(f"Total {comp}: {value:,.0f} m³ ({value/total_source*100:.1f}%)")
-        
-        # Storage
-        print("\nStorage:")
-        if len(df) > 0:
-            print(f"Initial Storage: {df['storage_start'].iloc[0]:,.0f} m³")
-            print(f"Final Storage: {df['storage_end'].iloc[-1]:,.0f} m³")
-            print(f"Net Storage Change: {df['storage_end'].iloc[-1] - df['storage_start'].iloc[0]:,.0f} m³")
-        
-        # Balance error statistics
-        print("\nBalance Error Statistics:")
-        error_stats = df['balance_error'].describe()
-        print(f"Mean Error: {error_stats['mean']:,.2f} m³")
-        print(f"Max Error: {error_stats['max']:,.2f} m³")
-        print(f"Min Error: {error_stats['min']:,.2f} m³")
-        print(f"Std Error: {error_stats['std']:,.2f} m³")
-        
-        return plot_path
-    
+ 
     def plot_cumulative_volumes(self):
         """
         Create a plot showing the cumulative volumes of all water balance components,
@@ -959,8 +827,8 @@ class WaterSystemVisualizer:
             'Supplied Demand': 'supplied demand',
             'Sink Outflow': 'sink',
             'Edge Losses': 'edge losses',
-            'Reservoir Spills': 'reservoir spills',
-            'Reservoir ET Losses': 'reservoir ET losses',
+            'Res Spills': 'reservoir spills',
+            'Res ET Losses': 'reservoir ET losses',
         }
         
         for label, comp in components.items():
@@ -1001,7 +869,7 @@ class WaterSystemVisualizer:
             'Sink': 'sink',
             'Losses': 'edge losses',
             'Spills': 'reservoir spills',
-            'Reservoir ET': 'reservoir ET losses'
+            'Res ET': 'reservoir ET losses'
         }
         
         for label, comp in components.items():
@@ -1511,3 +1379,266 @@ class WaterSystemVisualizer:
             f.write(html_content)
         
         return filepath
+    
+    def plot_storage_spills(self):
+        """
+        Create time series plots showing storage dynamics including volumes, elevations, spills, 
+        and evaporation losses for each storage node over time in separate subplots.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Find storage nodes in the system
+        storage_cols = [(col, col.replace('_Storage', '')) for col in self.df.columns 
+                        if col.endswith('_Storage')]
+        
+        if not storage_cols:
+            print("No storage nodes found in the system.")
+            return None
+            
+        # Get unique node names
+        unique_nodes = sorted(set(node for _, node in storage_cols))
+        n_nodes = len(unique_nodes)
+        
+        # Create figure with subplots
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
+        
+        # Color scheme
+        colors = {
+            'storage': '#2196F3',     # Blue for storage volume
+            'spills': '#f44336',      # Red for spills
+            'evaporation': '#FF9800', # Orange for evaporation losses
+            'elevation': '#4CAF50'    # Green for water surface elevation
+        }
+        
+        # Plot for each storage node
+        for idx, node_name in enumerate(unique_nodes):
+            ax = axes[idx]
+            
+            # Plot storage volume
+            storage_col = f"{node_name}_Storage"
+            storage = self.df[storage_col]
+            ax.plot(self.df['TimeStep'], storage, 
+                   color=colors['storage'],
+                   label='Storage Volume',
+                   linewidth=2)
+            
+            # Plot spills if available
+            spill_col = f"{node_name}_ExcessVolume"
+            if spill_col in self.df.columns:
+                spills = self.df[spill_col]
+                ax.plot(self.df['TimeStep'], spills,
+                       color=colors['spills'],
+                       label='Spillway Volume',
+                       linestyle='--',
+                       linewidth=1.5)
+            
+            # Find the storage node instance to get evaporation data
+            node_instance = None
+            for _, node_data in self.system.graph.nodes(data=True):
+                if isinstance(node_data['node'], StorageNode) and node_data['node'].id == node_name:
+                    node_instance = node_data['node']
+                    break
+            
+            # Plot evaporation losses if available
+            if node_instance and hasattr(node_instance, 'evaporation_losses') and node_instance.evaporation_losses:
+                evap_losses = node_instance.evaporation_losses
+                ax.plot(range(len(evap_losses)), evap_losses,
+                       color=colors['evaporation'],
+                       label='Evaporation Loss',
+                       linestyle=':',
+                       linewidth=1.5)
+            
+            # Create second y-axis for elevation
+            ax2 = ax.twinx()
+            if hasattr(node_instance, 'water_level') and node_instance.water_level:
+                elevations = node_instance.water_level
+                ax2.plot(range(len(elevations)), elevations,
+                        color=colors['elevation'],
+                        label='Water Surface Elevation',
+                        linestyle='-.',
+                        linewidth=1.5)
+                ax2.set_ylabel('Elevation [m.a.s.l]', color=colors['elevation'])
+                ax2.tick_params(axis='y', labelcolor=colors['elevation'])
+            
+            # Add reservoir capacity line
+            if node_instance:
+                capacity = node_instance.capacity
+                ax.axhline(y=capacity, 
+                          color='gray', 
+                          linestyle='--', 
+                          alpha=0.5,
+                          label='Reservoir Capacity')
+                ax.text(ax.get_xlim()[1], capacity, 
+                       f'Capacity: {capacity:,.0f} m³',
+                       verticalalignment='bottom',
+                       horizontalalignment='right')
+            
+            # Add summary statistics in text box
+            stats_text = (
+                f"Statistics:\n"
+                f"Mean Storage: {storage.mean():,.0f} m³\n"
+                f"Max Storage: {storage.max():,.0f} m³\n"
+                f"Min Storage: {storage.min():,.0f} m³\n"
+            )
+            
+            if spill_col in self.df.columns:
+                spill_volume = spills.sum()
+                stats_text += f"Total Spill Volume: {spill_volume:,.0f} m³\n"
+            
+            if node_instance and node_instance.evaporation_losses:
+                total_evap = sum(node_instance.evaporation_losses)
+                mean_evap = np.mean(node_instance.evaporation_losses)
+                stats_text += (f"Total Evaporation Loss: {total_evap:,.0f} m³\n"
+                             f"Mean Monthly Evaporation: {mean_evap:,.1f} m³/s\n")
+            
+            if hasattr(node_instance, 'water_level') and node_instance.water_level:
+                stats_text += (f"Mean Elevation: {np.mean(node_instance.water_level):.1f} m\n"
+                             f"Max Elevation: {max(node_instance.water_level):.1f} m\n"
+                             f"Min Elevation: {min(node_instance.water_level):.1f} m")
+            
+            # Add stats text box
+            ax.text(0.02, 0.98, stats_text,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize subplot
+            ax.set_title(f'{node_name} Storage Dynamics')
+            if idx == n_nodes - 1:  # Only add xlabel to bottom subplot
+                ax.set_xlabel('Time Step')
+            ax.set_ylabel('Volume [m³]')
+            ax.grid(True, alpha=0.3)
+            
+            # Combine legends from both axes
+            lines1, labels1 = ax.get_legend_handles_labels()
+            if hasattr(node_instance, 'water_level') and node_instance.water_level:
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax.legend(lines1 + lines2, labels1 + labels2,
+                         bbox_to_anchor=(1.15, 1),
+                         loc='upper left',
+                         borderaxespad=0.,
+                         frameon=True,
+                         fancybox=True,
+                         shadow=True)
+            else:
+                ax.legend(bbox_to_anchor=(1.15, 1),
+                         loc='upper left',
+                         borderaxespad=0.,
+                         frameon=True,
+                         fancybox=True,
+                         shadow=True)
+        
+        plt.tight_layout()
+        return self._save_plot("storage_dynamics")
+
+    def plot_water_balance(self):
+        """
+        Create water balance visualization using side-by-side bars.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        if not hasattr(self, 'image_dir'):
+            self.image_dir = os.path.join('.', 'figures')
+            os.makedirs(self.image_dir, exist_ok=True)
+        
+        df = self.system.get_water_balance()
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(15, 8))
+        
+        # Width of bars
+        bar_width = 0.35
+        
+        # Define colors with evaporation included
+        colors = {
+            'source': '#2196F3',           # Blue
+            'supplied demand': '#4CAF50',   # Green
+            'sink': '#f44336',             # Red
+            'edge losses': '#FF9800',       # Orange
+            'reservoir spills': '#9C27B0',  # Purple
+            'reservoir ET losses': '#795548', # Brown
+            'storage_change': '#607D8B'     # Gray
+        }
+        
+        time_steps = df['time_step']
+        
+        # Create positive bars (sources)
+        source_bars = ax.bar(time_steps, df['source'], 
+                           bar_width, label='Source',
+                           color=colors['source'], alpha=0.7)
+        
+        # Create stacked negative bars (sinks)
+        components = ['supplied demand', 'sink', 'edge losses', 
+                     'reservoir spills', 'reservoir ET losses', 'storage_change']
+        labels = ['Supplied Demand', 'Sink', 'Edge Losses', 
+                 'Reservoir Spills', 'Reservoir ET', 'Storage Change']
+        
+        bottom = np.zeros(len(df))
+        bars = []
+        for comp, label in zip(components, labels):
+            bars.append(ax.bar(time_steps + bar_width, df[comp], 
+                             bar_width, bottom=bottom,
+                             label=label, color=colors[comp], alpha=0.7))
+            bottom += df[comp]
+            
+        # Add balance error as a line
+        ax.plot(time_steps + bar_width/2, df['balance_error'],
+               label='Balance Error', color='black',
+               linestyle='--', linewidth=1, marker='o')
+        
+        # Customize plot
+        ax.set_xlabel('Time Step')
+        ax.set_ylabel('Volume (m³)')
+        ax.set_title('Water Balance Components')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+        
+        # Adjust layout and save
+        plt.tight_layout()
+        plot_path = os.path.join(self.image_dir, f"{self.name}_water_balance.png")
+        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
+        plt.close()
+        
+        # Print enhanced summary statistics
+        print("\nWater Balance Summary")
+        print("=" * 50)
+        
+        # Total volumes
+        print("\nTotal Volumes:")
+        total_source = df['source'].sum()
+        print(f"Total Source: {total_source:,.0f} m³")
+        
+        components_sum = {
+            'Supplied Demand': df['supplied demand'].sum(),
+            'Sink Outflow': df['sink'].sum(),
+            'Edge Losses': df['edge losses'].sum(),
+            'Reservoir Spills': df['reservoir spills'].sum(),
+            'Reservoir ET': df['reservoir ET losses'].sum()
+        }
+        
+        for comp, value in components_sum.items():
+            print(f"Total {comp}: {value:,.0f} m³ ({value/total_source*100:.1f}%)")
+        
+        # Storage
+        print("\nStorage:")
+        if len(df) > 0:
+            print(f"Initial Storage: {df['storage_start'].iloc[0]:,.0f} m³")
+            print(f"Final Storage: {df['storage_end'].iloc[-1]:,.0f} m³")
+            print(f"Net Storage Change: {df['storage_end'].iloc[-1] - df['storage_start'].iloc[0]:,.0f} m³")
+        
+        # Balance error statistics
+        print("\nBalance Error Statistics:")
+        error_stats = df['balance_error'].describe()
+        print(f"Mean Error: {error_stats['mean']:,.2f} m³")
+        print(f"Max Error: {error_stats['max']:,.2f} m³")
+        print(f"Min Error: {error_stats['min']:,.2f} m³")
+        print(f"Std Error: {error_stats['std']:,.2f} m³")
+        
+        return plot_path
