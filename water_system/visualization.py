@@ -819,10 +819,10 @@ class WaterSystemVisualizer:
         # Source volumes
         print_section("Source Volumes")
         total_source = df['source'].sum()
-        print(f"Total source volume: {total_source:,.0f} m³")
+        print(f"Total source volume: {total_source:,.0f} m³ (100%)")
         
         # Component volumes and percentages
-        print_section("Component Volumes")
+        print_section("Sink Volumes")
         components = {
             'Supplied Demand': 'supplied demand',
             'Sink Outflow': 'sink',
@@ -844,6 +844,18 @@ class WaterSystemVisualizer:
         storage_percentage = (total_storage_change / total_source * 100) if total_source > 0 else 0
         print(f"Net storage change:  {total_storage_change:15,.0f} m³ ({storage_percentage:6.1f}%)")
         
+        # Demand satisfaction
+        print_section("Demand Satisfaction")
+        total_demand = df['demands'].sum()
+        total_satisfied = df['supplied demand'].sum()
+        unmet_demand = df['unmet demand'].sum()
+        satisfied_percentage = (total_satisfied / total_demand * 100) if total_demand > 0 else 0
+        unmet_percentage = (unmet_demand / total_demand * 100) if total_demand > 0 else 0
+        print(f"Total demand:        {total_demand:15,.0f} m³ ( 100.0%)")
+        print(f"Satisfied demand:    {total_satisfied:15,.0f} m³ ({satisfied_percentage:6.1f}%)")
+        print(f"Unmet demand:        {unmet_demand:15,.0f} m³ ({unmet_percentage:6.1f}%)")
+
+
         # Balance error statistics
         print_section("Balance Error Statistics")
         error_stats = df['balance_error'].describe()
@@ -858,8 +870,7 @@ class WaterSystemVisualizer:
         # Calculate relative errors
         total_flux = df['source'].sum()
         for label, value in error_metrics.items():
-            rel_error = (value / total_source * 100) if total_source > 0 else 0
-            print(f"{label:8s}: {value:15,.2f} m³ ({rel_error:6.2f}%)")
+            print(f"{label:8s}: {value:15,.2f} m³")
         
         # Additional statistics
         print_section("Maximum Values")
@@ -888,8 +899,7 @@ class WaterSystemVisualizer:
         print(f"Net storage:       {total_stored:15,.0f} m³")
         
         balance = total_in - total_out - total_stored
-        rel_balance = (balance / total_in * 100) if total_in > 0 else 0
-        print(f"Balance residual:  {balance:15,.0f} m³ ({rel_balance:6.2f}%)")
+        print(f"Balance residual:  {balance:15,.0f} m³")
         
         print("\n" + "=" * 50)
 
@@ -1605,40 +1615,5 @@ class WaterSystemVisualizer:
         plot_path = os.path.join(self.image_dir, f"{self.name}_water_balance.png")
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
-        
-        # Print enhanced summary statistics
-        print("\nWater Balance Summary")
-        print("=" * 50)
-        
-        # Total volumes
-        print("\nTotal Volumes:")
-        total_source = df['source'].sum()
-        print(f"Total Source: {total_source:,.0f} m³")
-        
-        components_sum = {
-            'Supplied Demand': df['supplied demand'].sum(),
-            'Sink Outflow': df['sink'].sum(),
-            'Edge Losses': df['edge losses'].sum(),
-            'Reservoir Spills': df['reservoir spills'].sum(),
-            'Reservoir ET': df['reservoir ET losses'].sum()
-        }
-        
-        for comp, value in components_sum.items():
-            print(f"Total {comp}: {value:,.0f} m³ ({value/total_source*100:.1f}%)")
-        
-        # Storage
-        print("\nStorage:")
-        if len(df) > 0:
-            print(f"Initial Storage: {df['storage_start'].iloc[0]:,.0f} m³")
-            print(f"Final Storage: {df['storage_end'].iloc[-1]:,.0f} m³")
-            print(f"Net Storage Change: {df['storage_end'].iloc[-1] - df['storage_start'].iloc[0]:,.0f} m³")
-        
-        # Balance error statistics
-        print("\nBalance Error Statistics:")
-        error_stats = df['balance_error'].describe()
-        print(f"Mean Error: {error_stats['mean']:,.2f} m³")
-        print(f"Max Error: {error_stats['max']:,.2f} m³")
-        print(f"Min Error: {error_stats['min']:,.2f} m³")
-        print(f"Std Error: {error_stats['std']:,.2f} m³")
         
         return plot_path

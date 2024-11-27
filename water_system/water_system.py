@@ -111,9 +111,7 @@ class WaterSystem:
                 'edge losses': 0.0,    # Edge losses
                 'demands': 0.0,   # Total demand
                 'supplied demand': 0.0,  # Satisfied demand
-                
-                
-                
+                'unmet demand': 0.0,  # Unsatisfied demand
             }
             
             # Calculate volumes for each component
@@ -132,6 +130,7 @@ class WaterSystem:
                     
                     volumes['demands'] += demand_rate * self.dt
                     volumes['supplied demand'] += satisfied_rate * self.dt
+                    volumes['unmet demand'] += (demand_rate - satisfied_rate) * self.dt
                     
                 elif isinstance(node, StorageNode):
                     # Add current storage
