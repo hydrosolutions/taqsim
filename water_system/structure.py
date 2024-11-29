@@ -580,6 +580,7 @@ class StorageNode(Node):
        
         return release
         """
+    
     def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
         """
         Initialize evaporation rates from CSV file.

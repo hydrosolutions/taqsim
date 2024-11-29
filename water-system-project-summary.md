@@ -59,8 +59,8 @@ Several sample test systems have been implemented:
 - [x] Initialize reservoirs with initial condition of reservoir filling
 - [x] Implement reservoir spillway where V(t) <= Vmax is always true
 - [x] Each edge has a loss factor as an attribute upon which flow losses depend over distance of the edge
-- [ ] Implement water level-volume relationship for reservoir nodes
-- [ ] Implement evaporative losses at reservoir nodes
+- [x] Implement water level-volume relationship for reservoir nodes
+- [x] Implement evaporative losses at reservoir nodes
 
 ### Unsaturated and Saturated Zone
 - [ ] Soil moisture/infiltration model

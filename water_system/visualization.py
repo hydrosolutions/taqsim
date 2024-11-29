@@ -175,79 +175,6 @@ class WaterSystemVisualizer:
         plt.close()
         return filepath
           
-    def plot_demand_satisfaction(self):
-        """
-        Create a time series plot comparing demanded vs satisfied demand for all demand nodes.
-        Uses distinct colors and patterns to make demands clearly distinguishable.
-        """
-        demand_cols = [col for col in self.df.columns if col.endswith('_Demand')]
-        if not demand_cols:
-            print("No demand nodes found in the system.")
-            return
-            
-        plt.figure(figsize=(12, 10))
-        
-        # Color scheme for different demand nodes
-        colors = [
-            '#0077BB',  # Blue
-            '#EE7733',  # Orange
-            '#009988',  # Teal
-            '#CC3311',  # Red
-            '#33BBEE',  # Cyan
-            '#EE3377',  # Magenta
-            '#669900',  # Lime
-            '#AA44BB',  # Purple
-        ]
-        
-        demanded_style = 'solid'
-        satisfied_style = 'dashed'
-        demanded_marker = 'o'
-        satisfied_marker = 's'
-        
-        for idx, col in enumerate(demand_cols):
-            node_id = col.replace('_Demand', '')
-            satisfied_col = f"{node_id}_SatisfiedDemand"
-            color = colors[idx % len(colors)]
-            
-            plt.plot(self.df['TimeStep'], 
-                    self.df[col], 
-                    label=f"{node_id} Demanded",
-                    color=color,
-                    linestyle=demanded_style,
-                    marker=demanded_marker,
-                    linewidth=0.8,
-                    markersize=3,
-                    markerfacecolor='white',
-                    markeredgewidth=1)
-            
-            plt.plot(self.df['TimeStep'], 
-                    self.df[satisfied_col], 
-                    label=f"{node_id} Satisfied",
-                    color=color,
-                    linestyle=satisfied_style,
-                    marker=satisfied_marker,
-                    linewidth=0.8,
-                    markersize=3,
-                    markerfacecolor='white',
-                    markeredgewidth=1)
-        
-        plt.xlabel('Time Step', fontsize=12)
-        plt.ylabel('Flow Rate [m³/s]', fontsize=12)
-        plt.title('Demand Satisfaction Over Time', fontsize=14, pad=20)
-        plt.grid(True, linestyle='--', alpha=0.7)
-        
-        plt.legend(bbox_to_anchor=(1.05, 1), 
-                loc='upper left',
-                borderaxespad=0.,
-                frameon=True,
-                fancybox=True,
-                shadow=True,
-                fontsize=10)
-        
-        plt.tight_layout()
-        
-        return self._save_plot("demand_satisfaction")
-
     def plot_demand_deficit_heatmap(self):
         """
         Create enhanced heatmaps showing demand deficits across all demand nodes over time.
@@ -1197,7 +1124,7 @@ class WaterSystemVisualizer:
         
         return filepath
     
-    def plot_storage_spills(self):
+    def plot_storage_dynamics(self):
         """
         Create time series plots showing storage dynamics including volumes, elevations, spills, 
         and evaporation losses for each storage node over time in separate subplots.
@@ -1205,6 +1132,8 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
+        
+        plt.rcParams.update({'font.size': 13})
         # Find storage nodes in the system
         storage_cols = [(col, col.replace('_Storage', '')) for col in self.df.columns 
                         if col.endswith('_Storage')]
@@ -1229,7 +1158,7 @@ class WaterSystemVisualizer:
             'evaporation': '#FF9800', # Orange for evaporation losses
             'elevation': '#4CAF50'    # Green for water surface elevation
         }
-        
+    
         # Plot for each storage node
         for idx, node_name in enumerate(unique_nodes):
             ax = axes[idx]
@@ -1297,8 +1226,6 @@ class WaterSystemVisualizer:
             stats_text = (
                 f"Statistics:\n"
                 f"Mean Storage: {storage.mean():,.0f} m³\n"
-                f"Max Storage: {storage.max():,.0f} m³\n"
-                f"Min Storage: {storage.min():,.0f} m³\n"
             )
             
             if spill_col in self.df.columns:
@@ -1309,12 +1236,8 @@ class WaterSystemVisualizer:
                 total_evap = sum(node_instance.evaporation_losses)
                 mean_evap = np.mean(node_instance.evaporation_losses)
                 stats_text += (f"Total Evaporation Loss: {total_evap:,.0f} m³\n"
-                             f"Mean Monthly Evaporation: {mean_evap:,.1f} m³/s\n")
-            
-            if hasattr(node_instance, 'water_level') and node_instance.water_level:
-                stats_text += (f"Mean Elevation: {np.mean(node_instance.water_level):.1f} m\n"
-                             f"Max Elevation: {max(node_instance.water_level):.1f} m\n"
-                             f"Min Elevation: {min(node_instance.water_level):.1f} m")
+                             f"Mean Monthly Evaporation: {mean_evap:,.1f} m³\n")
+
             
             # Add stats text box
             ax.text(0.02, 0.98, stats_text,
@@ -1360,6 +1283,7 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
+        plt.rcParams.update({'font.size': 13})
         # Find storage nodes in the system
         storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
                         if isinstance(data['node'], StorageNode)]
@@ -1378,7 +1302,7 @@ class WaterSystemVisualizer:
         colors = {
             'inflow': '#2196F3',    # Blue
             'outflow': '#4CAF50',   # Green
-            'volume': '#9C27B0'     # Purple
+            'waterlevel': '#9C27B0'     # Purple
         }
         
         time_steps = range(self.system.time_steps)
@@ -1386,7 +1310,7 @@ class WaterSystemVisualizer:
         # Plot for each reservoir
         for idx, (node_id, node) in enumerate(storage_nodes):
             ax1 = axes[idx]
-            ax2 = ax1.twinx()  # Create second y-axis for volume
+            ax2 = ax1.twinx()  # Create second y-axis for waterlevel
             
             # Calculate total inflow for each timestep
             inflows = [sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
@@ -1396,8 +1320,8 @@ class WaterSystemVisualizer:
             outflows = [sum(edge.get_edge_inflow(t) for edge in node.outflow_edges.values())
                     for t in time_steps]
             
-            # Get volumes (excluding last entry which is for next timestep)
-            volumes = node.storage[:-1]
+            # Get waterlevels (excluding last entry which is for next timestep)
+            waterlevels = node.water_level[:-1]
             
             # Plot flows on left y-axis
             ax1.plot(time_steps, inflows, color=colors['inflow'], 
@@ -1405,19 +1329,19 @@ class WaterSystemVisualizer:
             ax1.plot(time_steps, outflows, color=colors['outflow'], 
                     label='Outflow', linewidth=2)
             
-            # Plot volume on right y-axis
-            ax2.plot(time_steps, volumes, color=colors['volume'], 
-                    label='Volume', linewidth=2, linestyle='--')
+            # Plot waterlevel on right y-axis
+            ax2.plot(time_steps, waterlevels, color=colors['waterlevel'], 
+                    label='waterlevel', linewidth=2, linestyle='--')
             
             # Calculate statistics
             stats_text = (
                 f"Statistics:\n"
                 f"Mean Inflow: {np.mean(inflows):.2f} m³/s\n"
                 f"Mean Outflow: {np.mean(outflows):.2f} m³/s\n"
-                f"Mean Volume: {np.mean(volumes):,.0f} m³\n"
-                f"Max Volume: {np.max(volumes):,.0f} m³\n"
-                f"Min Volume: {np.min(volumes):,.0f} m³\n"
-                f"Volume Change: {volumes[-1] - volumes[0]:,.0f} m³"
+                f"Mean waterlevel: {np.mean(waterlevels):,.0f} m³\n"
+                f"Max waterlevel: {np.max(waterlevels):,.0f} m³\n"
+                f"Min waterlevel: {np.min(waterlevels):,.0f} m³\n"
+                f"waterlevel Change: {waterlevels[-1] - waterlevels[0]:,.0f} m³"
             )
             
             # Add statistics text box
@@ -1431,7 +1355,7 @@ class WaterSystemVisualizer:
             # Customize axes
             ax1.set_xlabel('Time Step')
             ax1.set_ylabel('Flow Rate [m³/s]')
-            ax2.set_ylabel('Volume [m³]')
+            ax2.set_ylabel('Waterlevel [m asl.]')
             ax1.set_title(f'{node_id} Dynamics')
             ax1.grid(True, alpha=0.3)
             
@@ -1443,7 +1367,7 @@ class WaterSystemVisualizer:
                     bbox_to_anchor=(1.3, 0.5))
         
         plt.tight_layout()
-        return self._save_plot("reservoir_dynamics")
+        return self._save_plot("reservoir_inflow_outflow_waterlevel")
 
     def plot_release_function(self, storage_node):
         """
@@ -1493,17 +1417,6 @@ class WaterSystemVisualizer:
         # Add horizontal line for base release w
         ax.axhline(y=params['w'], color='gray', linestyle=':', alpha=0.5, label='w')
         
-        # Add annotations for slopes
-        mid_h1_h2 = (params['h1'] + params['h2']) / 2
-        mid_release = params['w'] + params['m1'] * (mid_h1_h2 - params['h1'])
-        ax.text(mid_h1_h2, mid_release, f'm₁ = {params["m1"]:.3f}', 
-                rotation=np.degrees(np.arctan(params['m1'])))
-        
-        h_high = params['h2'] + 1
-        release_high = params['w'] + params['m1'] * (params['h2'] - params['h1']) + params['m2']
-        ax.text(h_high, release_high, f'm₂ = {params["m2"]:.3f}',
-                rotation=np.degrees(np.arctan(params['m2'])))
-        
         # Customize plot
         ax.set_xlabel('Water Level [m]')
         ax.set_ylabel('Release Rate [m³/s]')
@@ -1529,75 +1442,3 @@ class WaterSystemVisualizer:
         
         plt.tight_layout()
         return self._save_plot(f"release_function_{storage_node.id}")
-
-    def plot_water_balance(self):
-        """
-        Create water balance visualization using side-by-side bars.
-        
-        Returns:
-            str: Path to the saved plot file
-        """
-        if not hasattr(self, 'image_dir'):
-            self.image_dir = os.path.join('.', 'figures')
-            os.makedirs(self.image_dir, exist_ok=True)
-        
-        df = self.system.get_water_balance()
-        
-        # Create figure
-        fig, ax = plt.subplots(figsize=(15, 8))
-        
-        # Width of bars
-        bar_width = 0.35
-        
-        # Define colors with evaporation included
-        colors = {
-            'source': '#2196F3',           # Blue
-            'supplied demand': '#4CAF50',   # Green
-            'sink': '#f44336',             # Red
-            'edge losses': '#FF9800',       # Orange
-            'reservoir spills': '#9C27B0',  # Purple
-            'reservoir ET losses': '#795548', # Brown
-            'storage_change': '#607D8B'     # Gray
-        }
-        
-        time_steps = df['time_step']
-        
-        # Create positive bars (sources)
-        source_bars = ax.bar(time_steps, df['source'], 
-                           bar_width, label='Source',
-                           color=colors['source'], alpha=0.7)
-        
-        # Create stacked negative bars (sinks)
-        components = ['supplied demand', 'sink', 'edge losses', 
-                     'reservoir spills', 'reservoir ET losses', 'storage_change']
-        labels = ['Supplied Demand', 'Sink', 'Edge Losses', 
-                 'Reservoir Spills', 'Reservoir ET', 'Storage Change']
-        
-        bottom = np.zeros(len(df))
-        bars = []
-        for comp, label in zip(components, labels):
-            bars.append(ax.bar(time_steps + bar_width, df[comp], 
-                             bar_width, bottom=bottom,
-                             label=label, color=colors[comp], alpha=0.7))
-            bottom += df[comp]
-            
-        # Add balance error as a line
-        ax.plot(time_steps + bar_width/2, df['balance_error'],
-               label='Balance Error', color='black',
-               linestyle='--', linewidth=1, marker='o')
-        
-        # Customize plot
-        ax.set_xlabel('Time Step')
-        ax.set_ylabel('Volume (m³)')
-        ax.set_title('Water Balance Components')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax.grid(True, alpha=0.3, axis='y')
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-        
-        # Adjust layout and save
-        plt.tight_layout()
-        plot_path = os.path.join(self.image_dir, f"{self.name}_water_balance.png")
-        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
-        plt.close()
-        
-        return plot_path

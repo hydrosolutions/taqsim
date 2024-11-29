@@ -3,37 +3,67 @@
 ## Version
 Version 0.0.5
 
+## Requirements
+
+### Core Dependencies
+```
+networkx>=2.5
+matplotlib>=3.3.0
+pandas>=1.2.0
+numpy>=1.19.0
+scipy>=1.6.0
+```
+
+### Optional Dependencies
+```
+seaborn>=0.11.0    # Enhanced visualizations
+webbrowser         # Interactive visualization viewing
+```
+
 ## Overview
 
 This project implements an object-oriented water system simulation and optimization tool using Python. It models water systems as networks of nodes and edges in a directed acyclic graph, allowing for the simulation and optimization of water flow over multiple time steps.
 
 ## Features
 
-- Modeling of various node types:
-  - Supply nodes (water sources)
-  - Sink nodes (water exits)
-  - Demand nodes (agricultural, domestic, industrial use)
-  - Structure nodes (storage, diversion, confluence)
-- Edge representation of fixed connections (rivers, canals) with capacity constraints
-- Simulation of water flow over specified time steps
-- Visualization of the water system network and simulation results
+### Node Functionality
+- Supply nodes support variable rates and CSV data import
+- Storage nodes include:
+  - Height-volume-area relationships
+  - Evaporation losses
+  - Release rules
+  - Spillway handling
+- Demand nodes support:
+  - Time-varying demands
+  - Efficiency factors
+  - CSV data import
+
+### Edge Characteristics
+- Capacity constraints
+- Length-based losses
+- Automatic length calculation from node coordinates
+
+### Analysis Tools
+- Water balance calculations
+- Flow and storage visualization
+- Network layout plotting
+- Interactive visualizations
+- Comprehensive statistical analysis
+
+### Data Integration
+- CSV import/export support
+- GIS coordinate system integration
+- Time series data handling
 
 ## Project Structure
-
 ```
 water_system/
-│
 ├── __init__.py
-├── water_system.py
-├── structure.py
-└── edge.py
+├── water_system.py    # Core system management
+├── structure.py       # Node type definitions
+├── edge.py            # Edge class implementation
+└── visualization.py   # Visualization tools
 ```
-
-- `__init__.py`: Initializes the package and imports main classes
-- `water_system.py`: Contains the `WaterSystem` class for overall system management
-- `structure.py`: Defines various node types (Supply, Sink, Demand, Storage, etc.)
-- `edge.py`: Implements the `Edge` class for connections between nodes
-
 ## Installation
 
 1. Ensure you have Python 3.7+ installed.
@@ -54,48 +84,32 @@ Here's a basic example of how to use the water system simulation:
 ```python
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, Edge
 
-# Create a water system
-water_system = WaterSystem()
+# Initialize system
+system = WaterSystem()
 
 # Create nodes
-supply = SupplyNode("Supply1", supply_rate=10)
-reservoir = StorageNode("Reservoir1", capacity=1000)
-demand1 = DemandNode("Demand1", demand_rate=6)
-demand2 = DemandNode("Demand2", demand_rate=3)
+supply = SupplyNode("Supply1", supply_rates=10, easting=100, northing=100)
+storage = StorageNode("Storage1", capacity=1000, easting=200, northing=100)
+demand = DemandNode("Demand1", demand_rates=8, easting=300, northing=100)
 
-# Add nodes to the system
-for node in [supply, reservoir, demand1, demand2]:
-    water_system.add_node(node)
+# Add nodes
+for node in [supply, storage, demand]:
+    system.add_node(node)
 
-# Create and add edges
-water_system.add_edge(Edge(supply, reservoir, capacity=15))
-water_system.add_edge(Edge(reservoir, demand1, capacity=8))
-water_system.add_edge(Edge(reservoir, demand2, capacity=5))
+# Connect nodes
+system.add_edge(Edge(supply, storage, capacity=15))
+system.add_edge(Edge(storage, demand, capacity=10))
 
 # Run simulation
-water_system.simulate(num_time_steps=12)
+system.simulate(time_steps=12)
 
-# Visualize results
-water_system.visualize()
+# Create visualizer
+vis = WaterSystemVisualizer(system)
+vis.plot_network_layout()
+vis.plot_storage_dynamics()
+vis.print_water_balance_summary()
 ```
 
-## Visualization
-
-The `visualize()` method creates a hierarchical layout of the water system:
-- Supply nodes are shown in blue
-- Storage nodes in green
-- Demand nodes in red
-- Other node types in gray
-- Edges are labeled with their flow values
-
-## Future Developments
-
-1. Implement more complex node behaviors (e.g., time-varying supply/demand)
-2. Add water quality modeling capabilities
-3. Incorporate optimization algorithms for water allocation
-4. Develop a user interface for easier system configuration
-5. Implement data import/export features for integration with other tools
-6. Add support for stochastic simulations to model uncertainty
 
 ## Contributing
 

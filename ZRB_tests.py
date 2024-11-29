@@ -64,7 +64,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     release_params_akdarya = {
         'h1': 486.0,
         'h2': 496.0,
-        'w': 5.0,
+        'w': 10.0,
         'm1': 1.5,
         'm2': 1.5,
     }
@@ -159,99 +159,44 @@ def save_water_balance_to_csv(water_system, filename):
     balance_table.to_csv(filename, index=False)
     print(f"Water balance table saved to {filename}")
 
-def plot_water_balance_time_series(water_system, filename):
-    """
-    Create and save a single plot for the entire water system with dual y-axes.
-    
-    Args:
-    water_system (WaterSystem): The water system to plot.
-    filename (str): The name of the PNG file to save to.
-    """
-    balance_table = water_system.get_water_balance()
-
-    
-    columns_to_plot = [col for col in balance_table.columns if col != 'time_step']
-
-    fig, ax1 = plt.subplots(figsize=(12, 8))
-
-    plt.title('Water System Simulation Results')
-
-    colors = list(mcolors.TABLEAU_COLORS.values())  # Use predefined Tableau colors
-    line_styles = ['-', '--', ':', '-.']
-
-    color_index = 0
-    for column in columns_to_plot:
-        if column == 'time_step' or column == 'storage_start' or column == 'storage_end' or column == 'demands':
-            continue
-
-        color = colors[color_index % len(colors)]
-        line_style = line_styles[color_index % len(line_styles)]
-        color_index += 1
-
-        # Plot other columns on the left y-axis
-        ax1.plot(balance_table['time_step'], balance_table[column], 
-        color=color, linestyle=line_style, label=column)
-
-    ax1.set_xlabel('Time Step')
-    ax1.set_ylabel('Volume (m³)')
-
-    # Combine legends from both axes
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    ax1.legend(lines1, labels1, bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    plt.tight_layout()
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Water system plot saved to {filename}")
-
 def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
 
-    # Test: Super Simple System. This is a simple linear system with one source, one demand site, and one sink
+    # Definition of simulation period
     start_year = 2017
     start_month = 1
-    num_time_steps = 12 * 3  # 5 years of monthly data
+    num_time_steps = 12 * 3  # 3 years of monthly data
     ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
-    print("ZRB system test:")
+
+    print("ZRB system simulation:")
     ZRB_system.simulate(num_time_steps)
     print("Simulation complete")
     
-    print('ZRB system test: Visualizing the system')
+    print('ZRB system visualization:')
+    save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
     vis_ZRB.print_water_balance_summary()
-    vis_ZRB.plot_storage_spills()
     vis_ZRB.plot_reservoir_dynamics()
+    vis_ZRB.plot_network_layout()
 
     # Get the storage node from the system's graph
     storage_node = ZRB_system.graph.nodes['RES-Akdarya']['node']
     vis_ZRB.plot_release_function(storage_node)
     storage_node = ZRB_system.graph.nodes['RES-Kattakurgan']['node']
     vis_ZRB.plot_release_function(storage_node)
-    vis_ZRB.plot_network_layout()
-    """
+    
     vis_ZRB.plot_demand_deficit_heatmap()
-    vis_ZRB.plot_demand_satisfaction()
-    vis_ZRB.plot_storage_spills()
-    vis_ZRB.plot_edge_flows()
-    vis_ZRB.plot_edge_flow_summary()
+    vis_ZRB.plot_storage_dynamics()
     vis_ZRB.plot_network_layout()
-    vis_ZRB.plot_water_balance()
-    
-    print('ZRB system test: Visualization finished')
-    
 
     html_file = vis_ZRB.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    """
+
     print("Visualizations complete")
-    
-    plot_water_balance_time_series(ZRB_system, "ts_plot_ZRB_system.png")
-    save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
-    
+
 # Run the sample tests
 if __name__ == "__main__":
   run_sample_tests()
   
- 

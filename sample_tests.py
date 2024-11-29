@@ -30,18 +30,18 @@ def debug_hydroworks_flow():
 
     return system
 
-def create_complex_system():
+def create_complex_system(num_time_steps):
     """
     Creates a more complex water system with multiple supplies, storages, and demands.
     """
     dt = 30.44 * 24 * 3600 # Average month in seconds
     start_year=2017
     start_month=1
-    num_time_steps = 36 # 3 years of monthly data
+    num_time_steps = num_time_steps
     system = WaterSystem(dt)
 
-    supply1 = SupplyNode("MountainSupply", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=3.5)
-    supply2 = SupplyNode("ValleySupply", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=2.5)
+    supply1 = SupplyNode("MountainSupply", supply_rates=generate_seasonal_supply(num_time_steps), easting=1, northing=3)
+
     
     reservoir1 = StorageNode("MountainReservoir", hva_file='./data/Akdarya_H_V_A.csv', easting=2, northing=2, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
                              start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
@@ -59,13 +59,12 @@ def create_complex_system():
     industry = DemandNode("IndustrialPark", demand_rates=10, easting=3, northing=3)
     sink = SinkNode("RiverMouth", easting=4, northing=3)
 
-    nodes = [supply1,supply2, hydrowork1, hydrowork2, hydrowork3, reservoir1, reservoir2, agriculture1, agriculture2, 
+    nodes = [supply1, hydrowork1, hydrowork2, hydrowork3, reservoir1, reservoir2, agriculture1, agriculture2, 
             urban1, urban2, industry, sink]
     for node in nodes:
         system.add_node(node)
 
     system.add_edge(Edge(supply1, hydrowork1, capacity=200))
-    system.add_edge(Edge(supply2, hydrowork1, capacity=200))
     system.add_edge(Edge(hydrowork1, reservoir1, capacity=40))
     system.add_edge(Edge(hydrowork1, reservoir2, capacity=100))
     system.add_edge(Edge(reservoir1, hydrowork2, capacity=40))
@@ -83,7 +82,7 @@ def create_complex_system():
 
     return system
 
-def create_seasonal_reservoir_system():
+def create_seasonal_reservoir_system(num_time_steps):
     """
     Creates a test water system with a seasonal supply, a large reservoir,
     a seasonal demand, and a sink node. The system runs for 10 years with monthly time steps.
@@ -93,7 +92,7 @@ def create_seasonal_reservoir_system():
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    num_time_steps = 12 * 5  # 10 years of monthly data
+    num_time_steps = num_time_steps
     system = WaterSystem(dt=dt)
     start_year=2017
     start_month=1
@@ -131,52 +130,6 @@ def save_water_balance_to_csv(water_system, filename):
     balance_table = water_system.get_water_balance()
     balance_table.to_csv(filename, index=False)
     print(f"Water balance table saved to {filename}")
-
-def plot_water_balance_time_series(water_system, filename):
-    """
-    Create and save a single plot for the entire water system with dual y-axes.
-    
-    Args:
-    water_system (WaterSystem): The water system to plot.
-    filename (str): The name of the PNG file to save to.
-    columns_to_plot (list): Optional list of column names to plot. If None, all columns are plotted.
-    """
-    balance_table = water_system.get_water_balance()
-
-    
-    columns_to_plot = [col for col in balance_table.columns if col != 'time_step']
-
-    fig, ax1 = plt.subplots(figsize=(12, 8))
-
-    plt.title('Water System Simulation Results')
-
-    colors = list(mcolors.TABLEAU_COLORS.values())  # Use predefined Tableau colors
-    line_styles = ['-', '--', ':', '-.']
-
-    color_index = 0
-    for column in columns_to_plot:
-        if column == 'time_step' or column == 'storage_start' or column == 'storage_end' or column == 'demands':
-            continue
-
-        color = colors[color_index % len(colors)]
-        line_style = line_styles[color_index % len(line_styles)]
-        color_index += 1
-
-        # Plot other columns on the left y-axis
-        ax1.plot(balance_table['time_step'], balance_table[column], 
-        color=color, linestyle=line_style, label=column)
-
-    ax1.set_xlabel('Time Step')
-    ax1.set_ylabel('Volume (m³)')
-
-    # Combine legends from both axes
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    ax1.legend(lines1, labels1, bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    plt.tight_layout()
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Water system plot saved to {filename}")
 
 def generate_seasonal_supply(num_time_steps):
     """
@@ -221,44 +174,43 @@ def generate_seasonal_demand(num_time_steps):
 def run_sample_tests():
 
     print("\n" + "="*50 + "\n")
-    
-    # Test: Complex System. This is a complex system to test many to many connections.
-    complex_system = create_complex_system()
-    print("Complex System Test:")
+    # Simulation time steps
     num_time_steps = 36
+
+    # Test: Complex System. This is a complex system to test many to many connections.
+    complex_system = create_complex_system(num_time_steps)
+    print("Complex System Test:")
     complex_system.simulate(num_time_steps)
-    plot_water_balance_time_series(complex_system, "ts_plot_complex_system.png")
     save_water_balance_to_csv(complex_system, "balance_table_complex_system.csv")
-    vis=WaterSystemVisualizer(complex_system, 'complex')
+
+    # Visualize the system
+    print("Complex System visualization:")
+    vis=WaterSystemVisualizer(complex_system, 'complex system')
     vis.plot_network_layout()
     vis.plot_demand_deficit_heatmap()
-    vis.plot_demand_satisfaction()
     vis.print_water_balance_summary()
-    vis.plot_edge_flow_summary()
-    vis.plot_storage_spills()
+
 
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
     
     print("\n" + "="*50 + "\n")
-
     # Test: Seasonal Reservoir. Fully seasonal system.
-    seasonal_system = create_seasonal_reservoir_system()
-    num_time_steps = 2*12  # 2 years of monthly data
-
+    seasonal_system = create_seasonal_reservoir_system(num_time_steps)
     print("Running Seasonal Reservoir Test")
-
     seasonal_system.simulate(num_time_steps)
+    
     # Generate water balance table
     balance_table = seasonal_system.get_water_balance()
     balance_table.to_csv("balance_table_seasonal_reservoir_system.csv", index=False)
     print("\nWater balance table saved to 'balance_table_seasonal_reservoir_system.csv'")
 
     # Visualize the system
-    plot_water_balance_time_series(seasonal_system, "ts_plot_seasonal_reservoir_system.png")
-    print("System layout visualization saved to 'seasonal_reservoir_test_layout.png'")
+    print("Seasonal Reservoir visualization:")
     vis=WaterSystemVisualizer(seasonal_system, 'seasonal_reservoir')
+    vis.plot_network_layout()
+    vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
 
     html_file=vis.create_interactive_network_visualization()
