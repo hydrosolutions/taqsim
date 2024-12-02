@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import webbrowser
 import os
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, ReleaseOptimizer, GeneticReleaseOptimizer
 
 def create_test_system(num_time_steps):
     """
@@ -24,11 +24,11 @@ def create_test_system(num_time_steps):
 
     # Define reservoir release parameters
     release_params = {
-        'h1': 500.0, 
-        'h2': 509.0,
-        'w' : 30,
-        'm1': 1.5,
-        'm2': 1.5
+        'h1': 502.565,
+        'h2': 505.925,
+        'w' : 12.806,
+        'm1': 1.122,
+        'm2': 0.615
     }
 
     # Create nodes
@@ -142,7 +142,58 @@ def run_sample_tests():
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')   
     """
-    
+
+def run_optimization():
+
+    # Create optimizer with larger population and more generations
+    optimizer = GeneticReleaseOptimizer(
+        create_test_system,
+        num_time_steps=12,
+        population_size=100  # Increased population size
+    )
+
+    # Run optimization
+    results = optimizer.optimize(ngen=100)  # More generations
+
+    # Print results
+    print("\nOptimization Results:")
+    print("-" * 50)
+    print(f"Success: {results['success']}")
+    print(f"Message: {results['message']}")
+    print(f"Population size: {results['population_size']}")
+    print(f"Generations: {results['generations']}")
+    print(f"Final objective value: {results['objective_value']:,.0f} m³")
+    print("\nOptimal Parameters:")
+    for param, value in results['optimal_parameters'].items():
+        print(f"{param}: {value:.3f}")
+
+    # Plot convergence
+    optimizer.plot_convergence()
+    """
+    # Create optimizer instance
+    optimizer = ReleaseOptimizer(create_test_system, num_time_steps=12)
+
+    # Run optimization
+    results = optimizer.optimize()
+
+    # Print results
+    print("\nOptimization Results:")
+    print("-" * 50)
+    print(f"Success: {results['success']}")
+    print(f"Message: {results['message']}")
+    print(f"Iterations: {results['iterations']}")
+    print(f"Final objective value: {results['objective_value']:,.0f} m³")
+    print("\nOptimal Parameters:")
+    for param, value in results['optimal_parameters'].items():
+        print(f"{param}: {value:.3f}")
+
+    if results['best_parameters'] != results['optimal_parameters']:
+        print("\nBest Parameters Found:")
+        for param, value in results['best_parameters'].items():
+            print(f"{param}: {value:.3f}")
+    """
+
 # Run the sample tests
 if __name__ == "__main__":
-  run_sample_tests()
+  #run_sample_tests()
+  run_optimization()
