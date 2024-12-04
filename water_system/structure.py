@@ -862,33 +862,179 @@ class StorageNode(Node):
 
 class HydroWorks(Node):
     """
-    Represents a point where water can be redistributed, combining the functionality
-    of diversion and confluence points.
+    Represents a point where water can be redistributed using fixed distribution parameters.
+    Each outflow edge has a distribution parameter that defines what fraction of incoming flow it receives.
+    All distribution parameters for a HydroWorks node must sum to 1.
+
+    Attributes:
+        id (str): Unique identifier for the node
+        distribution_params (dict): Maps edge IDs to their distribution parameters
     """
+
+    def __init__(self, id, easting=None, northing=None):
+        """
+        Initialize a HydroWorks node with default distribution parameters.
+
+        Args:
+            id (str): Unique identifier for the node
+            easting (float, optional): Easting coordinate
+            northing (float, optional): Northing coordinate
+        """
+        super().__init__(id, easting, northing)
+        self.distribution_params = {}
+
+    def add_outflow(self, edge):
+        """
+        Add an outflow edge to the node and initialize its distribution parameter.
+        Initially distributes flow equally among all edges.
+
+        Args:
+            edge (Edge): The edge to be added as an outflow
+
+        Raises:
+            ValueError: If adding the edge would make total distribution exceed 1
+        """
+        super().add_outflow(edge)
+        
+        # When adding a new edge, redistribute parameters equally among all edges
+        n_edges = len(self.outflow_edges)
+        equal_distribution = 1.0 / n_edges
+        
+        self.distribution_params = {
+            edge_id: equal_distribution for edge_id in self.outflow_edges
+        }
+
+    def set_distribution_parameter(self, node_id, parameter):
+        """
+        Set the distribution parameter for a specific edge.
+
+        Args:
+            node_id (str): ID of the node
+            parameter (float): Distribution parameter value between 0 and 1
+
+        Raises:
+            ValueError: If parameter is invalid or would make total distribution exceed 1
+            KeyError: If node_id is not found in outflow edges
+        """
+        if node_id not in self.outflow_edges:
+            raise KeyError(f"Edge to {node_id} not found in outflow edges")
+        
+        if not 0 <= parameter <= 1:
+            raise ValueError("Distribution parameter must be between 0 and 1")
+        
+        # Calculate what total distribution would be with new parameter
+        total_distribution = parameter
+        for other_id, other_param in self.distribution_params.items():
+            if other_id != node_id:
+                total_distribution += other_param
+        
+        if abs(total_distribution - 1.0) > 1e-10:  # Allow for small floating point errors
+            raise ValueError(
+                f"Total distribution parameters must sum to 1. "
+                f"Setting this parameter would result in total of {total_distribution}"
+            )
+        
+        self.distribution_params[node_id] = parameter
+
+    def set_distribution_parameters(self, parameters):
+        """
+        Set distribution parameters for multiple edges at once.
+
+        Args:
+            parameters (dict): Dictionary mapping edge IDs to distribution parameters
+
+        Raises:
+            ValueError: If parameters are invalid or don't sum to 1
+            KeyError: If any edge ID is not found in outflow edges
+        """
+        # Verify all edges exist
+        for node_id in parameters:
+            if node_id not in self.outflow_edges:
+                raise KeyError(f"Edge to node {node_id} not found in outflow edges")
+        
+        # Verify all parameters are valid
+        for node_id, param in parameters.items():
+            if not 0 <= param <= 1:
+                raise ValueError(f"Distribution parameter for edge  to {node_id} must be between 0 and 1")
+        
+        # Verify parameters for specified edges sum to 1
+        # Also include existing parameters for edges not being updated
+        total = sum(parameters.values()) + sum(
+            self.distribution_params[node_id]
+            for node_id in self.outflow_edges
+            if node_id not in parameters
+        )
+        
+        if abs(total - 1.0) > 1e-10:  # Allow for small floating point errors
+            raise ValueError(f"Distribution parameters must sum to 1. Got {total}")
+        
+        # Update parameters
+        self.distribution_params.update(parameters)
 
     def update(self, time_step, dt):
         """
-        Update the HydroWorks node's state for the given time step.
-
-        This method calculates the total inflow and distributes it among outflow edges
-        based on their capacities.
+        Update the HydroWorks node's state for the given time step using the fixed
+        distribution parameters.
 
         Args:
-            time_step (int): The current time step of the simulation.
-            dt (float): The duration of the time step in seconds.
+            time_step (int): The current time step of the simulation
+            dt (float): The duration of the time step in seconds
+
+        Raises:
+            ValueError: If distribution parameters are not properly set
         """
         try:
-            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
-            total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
-
-            if total_outflow_capacity > 0:
-                for edge in self.outflow_edges.values():
-                    # Distribute water proportionally based on edge capacity
-                    edge_flow = (edge.capacity / total_outflow_capacity) * total_inflow
-                    edge.update(time_step, edge_flow)
-            else:
-                # If there's no outflow capacity, set all outflows to 0
-                for edge in self.outflow_edges.values():
-                    edge.update(time_step, 0)
+            # Calculate total inflow
+            total_inflow = sum(edge.get_edge_outflow(time_step) 
+                             for edge in self.inflow_edges.values())
+            
+            # Verify distribution parameters are properly set
+            if not self.distribution_params:
+                raise ValueError("Distribution parameters not set")
+            
+            total_distribution = sum(self.distribution_params.values())
+            if abs(total_distribution - 1.0) > 1e-10:
+                raise ValueError(f"Distribution parameters sum to {total_distribution}, should be 1")
+            
+            # Distribute flow according to parameters, respecting edge capacities
+            remaining_flow = total_inflow
+            actual_distributions = {}
+            
+            # First pass: allocate flow according to parameters, limited by edge capacities
+            for edge_id, edge in self.outflow_edges.items():
+                target_flow = total_inflow * self.distribution_params[edge_id]
+                actual_flow = min(target_flow, edge.capacity)
+                actual_distributions[edge_id] = actual_flow
+                remaining_flow -= actual_flow
+            
+            # Second pass: if there's remaining flow due to capacity constraints,
+            # redistribute it proportionally among edges that aren't at capacity
+            if remaining_flow > 0:
+                available_edges = {
+                    edge_id: edge
+                    for edge_id, edge in self.outflow_edges.items()
+                    if actual_distributions[edge_id] < edge.capacity
+                }
+                
+                if available_edges:
+                    # Normalize distribution parameters for available edges
+                    total_available_params = sum(
+                        self.distribution_params[edge_id]
+                        for edge_id in available_edges
+                    )
+                    
+                    if total_available_params > 0:
+                        for edge_id, edge in available_edges.items():
+                            normalized_param = self.distribution_params[edge_id] / total_available_params
+                            extra_flow = remaining_flow * normalized_param
+                            actual_distributions[edge_id] += min(
+                                extra_flow,
+                                edge.capacity - actual_distributions[edge_id]
+                            )
+            
+            # Update edges with calculated flows
+            for edge_id, flow in actual_distributions.items():
+                self.outflow_edges[edge_id].update(time_step, flow)
+                
         except Exception as e:
             raise ValueError(f"Failed to update hydroworks node {self.id}: {str(e)}")

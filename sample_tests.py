@@ -57,6 +57,12 @@ def create_test_system(num_time_steps):
     system.add_edge(Edge(demand1, sink, capacity=35))        # 50 m³/s max flow of excess to sink
     system.add_edge(Edge(demand2, sink, capacity=45))        # 50 m³/s max flow of excess to sink
 
+    # Set hydroworks distribution parameters
+    hydrowork.set_distribution_parameters({
+        'Demand1': 0.1,
+        'Demand2': 0.9
+    })
+
     return system
 
 def save_water_balance_to_csv(water_system, filename):
@@ -102,7 +108,7 @@ def generate_seasonal_demand(num_time_steps):
         list: A list of demand rates for each time step.
     """
     base_demand = 20  # m³/s
-    amplitude = 10    # m³/s
+    amplitude = 15    # m³/s
     demand_rates = []
     for t in range(num_time_steps):
         month = t % 12
@@ -136,6 +142,8 @@ def run_sample_tests():
     vis.plot_release_function(storage_node)
     vis.plot_reservoir_dynamics()
     vis.plot_storage_dynamics()
+    vis.plot_edge_flow_summary()
+    vis.plot_edge_flows()
 
     """
     html_file=vis.create_interactive_network_visualization()
