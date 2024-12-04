@@ -1974,3 +1974,99 @@ class WaterSystemVisualizer:
         
         plt.tight_layout()
         return self._save_plot(f"release_function_{storage_node.id}")
+    
+    def plot_hydroworks_flows(self, node_id=None):
+        """
+        Plot inflows and outflows for HydroWorks nodes in the system.
+        
+        Args:
+            node_id (str, optional): Specific HydroWorks node to plot. If None, plots all HydroWorks nodes.
+        """
+        # Find HydroWorks nodes
+        hydroworks_nodes = []
+        if node_id is not None:
+            node_data = self.system.graph.nodes[node_id]
+            if isinstance(node_data['node'], HydroWorks):
+                hydroworks_nodes = [(node_id, node_data['node'])]
+            else:
+                raise ValueError(f"Node {node_id} is not a HydroWorks node")
+        else:
+            hydroworks_nodes = [
+                (node_id, node_data['node']) 
+                for node_id, node_data in self.system.graph.nodes(data=True)
+                if isinstance(node_data['node'], HydroWorks)
+            ]
+        
+        if not hydroworks_nodes:
+            print("No HydroWorks nodes found in the system")
+            return
+        
+        for node_id, node in hydroworks_nodes:
+            # Create figure with two subplots
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), height_ratios=[1, 2])
+            fig.suptitle(f'HydroWorks Node: {node_id} - Flow Distribution', fontsize=14)
+            
+            # Time steps for x-axis
+            time_steps = range(self.system.time_steps)
+            months = [f'Month {(t%12)+1}' for t in time_steps]
+            
+            # Plot 1: Total Inflow
+            total_inflows = []
+            for t in time_steps:
+                inflow = sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+                total_inflows.append(inflow)
+            
+            ax1.plot(months, total_inflows, 'b-', label='Total Inflow', linewidth=2)
+            ax1.set_ylabel('Flow Rate (m³/s)')
+            ax1.set_title('Total Inflow')
+            ax1.grid(True)
+            ax1.legend()
+            
+            # Plot 2: Outflow Distribution
+            outflow_data = {}
+            for edge_id, edge in node.outflow_edges.items():
+                outflow_data[edge_id] = []
+                for t in time_steps:
+                    outflow = edge.get_edge_outflow(t)
+                    outflow_data[edge_id].append(outflow)
+            
+            # Create stacked area plot for outflows
+            ax2.stackplot(months, 
+                        outflow_data.values(),
+                        labels=outflow_data.keys(),
+                        alpha=0.7)
+            
+            # Add target distribution lines
+            if hasattr(node, 'distribution_params'):
+                for edge_id, params in node.distribution_params.items():
+                    target_flows = [inflow * params[t%12] for t, inflow in enumerate(total_inflows)]
+                    ax2.plot(months, target_flows, '--', label=f'{edge_id} Target', alpha=0.7)
+            
+            ax2.set_xlabel('Time Step')
+            ax2.set_ylabel('Flow Rate (m³/s)')
+            ax2.set_title('Outflow Distribution')
+            ax2.grid(True)
+            ax2.legend()
+            
+            # Rotate x-axis labels for better readability
+            for ax in [ax1, ax2]:
+                ax.tick_params(axis='x', rotation=45)
+            
+            # Add summary statistics
+            summary_text = (
+                f"Summary Statistics:\n"
+                f"Average Inflow: {np.mean(total_inflows):.1f} m³/s\n"
+                "Average Outflows:"
+            )
+            for edge_id, flows in outflow_data.items():
+                avg_flow = np.mean(flows)
+                avg_percent = (avg_flow / np.mean(total_inflows)) * 100
+                summary_text += f"\n{edge_id}: {avg_flow:.1f} m³/s ({avg_percent:.1f}%)"
+            
+            plt.figtext(1.02, 0.5, summary_text, fontsize=10, va='center')
+            
+            # Adjust layout to prevent overlap
+            plt.tight_layout()
+            plt.subplots_adjust(right=0.85)
+            
+            return self._save_plot(f"hydroworks_flows_{node_id}")

@@ -924,11 +924,12 @@ class HydroWorks(Node):
         n_edges = len(self.outflow_edges)
         equal_distribution = 1.0 / n_edges
         
+        # Initialize 12 months of equal distribution for each edge
         self.distribution_params = {
-            edge_id: equal_distribution for edge_id in self.outflow_edges
+            edge_id: [equal_distribution] * 12 for edge_id in self.outflow_edges
         }
 
-    def set_distribution_parameter(self, node_id, parameter):
+    def set_distribution_parameter(self, node_id, month, parameter):
         """
         Set the distribution parameter for a specific edge.
 
@@ -943,32 +944,38 @@ class HydroWorks(Node):
         if node_id not in self.outflow_edges:
             raise KeyError(f"Edge to {node_id} not found in outflow edges")
         
+        if not 1 <= month <= 12:
+            raise ValueError("Month must be between 1 and 12")
+        
         if not 0 <= parameter <= 1:
             raise ValueError("Distribution parameter must be between 0 and 1")
         
-        # Calculate what total distribution would be with new parameter
+        # Calculate what total distribution would be with new parameter for this month
+        month_idx = month - 1
         total_distribution = parameter
-        for other_id, other_param in self.distribution_params.items():
+        for other_id, other_params in self.distribution_params.items():
             if other_id != node_id:
-                total_distribution += other_param
+                total_distribution += other_params[month_idx]
         
         if abs(total_distribution - 1.0) > 1e-10:  # Allow for small floating point errors
             raise ValueError(
-                f"Total distribution parameters must sum to 1. "
+                f"Total distribution parameters for month {month} must sum to 1. "
                 f"Setting this parameter would result in total of {total_distribution}"
             )
         
-        self.distribution_params[node_id] = parameter
+        self.distribution_params[node_id][month_idx] = parameter
 
     def set_distribution_parameters(self, parameters):
         """
-        Set distribution parameters for multiple edges at once.
+        Set distribution parameters for multiple edges and all months at once.
 
         Args:
-            parameters (dict): Dictionary mapping edge IDs to distribution parameters
+            parameters (dict): Dictionary mapping edge IDs to either:
+                             - a list of 12 monthly parameters
+                             - a single float (will be applied to all months)
 
         Raises:
-            ValueError: If parameters are invalid or don't sum to 1
+            ValueError: If parameters are invalid or don't sum to 1 for any month
             KeyError: If any edge ID is not found in outflow edges
         """
         # Verify all edges exist
@@ -976,24 +983,38 @@ class HydroWorks(Node):
             if node_id not in self.outflow_edges:
                 raise KeyError(f"Edge to node {node_id} not found in outflow edges")
         
-        # Verify all parameters are valid
-        for node_id, param in parameters.items():
-            if not 0 <= param <= 1:
-                raise ValueError(f"Distribution parameter for edge  to {node_id} must be between 0 and 1")
+        # Create temporary dictionary to store new parameters
+        new_params = {}
         
-        # Verify parameters for specified edges sum to 1
-        # Also include existing parameters for edges not being updated
-        total = sum(parameters.values()) + sum(
-            self.distribution_params[node_id]
-            for node_id in self.outflow_edges
-            if node_id not in parameters
-        )
+        # Process and validate parameters
+        for node_id, params in parameters.items():
+            # Convert single float to list of 12 identical values
+            if isinstance(params, (int, float)):
+                new_params[node_id] = [float(params)] * 12
+            elif len(params) == 12:
+                new_params[node_id] = list(params)
+            else:
+                raise ValueError(f"Parameters for edge to {node_id} must be a single number or list of 12 values")
+            
+            # Verify all parameters are valid
+            if not all(0 <= p <= 1 for p in new_params[node_id]):
+                raise ValueError(f"All distribution parameters for edge to {node_id} must be between 0 and 1")
         
-        if abs(total - 1.0) > 1e-10:  # Allow for small floating point errors
-            raise ValueError(f"Distribution parameters must sum to 1. Got {total}")
+        # Verify parameters sum to 1 for each month
+        for month in range(12):
+            # Include existing parameters for edges not being updated
+            total = sum(new_params[node_id][month] for node_id in new_params)
+            total += sum(
+                self.distribution_params[node_id][month]
+                for node_id in self.outflow_edges
+                if node_id not in new_params
+            )
+            
+            if abs(total - 1.0) > 1e-10:  # Allow for small floating point errors
+                raise ValueError(f"Distribution parameters for month {month+1} must sum to 1. Got {total}")
         
         # Update parameters
-        self.distribution_params.update(parameters)
+        self.distribution_params.update(new_params)
 
     def update(self, time_step, dt):
         """
@@ -1016,9 +1037,17 @@ class HydroWorks(Node):
             if not self.distribution_params:
                 raise ValueError("Distribution parameters not set")
             
-            total_distribution = sum(self.distribution_params.values())
+            # Get current month's parameters (0-11)
+            current_month = time_step % 12
+
+            # Verify month's parameters sum to 1
+            total_distribution = sum(params[current_month] 
+                                  for params in self.distribution_params.values())
             if abs(total_distribution - 1.0) > 1e-10:
-                raise ValueError(f"Distribution parameters sum to {total_distribution}, should be 1")
+                raise ValueError(
+                    f"Distribution parameters for month {current_month + 1} "
+                    f"sum to {total_distribution}, should be 1"
+                )
             
             # Distribute flow according to parameters, respecting edge capacities
             remaining_flow = total_inflow
@@ -1026,7 +1055,7 @@ class HydroWorks(Node):
             
             # First pass: allocate flow according to parameters, limited by edge capacities
             for edge_id, edge in self.outflow_edges.items():
-                target_flow = total_inflow * self.distribution_params[edge_id]
+                target_flow = total_inflow * self.distribution_params[edge_id][current_month]
                 actual_flow = min(target_flow, edge.capacity)
                 actual_distributions[edge_id] = actual_flow
                 remaining_flow -= actual_flow
@@ -1043,13 +1072,13 @@ class HydroWorks(Node):
                 if available_edges:
                     # Normalize distribution parameters for available edges
                     total_available_params = sum(
-                        self.distribution_params[edge_id]
+                        self.distribution_params[edge_id][current_month]
                         for edge_id in available_edges
                     )
                     
                     if total_available_params > 0:
                         for edge_id, edge in available_edges.items():
-                            normalized_param = self.distribution_params[edge_id] / total_available_params
+                            normalized_param = (self.distribution_params[edge_id][current_month] / total_available_params)
                             extra_flow = remaining_flow * normalized_param
                             actual_distributions[edge_id] += min(
                                 extra_flow,

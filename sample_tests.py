@@ -51,15 +51,15 @@ def create_test_system(num_time_steps):
     # Connect nodes with edges
     system.add_edge(Edge(supply, reservoir, capacity=100))  # 100 m³/s max flow from supply to reservoir
     system.add_edge(Edge(reservoir, hydrowork, capacity=80))   # 80 m³/s max flow from reservoir to demand
-    system.add_edge(Edge(hydrowork, demand1, capacity=35))   # 80 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(hydrowork, demand2, capacity=45))   # 80 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(demand1, sink, capacity=35))        # 50 m³/s max flow of excess to sink
-    system.add_edge(Edge(demand2, sink, capacity=45))        # 50 m³/s max flow of excess to sink
+    system.add_edge(Edge(hydrowork, demand1, capacity=50))   # 80 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork, demand2, capacity=50))   # 80 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(demand1, sink, capacity=50))        # 50 m³/s max flow of excess to sink
+    system.add_edge(Edge(demand2, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
-    # Set hydroworks distribution parameters
+    # Set monthly distribution parameters for edges
     hydrowork.set_distribution_parameters({
-        'Demand1': 0.3,
-        'Demand2': 0.7
+        'Demand1': [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.3],
+        'Demand2': [0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.7]
     })
 
     return system
@@ -146,7 +146,7 @@ def run_sample_tests():
     vis.plot_water_balance_debug(storage_node)
     vis.plot_storage_waterbalance(storage_node)
     vis.plot_monthly_waterbalance(storage_node)
-
+    vis.plot_hydroworks_flows()
     
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
