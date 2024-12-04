@@ -52,6 +52,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # Demand Thermal powerplant Navoi (25 m³/s)
     Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
+    Jizzakh = DemandNode("Eski Tuyatortor", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
+    Kashkadarya = DemandNode("Eski Ankhor", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
 
     # Reservoir
     release_params_kattakurgan = {
@@ -77,15 +79,15 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     
     # Sink Nodes
-    sink_tuyatortor = SinkNode("TuyaTortor", easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("EskiAnkhor", easting=272551,northing=4361872)
+    sink_tuyatortor = SinkNode("Jizzakh", easting=376882.3,northing=4411307.9)
+    sink_eskiankhor = SinkNode("Kashkadarya", easting=272551,northing=4361872)
     sink_downstream = SinkNode("Sink-Navoi", easting=153771,northing=4454402)
 
     # Add nodes to the system
     supply_node = [supply]  # List of supply nodes
     reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
     hydroworks = [HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
-    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant]  # List of demand nodes
+    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant, Jizzakh, Kashkadarya]  # List of demand nodes
     sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
 
     # Iterate through each category and add nodes to the system
@@ -99,23 +101,24 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
     system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=125, length=50.1))
     system.add_edge(Edge(Bulungur, Jomboy, capacity=70, length=152.8))
-    system.add_edge(Edge(Bulungur, sink_tuyatortor, capacity=55))
+    system.add_edge(Edge(HW_Ravadhoza, Jizzakh, capacity=55, length=97.7))
+    system.add_edge(Edge(Jizzakh, sink_tuyatortor, capacity=55))
     system.add_edge(Edge(Jomboy, Payariq, capacity=70, length=97.7))
     # Supply for Toyloq, Urgut, Samarqand
     system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80, length=32.6))
     system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125, length=99.0))
+    system.add_edge(Edge(HW_Ravadhoza, Nurobod, capacity=80, length=42.6))
     system.add_edge(Edge(Toyloq, Samarqand, capacity=80, length=42.6))
     system.add_edge(Edge(Urgut, Samarqand, capacity=125))
     system.add_edge(Edge(Samarqand, Pastdargom, capacity=205, length=280.5))
-    system.add_edge(Edge(Pastdargom, Nurobod, capacity=80))
-    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=60))
+    system.add_edge(Edge(Nurobod, Kashkadarya, capacity=80))
+    system.add_edge(Edge(Kashkadarya, sink_eskiankhor, capacity=60))
     system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=205))
     # HW_AkKaraDarya
     system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230, length=64.3))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
     system.add_edge(Edge(Oqdaryo, Payariq, capacity=50))
     system.add_edge(Edge(Payariq, Ishtixon, capacity=100, length=63.0))
-    system.add_edge(Edge(Oqdaryo, Ishtixon, capacity=230))
     system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=230))
     system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=20))
 

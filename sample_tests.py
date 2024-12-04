@@ -54,8 +54,8 @@ def create_test_system(num_time_steps):
     system.add_edge(Edge(reservoir, hydrowork, capacity=80))   # 80 m³/s max flow from reservoir to demand
     system.add_edge(Edge(hydrowork, demand1, capacity=35))   # 80 m³/s max flow from hydrowork to demand
     system.add_edge(Edge(hydrowork, demand2, capacity=45))   # 80 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(demand1, sink, capacity=30))        # 50 m³/s max flow of excess to sink
-    system.add_edge(Edge(demand2, sink, capacity=40))        # 50 m³/s max flow of excess to sink
+    system.add_edge(Edge(demand1, sink, capacity=35))        # 50 m³/s max flow of excess to sink
+    system.add_edge(Edge(demand2, sink, capacity=45))        # 50 m³/s max flow of excess to sink
 
     return system
 
@@ -195,5 +195,5 @@ def run_optimization():
 
 # Run the sample tests
 if __name__ == "__main__":
-  #run_sample_tests()
-  run_optimization()
+  run_sample_tests()
+  #run_optimization()

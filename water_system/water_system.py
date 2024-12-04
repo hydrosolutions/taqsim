@@ -57,6 +57,168 @@ class WaterSystem:
         """
         self.graph.add_edge(edge.source.id, edge.target.id, edge=edge)
 
+    def _check_network(self):
+        """
+        Comprehensive check of network configuration for potential issues.
+        Performs multiple validations on network structure, node configuration,
+        edge properties, and data consistency.
+        
+        Raises:
+            ValueError: If critical network configuration issues are found
+        """
+        print("Checking network configuration...")
+        self._check_network_structure()
+        self._check_node_configuration()
+        self._check_edge_properties()
+        self._check_data_consistency()
+        print("Network configuration check complete. No issues found.")
+
+    def _check_network_structure(self):
+        """Check overall network structure and connectivity."""
+        # Check for empty network
+        if len(self.graph) == 0:
+            raise ValueError("Network is empty. Add nodes and edges before simulation.")
+
+        # Check for isolated nodes
+        if not nx.is_weakly_connected(self.graph):
+            isolated = [n for n in self.graph.nodes() 
+                       if self.graph.in_degree(n) == 0 and self.graph.out_degree(n) == 0]
+            raise ValueError(f"Network contains isolated nodes: {isolated}")
+
+        # Check for cycles
+        try:
+            nx.find_cycle(self.graph)
+            raise ValueError("Network contains cycles. Water system must be acyclic.")
+        except nx.NetworkXNoCycle:
+            pass  # This is what we want - no cycles
+
+        # Check for existence of supply and demand/sink nodes
+        node_types = {type(data['node']) for _, data in self.graph.nodes(data=True)}
+        if SupplyNode not in node_types:
+            raise ValueError("Network must contain at least one SupplyNode")
+        if not any(t in node_types for t in [DemandNode, SinkNode]):
+            raise ValueError("Network must contain at least one DemandNode or SinkNode")
+
+        # Check if all paths lead to demand or sink
+        terminal_nodes = {n for n, data in self.graph.nodes(data=True) 
+                         if isinstance(data['node'], (DemandNode, SinkNode))}
+        for node in self.graph.nodes():
+            if node not in terminal_nodes:
+                paths_exist = any(nx.has_path(self.graph, node, term) 
+                                for term in terminal_nodes)
+                if not paths_exist:
+                    raise ValueError(f"Node {node} has no path to any DemandNode or SinkNode")
+
+    def _check_node_configuration(self):
+        """Check individual node configurations and connections."""
+        for node_id, node_data in self.graph.nodes(data=True):
+            node = node_data['node']
+            in_degree = len(node.inflow_edges)
+            out_degree = len(node.outflow_edges)
+
+            # Check SupplyNode configuration
+            if isinstance(node, SupplyNode):
+                if in_degree > 0:
+                    raise ValueError(f"SupplyNode {node_id} should not have any inflows")
+                if out_degree == 0:
+                    raise ValueError(f"SupplyNode {node_id} must have one outflow")
+
+            # Check SinkNode configuration
+            elif isinstance(node, SinkNode):
+                if out_degree > 0:
+                    raise ValueError(f"SinkNode {node_id} should not have any outflows")
+                if in_degree == 0:
+                    raise ValueError(f"SinkNode {node_id} must have one inflow")
+
+            # Check StorageNode configuration
+            elif isinstance(node, StorageNode):
+                if in_degree == 0:
+                    raise ValueError(f"StorageNode {node_id} must have at least one inflow")
+                if out_degree == 0:
+                    raise ValueError(f"StorageNode {node_id} must have one outflow")
+
+            # Check HydroWorks configuration
+            elif isinstance(node, HydroWorks):
+                if in_degree == 0:
+                    raise ValueError(f"HydroWorks {node_id} must have at least one inflow")
+                if out_degree == 0:
+                    raise ValueError(f"HydroWorks {node_id} must have at least one outflow")
+
+            # Check single outflow constraint for other nodes
+            elif not isinstance(node, (HydroWorks, SinkNode)):
+                if out_degree != 1:
+                    raise ValueError(
+                        f"Node {node_id} has {out_degree} outflows. "
+                        f"All nodes except HydroWorks and SinkNode must have exactly one outflow."
+                    )
+
+            # Check capacity mismatches
+            if not isinstance(node, (StorageNode, SupplyNode, SinkNode)):
+                total_inflow_capacity = sum(edge.capacity for edge in node.inflow_edges.values())
+                total_outflow_capacity = sum(edge.capacity for edge in node.outflow_edges.values())
+                
+                if total_outflow_capacity < total_inflow_capacity:
+                    print(
+                        f"Warning: Node {node_id} has lower outflow capacity ({total_outflow_capacity} m³/s) "
+                        f"than inflow capacity ({total_inflow_capacity} m³/s). "
+                        f"This can lead to undefined water losses and errors in the water balance."
+                    )
+
+    def _check_edge_properties(self):
+        """Check edge properties and connections."""
+        for u, v, edge_data in self.graph.edges(data=True):
+            edge = edge_data['edge']
+            source_node = self.graph.nodes[u]['node']
+            target_node = self.graph.nodes[v]['node']
+
+            # Check edge capacity
+            if edge.capacity <= 0:
+                raise ValueError(f"Edge from {u} to {v} has invalid capacity: {edge.capacity}")
+
+            # Check loss factors
+            if edge.loss_factor < 0 or edge.loss_factor > 1:
+                raise ValueError(
+                    f"Edge from {u} to {v} has invalid loss factor: {edge.loss_factor}"
+                )
+            if edge.loss_factor > 0.5:
+                print(f"Warning: Edge from {u} to {v} has unusually high loss factor: {edge.loss_factor}")
+
+    def _check_data_consistency(self):
+        """Check consistency of node data and time series."""
+        for node_id, node_data in self.graph.nodes(data=True):
+            node = node_data['node']
+
+            # Check SupplyNode data
+            if isinstance(node, SupplyNode):
+                if not node.supply_rates and node.default_supply_rate <= 0:
+                    print(
+                        f"Warning: SupplyNode {node_id} has no supply rates defined "
+                        f"and default rate is {node.default_supply_rate}"
+                    )
+
+            # Check DemandNode data
+            elif isinstance(node, DemandNode):
+                if not node.demand_rates:
+                    raise ValueError(f"DemandNode {node_id} has no demand rates defined")
+
+            # Check StorageNode data
+            elif isinstance(node, StorageNode):
+                # Check HVA relationships
+                if not node.hva_data:
+                    raise ValueError(f"StorageNode {node_id} missing height-volume-area relationship")
+                
+                # Check evaporation data if node has evaporation rates
+                if node.evaporation_rates is not None:
+                    if len(node.evaporation_rates) == 0:
+                        print(f"Warning: StorageNode {node_id} has empty evaporation rates")
+
+                # Check initial storage
+                if node.storage and node.storage[0] > node.capacity:
+                    raise ValueError(
+                        f"StorageNode {node_id} initial storage ({node.storage[0]}) "
+                        f"exceeds capacity ({node.capacity})"
+                    )
+
     def simulate(self, time_steps):
         """
         Run the water system simulation for a specified number of time steps.
@@ -66,6 +228,9 @@ class WaterSystem:
 
         This method updates all nodes and edges in the system for each time step.
         """
+        # Check network configuration before starting simulation
+        self._check_network()
+
         self.time_steps = time_steps
         # Perform a topological sort to determine the correct order for node updates
         sorted_nodes = list(nx.topological_sort(self.graph))
