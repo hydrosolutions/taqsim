@@ -24,11 +24,11 @@ def create_test_system(num_time_steps):
 
     # Define reservoir release parameters
     release_params = {
-        'h1': 502.565,
-        'h2': 505.925,
-        'w' : 12.806,
-        'm1': 1.122,
-        'm2': 0.615
+        'h1': [500, 500, 500, 501, 501, 501, 502, 502, 502, 503, 503, 503],
+        'h2': [507, 507, 507, 508, 508, 508, 509, 509, 509, 510, 510, 510],
+        'w' : [10, 20, 30, 40, 50, 60, 70, 60, 50, 40, 30, 20],
+        'm1': [1.46, 1.47, 1.48, 1.49, 1.5, 1.51,1.52, 1.53, 1.54, 1.55, 1.56, 1.57],
+        'm2': [1.46, 1.47, 1.48, 1.49, 1.5, 1.51,1.52, 1.53, 1.54, 1.55, 1.56, 1.57]
     }
 
     # Create nodes
@@ -39,7 +39,6 @@ def create_test_system(num_time_steps):
     demand1 = DemandNode("Demand1", demand_rates=generate_seasonal_demand(num_time_steps), easting=2000, northing=1200)
     demand2 = DemandNode("Demand2", demand_rates=generate_seasonal_demand(num_time_steps), easting=2000, northing=800)
     sink = SinkNode("RiverMouth", easting=3000, northing=1000)
-
 
     # Add nodes to the system
     system.add_node(supply)
@@ -59,8 +58,8 @@ def create_test_system(num_time_steps):
 
     # Set hydroworks distribution parameters
     hydrowork.set_distribution_parameters({
-        'Demand1': 0.1,
-        'Demand2': 0.9
+        'Demand1': 0.3,
+        'Demand2': 0.7
     })
 
     return system
@@ -139,17 +138,20 @@ def run_sample_tests():
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     storage_node = test_system.graph.nodes['Reservoir']['node']
-    vis.plot_release_function(storage_node)
+    vis.plot_release_function(storage_node, months=[3,4,5,6])
     vis.plot_reservoir_dynamics()
     vis.plot_storage_dynamics()
     vis.plot_edge_flow_summary()
     vis.plot_edge_flows()
+    vis.plot_water_balance_debug(storage_node)
+    vis.plot_storage_waterbalance(storage_node)
+    vis.plot_monthly_waterbalance(storage_node)
 
-    """
+    
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')   
-    """
+    
 
 def run_optimization():
 
