@@ -30,6 +30,13 @@ def create_test_system(num_time_steps):
         'm1': [1.46, 1.47, 1.48, 1.49, 1.5, 1.51,1.52, 1.53, 1.54, 1.55, 1.56, 1.57],
         'm2': [1.46, 1.47, 1.48, 1.49, 1.5, 1.51,1.52, 1.53, 1.54, 1.55, 1.56, 1.57]
     }
+    release_params = {
+        'h1': [502.652]*12,
+        'h2': [506.502]*12,
+        'w' : [48.655]*12,  
+        'm1': [1.486]*12,
+        'm2': [1.509]*12
+    }
 
     # Create nodes
     supply = SupplyNode("Source", supply_rates=generate_seasonal_supply(num_time_steps), easting=0, northing=1000)
@@ -51,8 +58,8 @@ def create_test_system(num_time_steps):
     # Connect nodes with edges
     system.add_edge(Edge(supply, reservoir, capacity=100))  # 100 m³/s max flow from supply to reservoir
     system.add_edge(Edge(reservoir, hydrowork, capacity=80))   # 80 m³/s max flow from reservoir to demand
-    system.add_edge(Edge(hydrowork, demand1, capacity=50))   # 80 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(hydrowork, demand2, capacity=50))   # 80 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork, demand1, capacity=50))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork, demand2, capacity=50))   # 50 m³/s max flow from hydrowork to demand
     system.add_edge(Edge(demand1, sink, capacity=50))        # 50 m³/s max flow of excess to sink
     system.add_edge(Edge(demand2, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
@@ -150,8 +157,7 @@ def run_sample_tests():
     
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')   
-    
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
 def run_optimization():
 
@@ -159,7 +165,7 @@ def run_optimization():
     optimizer = GeneticReleaseOptimizer(
         create_test_system,
         num_time_steps=12,
-        population_size=100  # Increased population size
+        population_size=10  # Increased population size
     )
 
     # Run optimization

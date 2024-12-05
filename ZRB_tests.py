@@ -94,60 +94,63 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     for node in supply_node + demand_node + reservoir + hydroworks + sink_node:
         system.add_node(node)
 
-    # Connect nodes with edges
+    # Add Edges to the system
     system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1350))
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=850))
-   
+
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=125, length=50.1))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=70, length=152.8))
-    system.add_edge(Edge(HW_Ravadhoza, Jizzakh, capacity=55, length=97.7))
-    system.add_edge(Edge(Jizzakh, sink_tuyatortor, capacity=55))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=70, length=97.7))
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=70))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=70))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=70))
+    system.add_edge(Edge(HW_Ravadhoza, Jizzakh, capacity=90))
+    system.add_edge(Edge(Jizzakh, sink_tuyatortor, capacity=90))
+
     # Supply for Toyloq, Urgut, Samarqand
-    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80, length=32.6))
-    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125, length=99.0))
-    system.add_edge(Edge(HW_Ravadhoza, Nurobod, capacity=80, length=42.6))
-    system.add_edge(Edge(Toyloq, Samarqand, capacity=80, length=42.6))
+    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
+    system.add_edge(Edge(Toyloq, Samarqand, capacity=80))
+    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
     system.add_edge(Edge(Urgut, Samarqand, capacity=125))
-    system.add_edge(Edge(Samarqand, Pastdargom, capacity=205, length=280.5))
-    system.add_edge(Edge(Nurobod, Kashkadarya, capacity=80))
-    system.add_edge(Edge(Kashkadarya, sink_eskiankhor, capacity=60))
+    system.add_edge(Edge(Samarqand, Pastdargom, capacity=205))
     system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=205))
+    system.add_edge(Edge(HW_Ravadhoza, Nurobod, capacity=80))
+    system.add_edge(Edge(Nurobod, Kashkadarya, capacity=80))
+    system.add_edge(Edge(Kashkadarya, sink_eskiankhor, capacity=80))
+
     # HW_AkKaraDarya
-    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230, length=64.3))
-    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
-    system.add_edge(Edge(Oqdaryo, Payariq, capacity=50))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=100, length=63.0))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=230))
+    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=310))
+    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=310))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=100))
+    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=100))
     system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=20))
+    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
     # Damkodzha
-    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
+    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=170))
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=20))
     system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
     system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=54, length=159.9))
-    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=94))
-    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=94))
-
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=20))
+    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=55))
+    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=95))
+    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=95))
 
     # HW_Narpay
     system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
-    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80, length=53.3))
+    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80))
+    system.add_edge(Edge(Narpay, Paxtachi, capacity=80))
+    system.add_edge(Edge(Paxtachi, Karmana, capacity=80))
+    system.add_edge(Edge(Karmana, sink_downstream, capacity=80))
     system.add_edge(Edge(HW_Narpay, Kattaqorgon, capacity=40))
-    system.add_edge(Edge(Narpay, Paxtachi, capacity=80, length=78.9))
-    # Downstream
-    system.add_edge(Edge(Paxtachi, Karmana, capacity=800))
-    system.add_edge(Edge(Karmana, sink_downstream  , capacity=80))
-    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=400))
+
+    # HW_Confluence
+    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=500))
 
     # HW_Karmana
     system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
     system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
-    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=300))
+    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=500))
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
+
     return system
 
 def save_water_balance_to_csv(water_system, filename):
@@ -192,6 +195,9 @@ def run_sample_tests():
     vis_ZRB.plot_demand_deficit_heatmap()
     vis_ZRB.plot_storage_dynamics()
     vis_ZRB.plot_network_layout()
+    vis_ZRB.plot_hydroworks_flows()
+    vis_ZRB.plot_edge_flow_summary()
+    vis_ZRB.plot_edge_flows()
 
     html_file = vis_ZRB.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
