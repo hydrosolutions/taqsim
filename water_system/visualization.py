@@ -1975,6 +1975,89 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         return self._save_plot(f"release_function_{storage_node.id}")
     
+    def plot_demand_satisfaction(self):
+        """
+        Create time series plots showing target, satisfied, and unmet demand for all demand nodes.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Find demand nodes in the system
+        demand_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], DemandNode)]
+        
+        if not demand_nodes:
+            print("No demand nodes found in the system.")
+            return None
+            
+        # Create figure with subplots
+        n_nodes = len(demand_nodes)
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
+        
+        # Color scheme
+        colors = {
+            'target': '#2196F3',    # Blue
+            'satisfied': '#4CAF50',  # Green
+            'unmet': '#f44336'      # Red
+        }
+        
+        time_steps = range(self.system.time_steps)
+        
+        # Plot for each demand node
+        for idx, (node_id, node) in enumerate(demand_nodes):
+            ax = axes[idx]
+            
+            # Get demand data
+            target_demands = [node.get_demand_rate(t) for t in time_steps]
+            satisfied_demands = node.satisfied_demand[:len(time_steps)]
+            unmet_demands = [target - satisfied for target, satisfied in 
+                            zip(target_demands, satisfied_demands)]
+            
+            # Plot demands
+            ax.plot(time_steps, target_demands, color=colors['target'], 
+                    label='Target Demand', linewidth=2)
+            ax.plot(time_steps, satisfied_demands, color=colors['satisfied'], 
+                    label='Satisfied Demand', linewidth=2)
+            ax.fill_between(time_steps, satisfied_demands, target_demands, 
+                        color=colors['unmet'], alpha=0.3, 
+                        label='Unmet Demand')
+            
+            # Calculate statistics
+            mean_target = np.mean(target_demands)
+            mean_satisfied = np.mean(satisfied_demands)
+            mean_unmet = np.mean(unmet_demands)
+            satisfaction_rate = (mean_satisfied / mean_target * 100) if mean_target > 0 else 0
+            
+            stats_text = (
+                f"Statistics:\n"
+                f"Mean Target: {mean_target:.2f} m³/s\n"
+                f"Mean Satisfied: {mean_satisfied:.2f} m³/s\n"
+                f"Mean Unmet: {mean_unmet:.2f} m³/s\n"
+                f"Satisfaction Rate: {satisfaction_rate:.1f}%"
+            )
+            
+            # Add stats text box
+            ax.text(0.02, 0.98, stats_text,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize subplot
+            ax.set_title(f'{node_id} Demand Satisfaction')
+            ax.set_ylabel('Flow Rate [m³/s]')
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc='center right')
+            
+            if idx == n_nodes - 1:  # Only add xlabel to bottom subplot
+                ax.set_xlabel('Time Step')
+        
+        plt.tight_layout()
+        return self._save_plot("demand_satisfaction")
+
     def plot_hydroworks_flows(self, node_id=None):
         """
         Plot inflows and outflows for HydroWorks nodes in the system.

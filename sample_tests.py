@@ -24,27 +24,19 @@ def create_test_system(num_time_steps):
 
     # Define reservoir release parameters
     release_params = {
-        'h1': [500, 500, 500, 501, 501, 501, 502, 502, 502, 503, 503, 503],
-        'h2': [507, 507, 507, 508, 508, 508, 509, 509, 509, 510, 510, 510],
-        'w' : [10, 20, 30, 40, 50, 60, 70, 60, 50, 40, 30, 20],
-        'm1': [1.46, 1.47, 1.48, 1.49, 1.5, 1.51,1.52, 1.53, 1.54, 1.55, 1.56, 1.57],
-        'm2': [1.46, 1.47, 1.48, 1.49, 1.5, 1.51,1.52, 1.53, 1.54, 1.55, 1.56, 1.57]
+        'h1': [504.899, 503.459, 501.389, 504.954, 503.371, 503.185, 504.311, 500.305, 500.915, 504.497, 502.594, 503.628],
+        'h2': [507.215, 507.855, 506.230, 508.566, 508.976, 505.482, 506.568, 506.742, 505.111, 508.261, 507.864, 506.210],
+        'w': [15.214, 16.653, 6.254, 14.200, 24.522, 9.554, 66.175, 62.287, 72.130, 45.774, 75.487, 13.462],
+        'm1': [1.511, 1.557, 1.534, 1.560, 1.565, 1.541, 1.524, 1.567, 1.559, 1.514, 1.530, 1.540],
+        'm2': [1.512, 1.553, 1.558, 1.551, 1.529, 1.522, 1.556, 1.515, 1.560, 1.533, 1.539, 1.527]
     }
-    release_params = {
-        'h1': [502.652]*12,
-        'h2': [506.502]*12,
-        'w' : [48.655]*12,  
-        'm1': [1.486]*12,
-        'm2': [1.509]*12
-    }
-
     # Create nodes
     supply = SupplyNode("Source", supply_rates=generate_seasonal_supply(num_time_steps), easting=0, northing=1000)
     reservoir = StorageNode("Reservoir", hva_file='./data/Kattakurgan_H_V_A.csv', initial_storage=2e8, easting=500, northing=1000, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
                              start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, release_params=release_params)
     hydrowork = HydroWorks("Hydroworks", easting=1000, northing=1000)
-    demand1 = DemandNode("Demand1", demand_rates=generate_seasonal_demand(num_time_steps), easting=2000, northing=1200)
-    demand2 = DemandNode("Demand2", demand_rates=generate_seasonal_demand(num_time_steps), easting=2000, northing=800)
+    demand1 = DemandNode("Demand1", easting=2000, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Kattaqorgon_17to22.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5)
+    demand2 = DemandNode("Demand2", easting=2000, northing=800, csv_file='./data/ETblue/monthly_ETblue_Pastdargom_17to22.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5)
     sink = SinkNode("RiverMouth", easting=3000, northing=1000)
 
     # Add nodes to the system
@@ -65,10 +57,9 @@ def create_test_system(num_time_steps):
 
     # Set monthly distribution parameters for edges
     hydrowork.set_distribution_parameters({
-        'Demand1': [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.3],
-        'Demand2': [0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.7]
+        'Demand1': [0.874, 0.890, 0.356, 0.485, 0.392, 0.581, 0.370, 0.493, 0.308, 0.953, 0.847, 0.942],
+        'Demand2': [0.126, 0.110, 0.644, 0.515, 0.608, 0.419, 0.630, 0.507, 0.692, 0.047, 0.153, 0.058]
     })
-
     return system
 
 def save_water_balance_to_csv(water_system, filename):
@@ -93,8 +84,8 @@ def generate_seasonal_supply(num_time_steps):
     Returns:
         list: A list of supply rates for each time step.
     """
-    base_supply = 60  # m³/s
-    amplitude = 40    # m³/s
+    base_supply = 20  # m³/s
+    amplitude = 15    # m³/s
     supply_rates = []
     for t in range(num_time_steps):
         month = t % 12
@@ -125,7 +116,7 @@ def generate_seasonal_demand(num_time_steps):
 
 def run_sample_tests():
 
-    num_time_steps = 12  # 1 year with monthly time steps
+    num_time_steps = 12*3  # 1 year with monthly time steps
 
     print("\n" + "="*50 + "\n")
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -152,26 +143,23 @@ def run_sample_tests():
     vis.plot_edge_flows()
     vis.plot_water_balance_debug(storage_node)
     vis.plot_storage_waterbalance(storage_node)
-    vis.plot_monthly_waterbalance(storage_node)
+    #vis.plot_monthly_waterbalance(storage_node)
     vis.plot_hydroworks_flows()
+    vis.plot_demand_satisfaction()
     
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
 def run_optimization():
-
-    # Create optimizer with larger population and more generations
     optimizer = GeneticReleaseOptimizer(
         create_test_system,
-        num_time_steps=12,
-        population_size=10  # Increased population size
+        num_time_steps=12*3,
+        population_size=20
     )
 
-    # Run optimization
-    results = optimizer.optimize(ngen=100)  # More generations
+    results = optimizer.optimize(ngen=100)
 
-    # Print results
     print("\nOptimization Results:")
     print("-" * 50)
     print(f"Success: {results['success']}")
@@ -179,35 +167,18 @@ def run_optimization():
     print(f"Population size: {results['population_size']}")
     print(f"Generations: {results['generations']}")
     print(f"Final objective value: {results['objective_value']:,.0f} m³")
-    print("\nOptimal Parameters:")
-    for param, value in results['optimal_parameters'].items():
-        print(f"{param}: {value:.3f}")
+    
+    print("\nOptimal Release Parameters:")
+    for param, values in results['optimal_parameters'].items():
+        print(f"{param}: ", end="")
+        print([f"{v:.3f}" for v in values])
+        
+    print("\nOptimal Distribution Parameters:")
+    for demand, values in results['optimal_distribution'].items():
+        print(f"{demand}: ", end="")
+        print([f"{v:.3f}" for v in values])
 
-    # Plot convergence
     optimizer.plot_convergence()
-    """
-    # Create optimizer instance
-    optimizer = ReleaseOptimizer(create_test_system, num_time_steps=12)
-
-    # Run optimization
-    results = optimizer.optimize()
-
-    # Print results
-    print("\nOptimization Results:")
-    print("-" * 50)
-    print(f"Success: {results['success']}")
-    print(f"Message: {results['message']}")
-    print(f"Iterations: {results['iterations']}")
-    print(f"Final objective value: {results['objective_value']:,.0f} m³")
-    print("\nOptimal Parameters:")
-    for param, value in results['optimal_parameters'].items():
-        print(f"{param}: {value:.3f}")
-
-    if results['best_parameters'] != results['optimal_parameters']:
-        print("\nBest Parameters Found:")
-        for param, value in results['best_parameters'].items():
-            print(f"{param}: {value:.3f}")
-    """
 
 # Run the sample tests
 if __name__ == "__main__":

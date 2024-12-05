@@ -66,12 +66,12 @@ class WaterSystem:
         Raises:
             ValueError: If critical network configuration issues are found
         """
-        print("Checking network configuration...")
+        #print("Checking network configuration...")
         self._check_network_structure()
         self._check_node_configuration()
         self._check_edge_properties()
         self._check_data_consistency()
-        print("Network configuration check complete. No issues found.")
+        #print("Network configuration check complete. No issues found.")
 
     def _check_network_structure(self):
         """Check overall network structure and connectivity."""
