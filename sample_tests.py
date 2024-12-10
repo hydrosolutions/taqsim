@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import webbrowser
 import os
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, ReleaseOptimizer, GeneticReleaseOptimizer
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer, GeneticReleaseOptimizer
 
-def create_test_system(num_time_steps):
+def create_test_system(start_year, start_month, num_time_steps):
     """
     Creates a test water system with a seasonal supply, a large reservoir,
     a seasonal demand, and a sink node. The system runs for 10 years with monthly time steps.
@@ -19,8 +19,8 @@ def create_test_system(num_time_steps):
     dt = 30.44 * 24 * 3600  # Average month in seconds
     num_time_steps = num_time_steps
     system = WaterSystem(dt=dt)
-    start_year=2017
-    start_month=1
+    start_year=start_year
+    start_month=start_month
 
     # Define reservoir release parameters
     release_params = {
@@ -117,10 +117,12 @@ def generate_seasonal_demand(num_time_steps):
 def run_sample_tests():
 
     num_time_steps = 12*3  # 1 year with monthly time steps
+    start_year=2017
+    start_month=1
 
     print("\n" + "="*50 + "\n")
     # Test: Seasonal Reservoir. Fully seasonal system.
-    test_system = create_test_system(num_time_steps)
+    test_system = create_test_system(start_year, start_month, num_time_steps)
     print("Running test system")
     test_system.simulate(num_time_steps)
     
@@ -152,9 +154,9 @@ def run_sample_tests():
     webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
 def run_optimization():
-    optimizer = GeneticReleaseOptimizer(
+    optimizer = MultiGeneticOptimizer(
         create_test_system,
-        num_time_steps=12*3,
+        num_time_steps=12,
         population_size=20
     )
 
@@ -168,15 +170,19 @@ def run_optimization():
     print(f"Generations: {results['generations']}")
     print(f"Final objective value: {results['objective_value']:,.0f} m³")
     
-    print("\nOptimal Release Parameters:")
-    for param, values in results['optimal_parameters'].items():
-        print(f"{param}: ", end="")
-        print([f"{v:.3f}" for v in values])
+    print("\nOptimal Reservoir Parameters:")
+    for res_id, params in results['optimal_reservoir_parameters'].items():
+        print(f"\n{res_id}:")
+        for param, values in params.items():
+            print(f"{param}: ", end="")
+            print([f"{v:.3f}" for v in values])
         
-    print("\nOptimal Distribution Parameters:")
-    for demand, values in results['optimal_distribution'].items():
-        print(f"{demand}: ", end="")
-        print([f"{v:.3f}" for v in values])
+    print("\nOptimal Hydroworks Parameters:")
+    for hw_id, params in results['optimal_hydroworks_parameters'].items():
+        print(f"\n{hw_id}:")
+        for target, values in params.items():
+            print(f"{target}: ", end="")
+            print([f"{v:.3f}" for v in values])
 
     optimizer.plot_convergence()
 
