@@ -50,15 +50,15 @@ def create_test_system(num_time_steps):
     # Connect nodes with edges
     system.add_edge(Edge(supply, reservoir, capacity=100))  # 100 m³/s max flow from supply to reservoir
     system.add_edge(Edge(reservoir, hydrowork, capacity=80))   # 80 m³/s max flow from reservoir to demand
-    system.add_edge(Edge(hydrowork, demand1, capacity=10))   # 50 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(hydrowork, demand2, capacity=50))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork, demand1, capacity=20))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork, demand2, capacity=20))   # 50 m³/s max flow from hydrowork to demand
     system.add_edge(Edge(demand1, sink, capacity=50))        # 50 m³/s max flow of excess to sink
     system.add_edge(Edge(demand2, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
     # Set monthly distribution parameters for edges
     hydrowork.set_distribution_parameters({
-        'Demand1': [0.874, 0.890, 0.356, 0.485, 0.392, 0.581, 0.370, 0.493, 0.308, 0.953, 0.847, 0.942],
-        'Demand2': [0.126, 0.110, 0.644, 0.515, 0.608, 0.419, 0.630, 0.507, 0.692, 0.047, 0.153, 0.058]
+        'Demand1': [0.5]*12,
+        'Demand2': [0.5]*12
     })
     return system
 

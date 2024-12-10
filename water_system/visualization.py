@@ -564,6 +564,7 @@ class WaterSystemVisualizer:
             'Edge Losses': 'edge losses',
             'Res Spills': 'reservoir spills',
             'Res ET Losses': 'reservoir ET losses',
+            'HW Spills': 'hydroworks spills'
         }
         
         for label, comp in components.items():
@@ -614,8 +615,9 @@ class WaterSystemVisualizer:
             'Supplied': 'supplied demand',
             'Sink': 'sink',
             'Losses': 'edge losses',
-            'Spills': 'reservoir spills',
-            'Res ET': 'reservoir ET losses'
+            'Res Spills': 'reservoir spills',
+            'Res ET': 'reservoir ET losses',
+            'HW Spills': 'hydroworks spills'
         }
         
         for label, comp in components.items():
@@ -626,7 +628,7 @@ class WaterSystemVisualizer:
         # Conservation check
         print_section("Conservation Check")
         total_in = total_source
-        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 'reservoir ET losses'])
+        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 'reservoir ET losses', 'hydroworks spills'])
         total_stored = total_storage_change
         
         print(f"Total in:          {total_in:15,.0f} m³")
@@ -2139,6 +2141,7 @@ class WaterSystemVisualizer:
             summary_text = (
                 f"Summary Statistics:\n"
                 f"Average Inflow: {np.mean(total_inflows):.1f} m³/s\n"
+                f"Total Spill Volume: {sum(node.spill_register):.1f} m³\n"
                 "Average Outflows:"
             )
             for edge_id, flows in outflow_data.items():

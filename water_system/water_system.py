@@ -269,8 +269,9 @@ class WaterSystem:
                 'storage_start': 0.0, # Storage at start of timestep
                 'storage_end': 0.0,  # Storage at end of timestep
                 'storage_change': 0.0,  # Change in storage (current - previous)
-                'reservoir spills': 0.0,    # Reservoir spills
                 'reservoir ET losses': 0.0,    # Reservoir evaporation losses
+                'reservoir spills': 0.0,    # Reservoir spills
+                'hydroworks spills': 0.0,  # Add hydroworks spills
                 'source': 0.0,    # Supply node contributions
                 'sink': 0.0,   # Sink node outflows
                 'edge losses': 0.0,    # Edge losses
@@ -317,7 +318,11 @@ class WaterSystem:
                     # Add spills
                     if t < len(node.spillway_register):
                         volumes['reservoir spills'] += node.spillway_register[t]
-                        
+                
+                elif isinstance(node, HydroWorks):
+                    if t < len(node.spill_register):
+                        volumes['hydroworks spills'] += node.spill_register[t]
+                
                 elif isinstance(node, SinkNode):
                     for edge in node.inflow_edges.values():
                         outflow_rate = edge.get_edge_outflow(t)
@@ -338,6 +343,7 @@ class WaterSystem:
                 - volumes['edge losses']
                 - volumes['reservoir spills']
                 - volumes['reservoir ET losses']
+                - volumes['hydroworks spills']
                 - volumes['storage_change']
             )
             

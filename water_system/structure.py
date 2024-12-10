@@ -906,6 +906,7 @@ class HydroWorks(Node):
         """
         super().__init__(id, easting, northing)
         self.distribution_params = {}
+        self.spill_register = []  # Add spill register list
 
     def add_outflow(self, edge):
         """
@@ -1078,12 +1079,20 @@ class HydroWorks(Node):
                     
                     if total_available_params > 0:
                         for edge_id, edge in available_edges.items():
-                            normalized_param = (self.distribution_params[edge_id][current_month] / total_available_params)
+                            normalized_param = (self.distribution_params[edge_id][current_month] 
+                                             / total_available_params)
                             extra_flow = remaining_flow * normalized_param
                             actual_distributions[edge_id] += min(
                                 extra_flow,
                                 edge.capacity - actual_distributions[edge_id]
                             )
+                            remaining_flow -= min(
+                                extra_flow,
+                                edge.capacity - actual_distributions[edge_id]
+                            )
+            
+            # Record spill (any remaining flow that couldn't be distributed)
+            self.spill_register.append(remaining_flow * dt)
             
             # Update edges with calculated flows
             for edge_id, flow in actual_distributions.items():
