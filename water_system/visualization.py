@@ -2060,7 +2060,6 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         return self._save_plot("demand_satisfaction")
 
-    def plot_hydroworks_flows(self, node_id=None):
         """
         Plot inflows and outflows for HydroWorks nodes in the system.
         

@@ -27,6 +27,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     HW_Narpay = HydroWorks("HW-Narpay", easting=270403.55,northing=4424501.92)
     HW_Confluence=HydroWorks("HW-Confluence", easting=239889.6,northing=4433214.0)
     HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
+    HW_EskiAnkhor=HydroWorks("HW-EskiAnkhor", easting=315015,northing=4390976)
+    HW_PC22=HydroWorks("HW-PC22", easting=362679.7,northing=4379566.2)
     
     # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,utm_easting,utm_northing,longitude,latitude,csv_path)
     Demand_info = pd.read_csv('./data/DemandNode_Info.csv', sep=',')
@@ -52,8 +54,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # Demand Thermal powerplant Navoi (25 m³/s)
     Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
-    Jizzakh = DemandNode("Eski Tuyatortor", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
-    Kashkadarya = DemandNode("Eski Ankhor", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
+    Jizzakh = DemandNode("Jizzakh", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
+    Kashkadarya = DemandNode("Kashkadarya", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
 
     # Reservoir
     release_params_kattakurgan = {
@@ -76,17 +78,16 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=6e7, 
                               evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya)
-
     
     # Sink Nodes
-    sink_tuyatortor = SinkNode("Jizzakh", easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("Kashkadarya", easting=272551,northing=4361872)
+    sink_tuyatortor = SinkNode("Sink-Jizzakh", easting=376882.3,northing=4411307.9)
+    sink_eskiankhor = SinkNode("Sink-Kashkadarya", easting=272551,northing=4361872)
     sink_downstream = SinkNode("Sink-Navoi", easting=153771,northing=4454402)
 
     # Add nodes to the system
     supply_node = [supply]  # List of supply nodes
     reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
-    hydroworks = [HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
+    hydroworks = [HW_PC22,HW_EskiAnkhor, HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
     demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant, Jizzakh, Kashkadarya]  # List of demand nodes
     sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
 
@@ -96,37 +97,40 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # Add Edges to the system
     system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1350))
-    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=850))
+    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
 
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=70))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=70))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=70))
-    system.add_edge(Edge(HW_Ravadhoza, Jizzakh, capacity=90))
-    system.add_edge(Edge(Jizzakh, sink_tuyatortor, capacity=90))
+    system.add_edge(Edge(HW_Ravadhoza, HW_PC22, capacity=125))
+    system.add_edge(Edge(HW_PC22, Bulungur, capacity=65))
+    system.add_edge(Edge(HW_PC22, Jomboy, capacity=50))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=65))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=115))
+    system.add_edge(Edge(HW_PC22, Jizzakh, capacity=65))
+    system.add_edge(Edge(Jizzakh, sink_tuyatortor, capacity=65))
 
     # Supply for Toyloq, Urgut, Samarqand
     system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
     system.add_edge(Edge(Toyloq, Samarqand, capacity=80))
     system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
     system.add_edge(Edge(Urgut, Samarqand, capacity=125))
-    system.add_edge(Edge(Samarqand, Pastdargom, capacity=205))
-    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=205))
-    system.add_edge(Edge(HW_Ravadhoza, Nurobod, capacity=80))
+    system.add_edge(Edge(Samarqand, HW_EskiAnkhor, capacity=205))
+    system.add_edge(Edge(HW_EskiAnkhor, Pastdargom, capacity=125))
+    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=125))
+    system.add_edge(Edge(HW_EskiAnkhor, Nurobod, capacity=80))
     system.add_edge(Edge(Nurobod, Kashkadarya, capacity=80))
     system.add_edge(Edge(Kashkadarya, sink_eskiankhor, capacity=80))
 
     # HW_AkKaraDarya
-    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=310))
-    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=310))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=100))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=100))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=20))
+    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=300))
+    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=300))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=115))
+    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=115))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=55))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
     # Damkodzha
-    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=170))
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=20))
+    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=65))
     system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
     system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
     system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=55))
@@ -195,7 +199,6 @@ def run_sample_tests():
     vis_ZRB.plot_demand_deficit_heatmap()
     vis_ZRB.plot_storage_dynamics()
     vis_ZRB.plot_network_layout()
-    vis_ZRB.plot_hydroworks_flows()
     vis_ZRB.plot_edge_flow_summary()
     vis_ZRB.plot_edge_flows()
 
