@@ -136,7 +136,7 @@ class GeneticReleaseOptimizer:
             return (total_deficit,)  # Return as tuple for DEAP
             
         except Exception as e:
-            print(f"Error evaluating individual: {str(e)}")
+            print(f"Error evaluating individual: Individual NOT fit: ({str(e)})")
             return (float('inf'),)  # Penalize invalid solutions
     
     def _mutate_individual(self, individual, indpb=0.1):
@@ -164,7 +164,7 @@ class GeneticReleaseOptimizer:
                     
         return individual,
     
-    def optimize(self, ngen=50, cxpb=0.7, mutpb=0.2):
+    def optimize(self, ngen=50, cxpb=0.2, mutpb=0.5):
         """Run genetic algorithm optimization"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
