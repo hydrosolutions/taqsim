@@ -572,9 +572,9 @@ class StorageNode(Node):
         release = sum(edge.capacity for edge in self.outflow_edges.values())
         if waterlevel < self.hva_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
             release = w + (waterlevel-h2)* np.tan(m2)
-        if waterlevel <= h2:
+        if waterlevel <= h2 and (w<=sum(edge.capacity for edge in self.outflow_edges.values())):
             release = w
-        if (waterlevel-h1)* np.tan(m1) < w:
+        if (waterlevel-h1)* np.tan(m1) < w and (waterlevel-h1)* np.tan(m1) < sum(edge.capacity for edge in self.outflow_edges.values()):
             release = (waterlevel-h1)* np.tan(m1)
         if waterlevel < h1:
             release = 0
@@ -1050,53 +1050,27 @@ class HydroWorks(Node):
                     f"sum to {total_distribution}, should be 1"
                 )
             
-            # Distribute flow according to parameters, respecting edge capacities
-            remaining_flow = total_inflow
-            actual_distributions = {}
+            # Track total spill for this time step
+            total_spill = 0
             
-            # First pass: allocate flow according to parameters, limited by edge capacities
+            # Distribute flow according to parameters, recording spills when capacity is exceeded
             for edge_id, edge in self.outflow_edges.items():
+                # Calculate target flow based on distribution parameter
                 target_flow = total_inflow * self.distribution_params[edge_id][current_month]
-                actual_flow = min(target_flow, edge.capacity)
-                actual_distributions[edge_id] = actual_flow
-                remaining_flow -= actual_flow
-            
-            # Second pass: if there's remaining flow due to capacity constraints,
-            # redistribute it proportionally among edges that aren't at capacity
-            if remaining_flow > 0:
-                available_edges = {
-                    edge_id: edge
-                    for edge_id, edge in self.outflow_edges.items()
-                    if actual_distributions[edge_id] < edge.capacity
-                }
                 
-                if available_edges:
-                    # Normalize distribution parameters for available edges
-                    total_available_params = sum(
-                        self.distribution_params[edge_id][current_month]
-                        for edge_id in available_edges
-                    )
-                    
-                    if total_available_params > 0:
-                        for edge_id, edge in available_edges.items():
-                            normalized_param = (self.distribution_params[edge_id][current_month] 
-                                             / total_available_params)
-                            extra_flow = remaining_flow * normalized_param
-                            actual_distributions[edge_id] += min(
-                                extra_flow,
-                                edge.capacity - actual_distributions[edge_id]
-                            )
-                            remaining_flow -= min(
-                                extra_flow,
-                                edge.capacity - actual_distributions[edge_id]
-                            )
+                # If target exceeds capacity, record the excess as spill
+                if target_flow > edge.capacity:
+                    actual_flow = edge.capacity
+                    spill = (target_flow - edge.capacity) * dt
+                    total_spill += spill
+                else:
+                    actual_flow = target_flow
+                
+                # Update edge with the actual flow
+                edge.update(time_step, actual_flow)
             
-            # Record spill (any remaining flow that couldn't be distributed)
-            self.spill_register.append(remaining_flow * dt)
-            
-            # Update edges with calculated flows
-            for edge_id, flow in actual_distributions.items():
-                self.outflow_edges[edge_id].update(time_step, flow)
+            # Record total spill for this time step
+            self.spill_register.append(total_spill)
                 
         except Exception as e:
             raise ValueError(f"Failed to update hydroworks node {self.id}: {str(e)}")

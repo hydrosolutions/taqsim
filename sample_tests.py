@@ -26,7 +26,7 @@ def create_test_system(num_time_steps):
     release_params = {
         'h1': [504.899, 503.459, 501.389, 504.954, 503.371, 503.185, 504.311, 500.305, 500.915, 504.497, 502.594, 503.628],
         'h2': [507.215, 507.855, 506.230, 508.566, 508.976, 505.482, 506.568, 506.742, 505.111, 508.261, 507.864, 506.210],
-        'w': [15.214, 16.653, 6.254, 14.200, 24.522, 9.554, 66.175, 62.287, 72.130, 45.774, 75.487, 13.462],
+        'w': [15.214, 16.653, 6.254, 14.200, 24.522, 9.554, 40, 40, 40, 40, 40, 13.462],
         'm1': [1.511, 1.557, 1.534, 1.560, 1.565, 1.541, 1.524, 1.567, 1.559, 1.514, 1.530, 1.540],
         'm2': [1.512, 1.553, 1.558, 1.551, 1.529, 1.522, 1.556, 1.515, 1.560, 1.533, 1.539, 1.527]
     }
@@ -49,9 +49,9 @@ def create_test_system(num_time_steps):
 
     # Connect nodes with edges
     system.add_edge(Edge(supply, reservoir, capacity=100))  # 100 m³/s max flow from supply to reservoir
-    system.add_edge(Edge(reservoir, hydrowork, capacity=80))   # 80 m³/s max flow from reservoir to demand
-    system.add_edge(Edge(hydrowork, demand1, capacity=20))   # 50 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(hydrowork, demand2, capacity=20))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(reservoir, hydrowork, capacity=40))   # 80 m³/s max flow from reservoir to demand
+    system.add_edge(Edge(hydrowork, demand1, capacity=30))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork, demand2, capacity=10))   # 50 m³/s max flow from hydrowork to demand
     system.add_edge(Edge(demand1, sink, capacity=50))        # 50 m³/s max flow of excess to sink
     system.add_edge(Edge(demand2, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
@@ -136,7 +136,7 @@ def run_sample_tests():
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     storage_node = test_system.graph.nodes['Reservoir']['node']
-    vis.plot_release_function(storage_node, months=[3,4,5,6])
+    vis.plot_release_function(storage_node, months=[8,9,10])
     vis.plot_reservoir_dynamics()
     vis.plot_storage_dynamics()
     vis.plot_edge_flow_summary()
