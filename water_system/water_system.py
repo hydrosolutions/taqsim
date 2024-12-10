@@ -311,9 +311,6 @@ class WaterSystem:
 
         This method updates all nodes and edges in the system for each time step.
         """
-        # Check network configuration before starting simulation
-        self._check_network()
-
         self.time_steps = time_steps
         # Perform a topological sort to determine the correct order for node updates
         sorted_nodes = list(nx.topological_sort(self.graph))

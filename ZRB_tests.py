@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import webbrowser
 import os
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer
 
 def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     """
@@ -50,7 +50,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     # Unpack demand nodes into individual variables based on Demand_info['name'] row
     for index, row in Demand_info.iterrows():
         globals()[row['name']] = demand_nodes[index]
-        print(f"Created demand node: {row['name']}")
+        #print(f"Created demand node: {row['name']}")
 
     # Demand Thermal powerplant Navoi (25 m³/s)
     Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
@@ -235,6 +235,7 @@ def run_sample_tests():
     ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
 
     print("ZRB system simulation:")
+    ZRB_system._check_network()
     ZRB_system.simulate(num_time_steps)
     print("Simulation complete")
     
@@ -263,7 +264,41 @@ def run_sample_tests():
 
     print("Visualizations complete")
 
+def run_optimization():
+    optimizer = MultiGeneticOptimizer(
+        create_seasonal_ZRB_system,
+        num_time_steps=12,
+        population_size=20
+    )
+
+    results = optimizer.optimize(ngen=50)
+
+    print("\nOptimization Results:")
+    print("-" * 50)
+    print(f"Success: {results['success']}")
+    print(f"Message: {results['message']}")
+    print(f"Population size: {results['population_size']}")
+    print(f"Generations: {results['generations']}")
+    print(f"Final objective value: {results['objective_value']:,.0f} m³")
+    
+    print("\nOptimal Reservoir Parameters:")
+    for res_id, params in results['optimal_reservoir_parameters'].items():
+        print(f"\n{res_id}:")
+        for param, values in params.items():
+            print(f"{param}: ", end="")
+            print([f"{v:.3f}" for v in values])
+        
+    print("\nOptimal Hydroworks Parameters:")
+    for hw_id, params in results['optimal_hydroworks_parameters'].items():
+        print(f"\n{hw_id}:")
+        for target, values in params.items():
+            print(f"{target}: ", end="")
+            print([f"{v:.3f}" for v in values])
+
+    optimizer.plot_convergence()
+
 # Run the sample tests
 if __name__ == "__main__":
-  run_sample_tests()
+  #run_sample_tests()
+  run_optimization()
   
