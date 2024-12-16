@@ -44,7 +44,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             start_month=start_month,
             num_time_steps=num_time_steps,
             field_efficiency=0.75,
-            conveyance_efficiency=0.65
+            conveyance_efficiency=0.65,
+            weight=1.0
         )
         demand_nodes.append(demand_node)
     
@@ -54,9 +55,11 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         #print(f"Created demand node: {row['name']}")
 
     # Demand Thermal powerplant Navoi (25 m³/s)
-    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3)
-    Jizzakh = DemandNode("Jizzakh", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
-    Kashkadarya = DemandNode("Kashkadarya", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps)
+    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=1000)
+    Jizzakh = DemandNode("Jizzakh", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', 
+                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=2)
+    Kashkadarya = DemandNode("Kashkadarya", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', 
+                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=2)
 
     # Reservoir
     release_params_kattakurgan = {
@@ -324,10 +327,10 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=20
+        population_size=30
     )
 
-    results = optimizer.optimize(ngen=10)
+    results = optimizer.optimize(ngen=100)
 
     print("\nOptimization Results:")
     print("-" * 50)

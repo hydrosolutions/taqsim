@@ -259,7 +259,8 @@ class DemandNode(Node):
     """
 
     def __init__(self, id, demand_rates=None, easting=None, northing=None,
-                 csv_file=None, start_year=None, start_month=None, num_time_steps=None, field_efficiency=1, conveyance_efficiency=1):
+                 csv_file=None, start_year=None, start_month=None, num_time_steps=None, 
+                 field_efficiency=1, conveyance_efficiency=1, weight=1.0):
         """
         Initialize a DemandNode object.
 
@@ -284,6 +285,13 @@ class DemandNode(Node):
             raise ValueError("Conveyance efficiency must be between 0 and 1")
         self.conveyance_efficiency = conveyance_efficiency
 
+        # Validate weight
+        if not isinstance(weight, (int, float)):
+            raise ValueError("Weight must be a number")
+        if weight <= 0:
+            raise ValueError("Weight must be positive")
+        self.weight = weight
+        
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
             self.demand_rates = self._initialize_demand_rates(
                 id, csv_file, start_year, start_month, num_time_steps, demand_rates

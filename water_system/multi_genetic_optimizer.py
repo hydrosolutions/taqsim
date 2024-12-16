@@ -225,8 +225,8 @@ class MultiGeneticOptimizer:
             # Run simulation
             system.simulate(self.num_time_steps)
             
-            # Calculate total deficit (objective to minimize)
-            total_deficit = 0
+            # Calculate weighted deficits using node weights
+            total_weighted_deficit = 0
             for node_id, node_data in system.graph.nodes(data=True):
                 if isinstance(node_data['node'], DemandNode):
                     node = node_data['node']
@@ -234,9 +234,10 @@ class MultiGeneticOptimizer:
                         demand = node.get_demand_rate(t)
                         satisfied = node.satisfied_demand[t]
                         deficit = (demand - satisfied) * system.dt
-                        total_deficit += deficit
+                        weighted_deficit = deficit * node.weight  # Use node's weight attribute
+                        total_weighted_deficit += weighted_deficit
             
-            return (total_deficit,)
+            return (total_weighted_deficit,)
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
