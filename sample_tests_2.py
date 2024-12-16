@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import webbrowser
 import os
+import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer, GeneticReleaseOptimizer
 
 def create_test_system(start_year, start_month, num_time_steps):
@@ -102,25 +103,98 @@ def generate_seasonal_supply(num_time_steps):
         supply_rates.append(max(0, supply_rate))  # Ensure non-negative supply
     return supply_rates
 
-def generate_seasonal_demand(num_time_steps):
+def load_optimized_parameters(system, optimization_results):
     """
-    Generates a list of seasonal demand rates.
-
+    Load optimized parameters into an existing water system.
+    
     Args:
-        num_time_steps (int): The number of time steps to generate demand for.
-
+        system (WaterSystem): The water system to update
+        optimization_results (dict): Results from the MultiGeneticOptimizer containing:
+            - optimal_reservoir_parameters (dict): Parameters for each reservoir
+            - optimal_hydroworks_parameters (dict): Parameters for each hydroworks
+            
     Returns:
-        list: A list of demand rates for each time step.
+        WaterSystem: Updated system with optimized parameters
     """
-    base_demand = 20  # m³/s
-    amplitude = 15    # m³/s
-    demand_rates = []
-    for t in range(num_time_steps):
-        month = t % 12
-        seasonal_factor = -math.cos(2 * math.pi * month / 12)  # Peak in summer, trough in winter
-        demand_rate = base_demand + amplitude * seasonal_factor
-        demand_rates.append(max(0, demand_rate))  # Ensure non-negative demand
-    return demand_rates
+    try:
+        # Load reservoir parameters
+        for res_id, params in optimization_results['optimal_reservoir_parameters'].items():
+            reservoir_node = system.graph.nodes[res_id]['node']
+            if not hasattr(reservoir_node, 'set_release_params'):
+                raise ValueError(f"Node {res_id} does not appear to be a StorageNode")
+            reservoir_node.set_release_params(params)
+            print(f"Successfully updated parameters for reservoir {res_id}")
+            
+        # Load hydroworks parameters
+        for hw_id, params in optimization_results['optimal_hydroworks_parameters'].items():
+            hydroworks_node = system.graph.nodes[hw_id]['node']
+            if not hasattr(hydroworks_node, 'set_distribution_parameters'):
+                raise ValueError(f"Node {hw_id} does not appear to be a HydroWorks")
+            hydroworks_node.set_distribution_parameters(params)
+            print(f"Successfully updated parameters for hydroworks {hw_id}")
+            
+        return system
+        
+    except Exception as e:
+        raise ValueError(f"Failed to load optimized parameters: {str(e)}")
+
+def save_optimized_parameters(optimization_results, filename):
+    """
+    Save optimized parameters to a file for later use.
+    
+    Args:
+        optimization_results (dict): Results from the MultiGeneticOptimizer
+        filename (str): Path to save the parameters
+    """
+    
+    # Convert all numeric values to floats for JSON serialization
+    def convert_to_float(obj):
+        if isinstance(obj, dict):
+            return {k: convert_to_float(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_float(x) for x in obj]
+        elif isinstance(obj, (int, float)):
+            return float(obj)
+        return obj
+    
+    # Prepare data for saving
+    save_data = {
+        'objective_value': float(optimization_results['objective_value']),
+        'reservoir_parameters': convert_to_float(optimization_results['optimal_reservoir_parameters']),
+        'hydroworks_parameters': convert_to_float(optimization_results['optimal_hydroworks_parameters'])
+    }
+    
+    # Save to file
+    with open(filename, 'w') as f:
+        json.dump(save_data, f, indent=2)
+    
+    print(f"Optimization results saved to {filename}")
+
+def run_system_with_optimized_parameters(system_creator, optimization_results, 
+                                       start_year, start_month, num_time_steps):
+    """
+    Create and run a water system using optimized parameters.
+    
+    Args:
+        system_creator (function): Function that creates the water system
+        optimization_results (dict): Results from optimization or loaded from file
+        start_year (int): Start year for simulation
+        start_month (int): Start month (1-12)
+        num_time_steps (int): Number of time steps to simulate
+        
+    Returns:
+        WaterSystem: Simulated system with optimized parameters
+    """
+    # Create new system
+    system = system_creator(start_year, start_month, num_time_steps)
+    
+    # Load optimized parameters
+    system = load_optimized_parameters(system, optimization_results)
+    
+    # Run simulation
+    system.simulate(num_time_steps)
+    
+    return system
 
 def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
@@ -163,10 +237,10 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=20
+        population_size=50
     )
 
-    results = optimizer.optimize(ngen=50)
+    results = optimizer.optimize(ngen=1000)
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -191,13 +265,37 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
             print([f"{v:.3f}" for v in values])
 
     optimizer.plot_convergence()
+    return results
 
 # Run the sample tests
 if __name__ == "__main__":
     start_year=2017
     start_month=1
-    num_time_steps=12
+    num_time_steps=12*3
 
 
     #run_sample_tests(start_year, start_month, num_time_steps)
-    run_optimization(start_year, start_month, num_time_steps)
+    results=run_optimization(start_year, start_month, num_time_steps)
+    
+    # Save optimization results
+    save_optimized_parameters(results, "optimized_parameters_test_system.json")
+
+    # Run system with optimized parameters
+    optimized_system = run_system_with_optimized_parameters(
+        create_test_system,  # Your system creator function
+        results,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps
+    )
+
+    # Visualize the optimized system
+    print("Optimized system visualization:")
+    vis=WaterSystemVisualizer(optimized_system, 'optimized_test_system')
+    vis.plot_demand_deficit_heatmap()
+    vis.print_water_balance_summary()
+    vis.plot_reservoir_dynamics()
+
+    html_file=vis.create_interactive_network_visualization()
+    print(f"Interactive visualization saved to: {html_file}")
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')

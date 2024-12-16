@@ -43,10 +43,10 @@ class MultiGeneticOptimizer:
                 # Set reservoir-specific bounds
                 self.reservoir_bounds[node_id] = {
                     'h1': (min_level, mid_level),  # Full range for h1
-                    'h2': (mid_level+1, max_level),  # Full range for h2
+                    'h2': (mid_level+0.1, max_level),  # Full range for h2
                     'w': (0, total_capacity),      # From 0 to total outflow capacity
-                    'm1': (1.5, 1.57),            # Standard slopes
-                    'm2': (1.5, 1.57)             # Standard slopes
+                    'm1': (1.47, 1.57),            # Standard slopes
+                    'm2': (1.47, 1.57)             # Standard slopes
                 }
 
             elif isinstance(node_data['node'], HydroWorks):
