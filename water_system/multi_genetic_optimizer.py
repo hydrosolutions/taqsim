@@ -9,13 +9,15 @@ class MultiGeneticOptimizer:
     Enhanced genetic algorithm optimizer for water systems with multiple reservoirs
     and hydroworks nodes.
     """
-    def __init__(self, system_creator, num_time_steps, population_size=50):
+    def __init__(self, system_creator, start_year, start_month, num_time_steps, population_size=50):
         self.system_creator = system_creator
+        self.start_year = start_year
+        self.start_month = start_month
         self.num_time_steps = num_time_steps
         self.population_size = population_size
         
         # Get initial system to identify reservoirs and hydroworks
-        test_system = self.system_creator(2017, 1, 12)  # Create test system to analyze structure
+        test_system = self.system_creator(self.start_year, self.start_month, self.num_time_steps)  # Create test system to analyze structure
         self.reservoir_ids = []
         self.hydroworks_ids = []
         self.hydroworks_targets = {}
@@ -235,7 +237,7 @@ class MultiGeneticOptimizer:
             reservoir_params, hydroworks_params = self._decode_individual(individual)
             
             # Create and configure water system
-            system = self.system_creator(2017, 1, self.num_time_steps)
+            system = self.system_creator(self.start_year, self.start_month, self.num_time_steps)
             
             # Set parameters for all reservoirs
             for res_id, params in reservoir_params.items():

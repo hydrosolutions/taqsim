@@ -73,7 +73,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm2': 1.5,
     }
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e8,
-                                 evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
+                                 evaporation_file='./data/reservoir_et_2010_2019_predicted.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan)
     RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=6e7, 
                               evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
@@ -224,14 +224,14 @@ def save_water_balance_to_csv(water_system, filename):
     balance_table.to_csv(filename, index=False)
     print(f"Water balance table saved to {filename}")
 
-def run_sample_tests():
+def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
     print("\n" + "="*50 + "\n")
 
     # Definition of simulation period
-    start_year = 2017
-    start_month = 1
-    num_time_steps = 12 * 3  # 3 years of monthly data
+    start_year = start_year
+    start_month = start_month
+    num_time_steps = num_time_steps
     ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
 
     print("ZRB system simulation:")
@@ -264,14 +264,16 @@ def run_sample_tests():
 
     print("Visualizations complete")
 
-def run_optimization():
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
     optimizer = MultiGeneticOptimizer(
         create_seasonal_ZRB_system,
-        num_time_steps=12,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps,
         population_size=20
     )
 
-    results = optimizer.optimize(ngen=50)
+    results = optimizer.optimize(ngen=10)
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -299,6 +301,9 @@ def run_optimization():
 
 # Run the sample tests
 if __name__ == "__main__":
-  #run_sample_tests()
-  run_optimization()
+    start_year = 2017
+    start_month = 1
+    num_time_steps = 12*3
+    #run_sample_tests(start_year, start_month, num_time_steps)
+    run_optimization(start_year, start_month, num_time_steps)
   

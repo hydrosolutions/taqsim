@@ -188,5 +188,5 @@ def run_optimization():
 
 # Run the sample tests
 if __name__ == "__main__":
-  #run_sample_tests()
+  run_sample_tests()
   run_optimization()
