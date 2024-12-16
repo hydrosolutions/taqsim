@@ -61,12 +61,12 @@ def create_test_system(start_year, start_month, num_time_steps):
 
     # Set monthly distribution parameters for edges
     hydrowork1.set_distribution_parameters({
-        'Demand1': [0.5]*12,
-        'Reservoir': [0.5]*12
+        'Demand1': [0.5]*num_time_steps,
+        'Reservoir': [0.5]*num_time_steps
     })
     hydrowork2.set_distribution_parameters({
-        'Demand1': [0.5]*12,
-        'Demand2': [0.5]*12
+        'Demand1': [0.5]*num_time_steps,
+        'Demand2': [0.5]*num_time_steps
     })
     return system
 
@@ -122,11 +122,11 @@ def generate_seasonal_demand(num_time_steps):
         demand_rates.append(max(0, demand_rate))  # Ensure non-negative demand
     return demand_rates
 
-def run_sample_tests():
+def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
-    num_time_steps = 12*3  # 1 year with monthly time steps
-    start_year=2017
-    start_month=1
+    num_time_steps = num_time_steps
+    start_year=start_year
+    start_month=start_month
 
     print("\n" + "="*50 + "\n")
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -157,10 +157,12 @@ def run_sample_tests():
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
-def run_optimization():
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
     optimizer = MultiGeneticOptimizer(
         create_test_system,
-        num_time_steps=12,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps,
         population_size=20
     )
 
@@ -192,5 +194,10 @@ def run_optimization():
 
 # Run the sample tests
 if __name__ == "__main__":
-  run_sample_tests()
-  #run_optimization()
+    start_year=2017
+    start_month=1
+    num_time_steps=12
+
+
+    #run_sample_tests(start_year, start_month, num_time_steps)
+    run_optimization(start_year, start_month, num_time_steps)

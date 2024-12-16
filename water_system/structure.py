@@ -887,12 +887,12 @@ class StorageNode(Node):
 class HydroWorks(Node):
     """
     Represents a point where water can be redistributed using fixed distribution parameters.
-    Each outflow edge has a distribution parameter that defines what fraction of incoming flow it receives.
-    All distribution parameters for a HydroWorks node must sum to 1.
+    Each outflow edge has a distribution parameter for each timestep.
+    All distribution parameters for a timestep must sum to 1.
 
     Attributes:
         id (str): Unique identifier for the node
-        distribution_params (dict): Maps edge IDs to their distribution parameters
+        distribution_params (dict): Maps edge IDs to their distribution parameters for each timestep
     """
 
     def __init__(self, id, easting=None, northing=None):
@@ -906,121 +906,111 @@ class HydroWorks(Node):
         """
         super().__init__(id, easting, northing)
         self.distribution_params = {}
-        self.spill_register = []  # Add spill register list
+        self.spill_register = []
+        self.num_timesteps = None  # Will be set when parameters are initialized
 
     def add_outflow(self, edge):
         """
         Add an outflow edge to the node and initialize its distribution parameter.
-        Initially distributes flow equally among all edges.
+        Initially distributes flow equally among all edges for all timesteps.
 
         Args:
             edge (Edge): The edge to be added as an outflow
-
-        Raises:
-            ValueError: If adding the edge would make total distribution exceed 1
         """
         super().add_outflow(edge)
         
         # When adding a new edge, redistribute parameters equally among all edges
+        # This will be overridden when set_distribution_parameters is called
         n_edges = len(self.outflow_edges)
         equal_distribution = 1.0 / n_edges
         
-        # Initialize 12 months of equal distribution for each edge
-        self.distribution_params = {
-            edge_id: [equal_distribution] * 12 for edge_id in self.outflow_edges
-        }
-
-    def set_distribution_parameter(self, node_id, month, parameter):
-        """
-        Set the distribution parameter for a specific edge.
-
-        Args:
-            node_id (str): ID of the node
-            parameter (float): Distribution parameter value between 0 and 1
-
-        Raises:
-            ValueError: If parameter is invalid or would make total distribution exceed 1
-            KeyError: If node_id is not found in outflow edges
-        """
-        if node_id not in self.outflow_edges:
-            raise KeyError(f"Edge to {node_id} not found in outflow edges")
-        
-        if not 1 <= month <= 12:
-            raise ValueError("Month must be between 1 and 12")
-        
-        if not 0 <= parameter <= 1:
-            raise ValueError("Distribution parameter must be between 0 and 1")
-        
-        # Calculate what total distribution would be with new parameter for this month
-        month_idx = month - 1
-        total_distribution = parameter
-        for other_id, other_params in self.distribution_params.items():
-            if other_id != node_id:
-                total_distribution += other_params[month_idx]
-        
-        if abs(total_distribution - 1.0) > 1e-10:  # Allow for small floating point errors
-            raise ValueError(
-                f"Total distribution parameters for month {month} must sum to 1. "
-                f"Setting this parameter would result in total of {total_distribution}"
-            )
-        
-        self.distribution_params[node_id][month_idx] = parameter
+        # Initialize with equal distribution for any existing timesteps
+        if self.num_timesteps is not None:
+            self.distribution_params = {
+                edge_id: [equal_distribution] * self.num_timesteps 
+                for edge_id in self.outflow_edges
+            }
+        else:
+            self.distribution_params = {}
 
     def set_distribution_parameters(self, parameters):
         """
-        Set distribution parameters for multiple edges and all months at once.
+        Set distribution parameters for multiple edges for all timesteps.
 
         Args:
             parameters (dict): Dictionary mapping edge IDs to either:
-                             - a list of 12 monthly parameters
-                             - a single float (will be applied to all months)
+                             - a list of parameters for each timestep
+                             - a list of 12 monthly values (will be repeated for longer simulations)
+                             - a single float (will be used for all timesteps)
 
         Raises:
-            ValueError: If parameters are invalid or don't sum to 1 for any month
+            ValueError: If parameters are invalid or don't sum to 1 for any timestep
             KeyError: If any edge ID is not found in outflow edges
         """
         # Verify all edges exist
         for node_id in parameters:
             if node_id not in self.outflow_edges:
                 raise KeyError(f"Edge to node {node_id} not found in outflow edges")
-        
+
         # Create temporary dictionary to store new parameters
         new_params = {}
         
+        # Determine number of timesteps from first parameter list
+        first_param = next(iter(parameters.values()))
+        if isinstance(first_param, (int, float)):
+            if self.num_timesteps is None:
+                raise ValueError("Cannot use scalar parameter before num_timesteps is set")
+            timesteps = self.num_timesteps
+        elif len(first_param) == 12:  # Monthly parameters
+            if self.num_timesteps is None:
+                self.num_timesteps = 12
+            timesteps = self.num_timesteps
+        else:
+            timesteps = len(first_param)
+            if self.num_timesteps is None:
+                self.num_timesteps = timesteps
+            elif timesteps != self.num_timesteps:
+                raise ValueError(f"Parameter length {timesteps} doesn't match num_timesteps {self.num_timesteps}")
+        
         # Process and validate parameters
         for node_id, params in parameters.items():
-            # Convert single float to list of 12 identical values
             if isinstance(params, (int, float)):
-                new_params[node_id] = [float(params)] * 12
-            elif len(params) == 12:
+                new_params[node_id] = [float(params)] * timesteps
+            elif len(params) == 12:  # Monthly parameters
+                # Repeat monthly pattern as needed
+                new_params[node_id] = [params[t % 12] for t in range(timesteps)]
+            elif len(params) == timesteps:
                 new_params[node_id] = list(params)
             else:
-                raise ValueError(f"Parameters for edge to {node_id} must be a single number or list of 12 values")
+                raise ValueError(
+                    f"Parameters for edge to {node_id} must be a single number, "
+                    f"12 monthly values, or {timesteps} timestep values"
+                )
             
             # Verify all parameters are valid
             if not all(0 <= p <= 1 for p in new_params[node_id]):
                 raise ValueError(f"All distribution parameters for edge to {node_id} must be between 0 and 1")
         
-        # Verify parameters sum to 1 for each month
-        for month in range(12):
+        # Verify parameters sum to 1 for each timestep
+        for t in range(timesteps):
             # Include existing parameters for edges not being updated
-            total = sum(new_params[node_id][month] for node_id in new_params)
+            total = sum(new_params[node_id][t] for node_id in new_params)
             total += sum(
-                self.distribution_params[node_id][month]
+                self.distribution_params[node_id][t]
                 for node_id in self.outflow_edges
                 if node_id not in new_params
             )
             
             if abs(total - 1.0) > 1e-10:  # Allow for small floating point errors
-                raise ValueError(f"Distribution parameters for month {month+1} must sum to 1. Got {total}")
+                raise ValueError(f"Distribution parameters for timestep {t} must sum to 1. Got {total}")
         
         # Update parameters
         self.distribution_params.update(new_params)
 
     def update(self, time_step, dt):
         """
-        Update the HydroWorks node's state for the given time step using the fixed
-        distribution parameters.
+        Update the HydroWorks node's state for the given time step using the
+        distribution parameters for that specific timestep.
 
         Args:
             time_step (int): The current time step of the simulation
@@ -1038,15 +1028,12 @@ class HydroWorks(Node):
             if not self.distribution_params:
                 raise ValueError("Distribution parameters not set")
             
-            # Get current month's parameters (0-11)
-            current_month = time_step % 12
-
             # Verify month's parameters sum to 1
-            total_distribution = sum(params[current_month] 
+            total_distribution = sum(params[time_step] 
                                   for params in self.distribution_params.values())
             if abs(total_distribution - 1.0) > 1e-10:
                 raise ValueError(
-                    f"Distribution parameters for month {current_month + 1} "
+                    f"Distribution parameters for timestep {time_step} "
                     f"sum to {total_distribution}, should be 1"
                 )
             
@@ -1056,7 +1043,7 @@ class HydroWorks(Node):
             # Distribute flow according to parameters, recording spills when capacity is exceeded
             for edge_id, edge in self.outflow_edges.items():
                 # Calculate target flow based on distribution parameter
-                target_flow = total_inflow * self.distribution_params[edge_id][current_month]
+                target_flow = total_inflow * self.distribution_params[edge_id][time_step]
                 
                 # If target exceeds capacity, record the excess as spill
                 if target_flow > edge.capacity:

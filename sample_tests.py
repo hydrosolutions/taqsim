@@ -57,8 +57,8 @@ def create_test_system(start_year, start_month, num_time_steps):
 
     # Set monthly distribution parameters for edges
     hydrowork.set_distribution_parameters({
-        'Demand1': [0.5]*12,
-        'Demand2': [0.5]*12
+        'Demand1': [0.5]*num_time_steps,
+        'Demand2': [0.5]*num_time_steps
     })
     return system
 
@@ -114,11 +114,11 @@ def generate_seasonal_demand(num_time_steps):
         demand_rates.append(max(0, demand_rate))  # Ensure non-negative demand
     return demand_rates
 
-def run_sample_tests():
+def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
-    num_time_steps = 12*3  # 1 year with monthly time steps
-    start_year=2017
-    start_month=1
+    num_time_steps = num_time_steps  # 1 year with monthly time steps
+    start_year=start_year
+    start_month=start_month
 
     print("\n" + "="*50 + "\n")
     # Test: Seasonal Reservoir. Fully seasonal system.
@@ -146,17 +146,18 @@ def run_sample_tests():
     vis.plot_water_balance_debug(storage_node)
     vis.plot_storage_waterbalance(storage_node)
     #vis.plot_monthly_waterbalance(storage_node)
-    vis.plot_hydroworks_flows()
     vis.plot_demand_satisfaction()
     
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
-def run_optimization():
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
     optimizer = MultiGeneticOptimizer(
         create_test_system,
-        num_time_steps=12,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps,
         population_size=20
     )
 
@@ -188,5 +189,8 @@ def run_optimization():
 
 # Run the sample tests
 if __name__ == "__main__":
-  run_sample_tests()
-  run_optimization()
+    start_year=2017
+    start_month=1
+    num_time_steps=12
+    run_sample_tests(start_year, start_month, num_time_steps)
+    run_optimization(start_year, start_month, num_time_steps)
