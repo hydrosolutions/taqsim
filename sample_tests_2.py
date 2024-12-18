@@ -6,7 +6,7 @@ import matplotlib.colors as mcolors
 import webbrowser
 import os
 import json
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer, GeneticReleaseOptimizer
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer
 
 def create_test_system(start_year, start_month, num_time_steps):
     """
@@ -37,8 +37,10 @@ def create_test_system(start_year, start_month, num_time_steps):
     reservoir = StorageNode("Reservoir", hva_file='./data/Kattakurgan_H_V_A.csv', initial_storage=2e8, easting=500, northing=1000, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
                              start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, release_params=release_params)
     hydrowork2 = HydroWorks("Hydroworks", easting=1000, northing=1000)
-    demand1 = DemandNode("Demand1", easting=2000, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Kattaqorgon_17to22.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5)
-    demand2 = DemandNode("Demand2", easting=2000, northing=800, csv_file='./data/ETblue/monthly_ETblue_Pastdargom_17to22.csv', start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5)
+    demand1 = DemandNode("Demand1", easting=2000, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Kattaqorgon_17to22.csv', 
+                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
+    demand2 = DemandNode("Demand2", easting=2000, northing=800, csv_file='./data/ETblue/monthly_ETblue_Pastdargom_17to22.csv', 
+                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=10.0)
     sink = SinkNode("RiverMouth", easting=3000, northing=1000)
 
     # Add nodes to the system
@@ -55,9 +57,9 @@ def create_test_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(hydrowork1, reservoir, capacity=80))   # 80 m³/s max flow from reservoir to demand
     system.add_edge(Edge(hydrowork1, demand1, capacity=80))   # 80 m³/s max flow from reservoir to demand
     system.add_edge(Edge(reservoir, hydrowork2, capacity=80))   # 80 m³/s max flow from reservoir to demand
-    system.add_edge(Edge(hydrowork2, demand1, capacity=30))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(hydrowork2, demand1, capacity=50))   # 50 m³/s max flow from hydrowork to demand
     system.add_edge(Edge(hydrowork2, demand2, capacity=50))   # 50 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(demand1, sink, capacity=50))        # 50 m³/s max flow of excess to sink
+    system.add_edge(Edge(demand1, sink, capacity=130))        # 50 m³/s max flow of excess to sink
     system.add_edge(Edge(demand2, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
     # Set monthly distribution parameters for edges
@@ -237,10 +239,10 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=50
+        population_size=20
     )
 
-    results = optimizer.optimize(ngen=1000)
+    results = optimizer.optimize(ngen=100)
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -295,6 +297,10 @@ if __name__ == "__main__":
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_reservoir_dynamics()
+
+    # Get the storage node from the system's graph
+    storage_node = optimized_system.graph.nodes['Reservoir']['node']
+    vis.plot_release_function(storage_node)
 
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")

@@ -55,11 +55,11 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         #print(f"Created demand node: {row['name']}")
 
     # Demand Thermal powerplant Navoi (25 m³/s)
-    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=1000)
+    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=100)
     Jizzakh = DemandNode("Jizzakh", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', 
-                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=2)
+                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=1)
     Kashkadarya = DemandNode("Kashkadarya", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', 
-                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=2)
+                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=1)
 
     # Reservoir
     release_params_kattakurgan = {
@@ -150,12 +150,12 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Narpay, Kattaqorgon, capacity=40))
 
     # HW_Confluence
-    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=500))
+    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=530))
 
     # HW_Karmana
     system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
     system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
-    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=500))
+    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=545))
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
 
@@ -263,6 +263,29 @@ def load_optimized_parameters(system, optimization_results):
     except Exception as e:
         raise ValueError(f"Failed to load optimized parameters: {str(e)}")
 
+def load_parameters_from_file(filename):
+    """
+    Load previously saved optimized parameters from a file.
+    
+    Args:
+        filename (str): Path to the parameter file
+        
+    Returns:
+        dict: Dictionary containing the optimization results
+    """
+    import json
+    
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    
+    return {
+        'success': True,
+        'message': "Parameters loaded from file",
+        'objective_value': data['objective_value'],
+        'optimal_reservoir_parameters': data['reservoir_parameters'],
+        'optimal_hydroworks_parameters': data['hydroworks_parameters']
+    }
+
 def save_optimized_parameters(optimization_results, filename):
     """
     Save optimized parameters to a file for later use.
@@ -318,6 +341,15 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     
     # Run simulation
     system.simulate(num_time_steps)
+
+    vis=WaterSystemVisualizer(system, 'ZRB_system_optimized')
+    vis.plot_sink_outflows()
+    vis.plot_demand_deficit_heatmap()
+
+    html_file = vis.create_interactive_network_visualization()
+    print(f"Interactive visualization saved to: {html_file}")
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')
+    
     
     return system
 
@@ -327,7 +359,7 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=30
+        population_size=10
     )
 
     results = optimizer.optimize(ngen=100)
@@ -432,9 +464,20 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 if __name__ == "__main__":
     start_year = 2017
     start_month = 1
-    num_time_steps = 12*2
+    num_time_steps = 12*3
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    run_optimization(start_year, start_month, num_time_steps)
+    #run_optimization(start_year, start_month, num_time_steps)
+    # Load parameters from file
+    loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen1000_pop50.json")
+
+    # Create and run system with loaded parameters
+    system = run_system_with_optimized_parameters(
+        create_seasonal_ZRB_system,
+        loaded_results,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps
+)
 
   

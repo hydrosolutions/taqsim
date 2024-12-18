@@ -2059,3 +2059,132 @@ class WaterSystemVisualizer:
         
         plt.tight_layout()
         return self._save_plot("demand_satisfaction")
+    
+
+    def plot_sink_outflows(self):
+        """
+        Create time series plots showing outflows at all sink nodes in the system.
+        Includes statistical analysis and cumulative volumes.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Find sink nodes in the system
+        sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                    if isinstance(data['node'], SinkNode)]
+        
+        if not sink_nodes:
+            print("No sink nodes found in the system.")
+            return None
+            
+        # Create figure with subplots - one for flows, one for cumulative volumes
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+        
+        # Color scheme using color cycle
+        colors = plt.cm.tab10(np.linspace(0, 1, len(sink_nodes)))
+        
+        time_steps = range(self.system.time_steps)
+        dt = self.system.dt  # Get timestep duration for volume calculations
+        
+        # Store data for statistical analysis
+        all_flows = {}
+        all_volumes = {}
+        
+        # Plot flows and calculate volumes for each sink
+        for idx, (node_id, node) in enumerate(sink_nodes):
+            # Calculate total inflow for each timestep
+            flows = [sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+                    for t in time_steps]
+            all_flows[node_id] = flows
+            
+            # Calculate cumulative volumes
+            volumes = np.cumsum([flow * dt for flow in flows])
+            all_volumes[node_id] = volumes
+            
+            # Plot flow time series
+            ax1.plot(time_steps, flows, color=colors[idx], 
+                    label=node_id, linewidth=2, marker='o', markersize=4)
+            
+            # Plot cumulative volumes
+            ax2.plot(time_steps, volumes, color=colors[idx], 
+                    label=node_id, linewidth=2)
+            
+            # Calculate and display statistics for each sink
+            stats_text = (
+                f"{node_id} Statistics:\n"
+                f"Mean Flow: {np.mean(flows):.2f} m³/s\n"
+                f"Max Flow: {np.max(flows):.2f} m³/s\n"
+                f"Min Flow: {np.min(flows):.2f} m³/s\n"
+                f"Total Volume: {volumes[-1]/1e6:.2f} Mm³"
+            )
+            
+            # Add stats text box to flow plot
+            ax1.text(1.02, 0.9 - idx*0.2, stats_text,
+                    transform=ax1.transAxes,
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8),
+                    fontsize=9)
+        
+        # Calculate and plot total system outflow
+        total_flows = np.zeros(len(time_steps))
+        for flows in all_flows.values():
+            total_flows += flows
+        
+        total_volumes = np.cumsum(total_flows * dt)
+        
+        ax1.plot(time_steps, total_flows, color='black', linestyle='--',
+                label='Total System Outflow', linewidth=2)
+        ax2.plot(time_steps, total_volumes, color='black', linestyle='--',
+                label='Total System Volume', linewidth=2)
+        
+        # Add total system statistics
+        total_stats = (
+            f"Total System Statistics:\n"
+            f"Mean Flow: {np.mean(total_flows):.2f} m³/s\n"
+            f"Max Flow: {np.max(total_flows):.2f} m³/s\n"
+            f"Min Flow: {np.min(total_flows):.2f} m³/s\n"
+            f"Total Volume: {total_volumes[-1]/1e6:.2f} Mm³"
+        )
+        
+        ax1.text(1.02, 0.1, total_stats,
+                transform=ax1.transAxes,
+                bbox=dict(boxstyle='round',
+                        facecolor='lightgray',
+                        alpha=0.8),
+                fontsize=9)
+        
+        # Customize flow plot
+        ax1.set_title('Sink Node Outflows Over Time')
+        ax1.set_xlabel('Time Step')
+        ax1.set_ylabel('Flow Rate [m³/s]')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(bbox_to_anchor=(1.01, 1), loc='upper left')
+        
+        # Customize volume plot
+        ax2.set_title('Cumulative Sink Node Volumes')
+        ax2.set_xlabel('Time Step')
+        ax2.set_ylabel('Volume [m³]')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(bbox_to_anchor=(1.01, 1), loc='upper left')
+        
+        # Add contribution percentages to volume plot
+        final_volumes = {node_id: vols[-1] for node_id, vols in all_volumes.items()}
+        total_volume = sum(final_volumes.values())
+        
+        volume_text = "Volume Contributions:\n"
+        for node_id, volume in final_volumes.items():
+            percentage = (volume / total_volume * 100) if total_volume > 0 else 0
+            volume_text += f"{node_id}: {percentage:.1f}%\n"
+        
+        ax2.text(1.02, 0.1, volume_text,
+                transform=ax2.transAxes,
+                bbox=dict(boxstyle='round',
+                        facecolor='white',
+                        alpha=0.8),
+                fontsize=9)
+        
+        plt.tight_layout()
+        return self._save_plot("sink_outflows")
+    
+    

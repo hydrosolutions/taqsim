@@ -57,8 +57,8 @@ class MultiGeneticOptimizer:
                 )
         
         # Set up DEAP genetic algorithm components
-        creator.create("FitnessMin", base.Fitness, weights=(-1.0,))  # Minimize objective
-        creator.create("Individual", list, fitness=creator.FitnessMin)
+        creator.create("FitnessMulti", base.Fitness, weights=(-1.0,))  # Minimize objective
+        creator.create("Individual", list, fitness=creator.FitnessMulti)
         
         self.toolbox = base.Toolbox()
         
@@ -108,13 +108,13 @@ class MultiGeneticOptimizer:
                     low,
                     high
                 )
-        
+        """
         # Create attribute for hydroworks distribution
         self.toolbox.register(
             "hydroworks_dist",
             random.random
         )
-        
+        """
         # Create individual and population
         self.toolbox.register("individual", self._create_individual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
@@ -123,9 +123,9 @@ class MultiGeneticOptimizer:
         self.toolbox.register("evaluate", self._evaluate_individual)
         self.toolbox.register("mate", tools.cxTwoPoint)
         self.toolbox.register("mutate", self._mutate_individual)
-        self.toolbox.register("select", tools.selTournament, tournsize=3)
+        self.toolbox.register("select", tools.selTournament, tournsize=5)
 
-    def _mutate_individual(self, individual, indpb=0.1):
+    def _mutate_individual(self, individual, indpb=0.2):
         """Custom mutation operator with enforced parameter bounds"""
         genes_per_reservoir = 12 * 5  # 5 parameters * 12 months
         
@@ -237,8 +237,22 @@ class MultiGeneticOptimizer:
                         weighted_deficit = deficit * node.weight  # Use node's weight attribute
                         total_weighted_deficit += weighted_deficit
             
-            return (total_weighted_deficit,)
+                # Calculate total spills with double weight
+                total_spills = 0
+                for node_id, node_data in system.graph.nodes(data=True):
+                    # Add reservoir spills
+                    if hasattr(node_data['node'], 'spillway_register'):
+                        total_spills += 100.0 * sum(node_data['node'].spillway_register) 
+                    
+                    # Add hydroworks spills
+                    if hasattr(node_data['node'], 'spill_register'):
+                        total_spills += 100.0 * sum(node_data['node'].spill_register)
+                
+                # Combined objective (weighted deficits + weighted spills)
+                total_objective = total_weighted_deficit + total_spills
             
+            return (total_objective,)
+     
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
             return (float('inf'),)
@@ -315,7 +329,7 @@ class MultiGeneticOptimizer:
         
         return creator.Individual(genes)
 
-    def optimize(self, ngen=50, cxpb=0.2, mutpb=0.5):
+    def optimize(self, ngen=50, cxpb=0.6, mutpb=0.5):
         """Run genetic algorithm optimization with parameter validation"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
