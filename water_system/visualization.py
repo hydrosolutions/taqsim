@@ -429,7 +429,8 @@ class WaterSystemVisualizer:
 
     def plot_network_layout(self):
         """
-        Create and save a network layout plot for the water system, showing flows and losses.
+        Create and save a static network layout plot for the water system, showing only
+        structural information like capacities and lengths.
         Returns the path to the saved image file.
         """
         # Setting node positions based on easting and northing
@@ -438,95 +439,207 @@ class WaterSystemVisualizer:
             node_instance = data['node']
             pos[node] = (node_instance.easting, node_instance.northing)
 
-        # Create figure and axis objects with a single subplot
-        fig, ax = plt.subplots(figsize=(30, 25))
-        plt.title('Water System Network Layout', fontsize=20)
+        # Create figure with a main subplot and space for legend
+        fig = plt.figure(figsize=(25, 15))
+        gs = plt.GridSpec(1, 20, figure=fig)
+        ax = fig.add_subplot(gs[0, :19])  # Main plot takes up most of the space
+
+        #plt.suptitle(f'{self.name} System Network Layout', fontsize=30, y=0.95)
         
-        # Define node styling
-        node_colors = {
-            SupplyNode: 'skyblue',
-            StorageNode: 'lightgreen',
-            DemandNode: 'salmon',
-            SinkNode: 'lightgray',
-            HydroWorks: 'orange'
-        }
-        
-        node_shapes = {
-            SupplyNode: 's',    # square
-            StorageNode: 's',   # square
-            DemandNode: 'o',    # circle
-            SinkNode: 's',      # square
-            HydroWorks: 'o',    # circle
+        # Define node styling with descriptive names for legend
+        node_styles = {
+            SupplyNode: {'color': 'skyblue', 'shape': 's', 'name': 'Supply Node'},
+            StorageNode: {'color': 'lightgreen', 'shape': 's', 'name': 'Storage Node'},
+            DemandNode: {'color': 'salmon', 'shape': 'o', 'name': 'Demand Node'},
+            SinkNode: {'color': 'lightgray', 'shape': 's', 'name': 'Sink Node'},
+            HydroWorks: {'color': 'orange', 'shape': 'o', 'name': 'Hydroworks'}
         }
         
         node_size = 5000
         
-        # Draw nodes
-        for node_type in node_colors.keys():
+        # Draw nodes and collect legend elements
+        legend_elements = []
+        for node_type, style in node_styles.items():
             node_list = [node for node, data in self.system.graph.nodes(data=True) 
                         if isinstance(data['node'], node_type)]
             nx.draw_networkx_nodes(self.system.graph, pos, 
                                 nodelist=node_list, 
-                                node_color=node_colors[node_type], 
-                                node_shape=node_shapes[node_type],
+                                node_color=style['color'], 
+                                node_shape=style['shape'],
                                 node_size=node_size, 
-                                alpha=0.8,
+                                alpha=0.6,
                                 ax=ax)
+            
+            # Add to legend elements
+            legend_elements.append(plt.scatter([], [], 
+                                            c=style['color'],
+                                            marker=style['shape'],
+                                            s=500,
+                                            label=style['name']))
 
-        # Draw edges with standard color
-        nx.draw_networkx_edges(self.system.graph, pos, edge_color='gray', 
-                            arrows=True, arrowsize=65, width=2, ax=ax)
+        # Draw edges with width based on capacity
+        max_capacity = max(edge_data['edge'].capacity for _, _, edge_data in self.system.graph.edges(data=True))
+        
+        edge_widths = []
+        for _, _, edge_data in self.system.graph.edges(data=True):
+            edge = edge_data['edge']
+            # Scale width between 1 and 10 based on capacity
+            width =1 + (edge.capacity / max_capacity) * 15
+            edge_widths.append(width)
 
-        # Update node labels
+        # Draw edges
+        nx.draw_networkx_edges(self.system.graph, pos, 
+                             edge_color='gray',
+                             arrows=True, 
+                             arrowsize=65, 
+                             width=edge_widths,
+                             ax=ax)
+
+        # Update node labels with static information
         labels = {}
         for node, data in self.system.graph.nodes(data=True):
             node_instance = data['node']
             if isinstance(node_instance, SupplyNode):
-                actual_supply = node_instance.supply_history[-1] if node_instance.supply_history else 0
-                labels[node] = f"{node}\nSupply Node\nActual: {actual_supply:.1f}"
+                labels[node] = f"{node}"
             elif isinstance(node_instance, DemandNode):
-                satisfied_demand = node_instance.satisfied_demand[-1] if node_instance.satisfied_demand else 0
-                current_demand = node_instance.get_demand_rate(len(node_instance.satisfied_demand) - 1)
-                labels[node] = f"{node}\nDemand\n{satisfied_demand:.1f} ({current_demand:.1f})"
+                labels[node] = f"{node}"
             elif isinstance(node_instance, SinkNode):
-                total_inflow = sum(edge.outflow[-1] if edge.outflow else 0 
-                                for edge in node_instance.inflow_edges.values())
-                labels[node] = f"{node}\nSink Node\nTotal Inflow: {total_inflow:.1f}"
+                labels[node] = f"{node}"
             elif isinstance(node_instance, StorageNode):
-                actual_storage = node_instance.storage[-1] if node_instance.storage else 0
-                labels[node] = f"{node}\nStorage Node\n{actual_storage:.1f} ({node_instance.capacity})"
+                labels[node] = f"{node}\nCap: {node_instance.capacity:,.0f} m³"
             elif isinstance(node_instance, HydroWorks):
-                total_inflow = sum(edge.outflow[-1] if edge.outflow else 0 
-                                for edge in node_instance.inflow_edges.values())
-                labels[node] = f"{node}\nHydroWorks\nInflow: {total_inflow:.1f}"
-            else:
-                labels[node] = f"{node}\n{node_instance.__class__.__name__}"
+                labels[node] = f"{node}"
         
         nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=14, ax=ax)
         
-        # Update edge labels to show flows and losses
+        # Add edge labels showing capacity and length
         edge_labels = {}
         for u, v, d in self.system.graph.edges(data=True):
             edge = d['edge']
-            if hasattr(edge, 'inflow') and hasattr(edge, 'losses') and edge.outflow and edge.inflow and edge.losses:
-                inflow = edge.inflow[-1]
-                outflow = edge.outflow[-1]
-                losses = edge.losses[-1]
-                loss_percent = (losses / inflow * 100) if inflow > 0 else 0
-                edge_labels[(u, v)] = (f'In: {inflow:.1f}m³/s\n'
-                                    f'Out: {outflow:.1f}m³/s\n'
-                                    f'Cap: {edge.capacity}m³/s\n'
-                                    f'L: {edge.length:.1f} km\n')
-            else:
-                edge_labels[(u, v)] = f'Cap: {edge.capacity}'
-        
+            edge_labels[(u, v)] = (f'{edge.capacity} m³/s')
+      
         nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
-                                font_size=8, ax=ax)
+                       font_size=14, ax=ax, rotate=False)
+  
+
+        # Create the legend on the top right of the plot
+        ax.legend(handles=legend_elements,
+              loc='upper right',
+              frameon=True,
+              fancybox=True,
+              shadow=True,
+              fontsize=22)
         
         plt.axis('off')
         plt.tight_layout()
         
-        return self._save_plot("network_layout")  
+        return self._save_plot("network_layout")
+    
+    def plot_network_layout_2(self):
+        """
+        Create and save a static network layout plot for the water system, showing only
+        structural information like capacities and lengths.
+        Returns the path to the saved image file.
+        """
+        # Setting node positions based on easting and northing
+        pos = {}
+        for node, data in self.system.graph.nodes(data=True):
+            node_instance = data['node']
+            pos[node] = (node_instance.easting, node_instance.northing)
+
+        # Create figure with a main subplot and space for legend
+        fig = plt.figure(figsize=(25, 15))
+        gs = plt.GridSpec(1, 20, figure=fig)
+        ax = fig.add_subplot(gs[0, :19])  # Main plot takes up most of the space
+
+        #plt.suptitle(f'{self.name} System Network Layout', fontsize=30, y=0.95)
+        
+        # Define node styling with descriptive names for legend
+        node_styles = {
+            SupplyNode: {'color': 'skyblue', 'shape': 's', 'name': 'Supply Node'},
+            StorageNode: {'color': 'lightgreen', 'shape': 's', 'name': 'Storage Node'},
+            DemandNode: {'color': 'salmon', 'shape': 'o', 'name': 'Demand Node'},
+            SinkNode: {'color': 'lightgray', 'shape': 's', 'name': 'Sink Node'},
+            HydroWorks: {'color': 'orange', 'shape': 'o', 'name': 'Hydroworks'}
+        }
+        
+        node_size = 500
+        
+        # Draw nodes and collect legend elements
+        legend_elements = []
+        for node_type, style in node_styles.items():
+            node_list = [node for node, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], node_type)]
+            nx.draw_networkx_nodes(self.system.graph, pos, 
+                                nodelist=node_list, 
+                                node_color=style['color'], 
+                                node_shape=style['shape'],
+                                node_size=node_size, 
+                                alpha=0.8,
+                                ax=ax)
+            
+            # Add to legend elements
+            legend_elements.append(plt.scatter([], [], 
+                                            c=style['color'],
+                                            marker=style['shape'],
+                                            s=500,
+                                            label=style['name']))
+
+        # Draw edges with width based on capacity
+        max_capacity = max(edge_data['edge'].capacity for _, _, edge_data in self.system.graph.edges(data=True))
+        
+        edge_widths = []
+        for _, _, edge_data in self.system.graph.edges(data=True):
+            edge = edge_data['edge']
+            # Scale width between 1 and 10 based on capacity
+            width =1 + (edge.capacity / max_capacity) * 4
+            edge_widths.append(width)
+
+        # Draw edges
+        nx.draw_networkx_edges(self.system.graph, pos, 
+                             edge_color='gray',
+                             arrows=True, 
+                             arrowsize=35, 
+                             width=edge_widths,
+                             ax=ax)
+
+        # Update node labels with static information
+        labels = {}
+        for node, data in self.system.graph.nodes(data=True):
+            node_instance = data['node']
+            if isinstance(node_instance, SupplyNode):
+                labels[node] = f"{node}"
+            elif isinstance(node_instance, DemandNode):
+                labels[node] = f"{node}"
+            elif isinstance(node_instance, SinkNode):
+                labels[node] = f"{node}"
+            elif isinstance(node_instance, StorageNode):
+                labels[node] = f"{node}\nCap: {node_instance.capacity:,.0f} m³"
+            elif isinstance(node_instance, HydroWorks):
+                labels[node] = f"{node}"
+        
+        #nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=14, ax=ax)
+        
+        # Add edge labels showing capacity and length
+        edge_labels = {}
+        for u, v, d in self.system.graph.edges(data=True):
+            edge = d['edge']
+            edge_labels[(u, v)] = (f'{edge.capacity} m³/s')
+      
+        #nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, font_size=14, ax=ax, rotate=False, bbox=dict(facecolor='white', alpha=0.5))
+
+        # Create the legend on the top right of the plot
+        ax.legend(handles=legend_elements,
+              loc='upper right',
+              frameon=True,
+              fancybox=True,
+              shadow=True,
+              fontsize=22)
+        
+        plt.axis('off')
+        plt.tight_layout()
+        
+        return self._save_plot("network_layout_hydroworks")
 
     def print_water_balance_summary(self):
         """
@@ -587,10 +700,23 @@ class WaterSystemVisualizer:
         unmet_demand = df['unmet demand'].sum()
         satisfied_percentage = (total_satisfied / total_demand * 100) if total_demand > 0 else 0
         unmet_percentage = (unmet_demand / total_demand * 100) if total_demand > 0 else 0
-        print(f"Total demand:        {total_demand:15,.0f} m³ ( 100.0%)")
-        print(f"Satisfied demand:    {total_satisfied:15,.0f} m³ ({satisfied_percentage:6.1f}%)")
-        print(f"Unmet demand:        {unmet_demand:15,.0f} m³ ({unmet_percentage:6.1f}%)")
+        print(f"Total demand:        {total_demand:15,.0f} m³")
+        print(f"Satisfied demand:    {total_satisfied:15,.0f} m³")
+        print(f"Unmet demand:        {unmet_demand:15,.0f} m³")
 
+        
+        # Conservation check
+        print_section("Conservation Check")
+        total_in = total_source
+        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 'reservoir ET losses', 'hydroworks spills'])
+        total_stored = total_storage_change
+        
+        print(f"Total in:          {total_in:15,.0f} m³")
+        print(f"Total out:         {total_out:15,.0f} m³")
+        print(f"Net storage:       {total_stored:15,.0f} m³")
+        
+        balance = total_in - total_out - total_stored
+        print(f"Balance residual:  {balance:15,.0f} m³")
 
         # Balance error statistics
         print_section("Balance Error Statistics")
@@ -607,7 +733,7 @@ class WaterSystemVisualizer:
         total_flux = df['source'].sum()
         for label, value in error_metrics.items():
             print(f"{label:8s}: {value:15,.2f} m³")
-        
+
         # Additional statistics
         print_section("Maximum Values")
         components = {
@@ -624,19 +750,6 @@ class WaterSystemVisualizer:
             max_value = df[comp].max()
             timestep = df.loc[df[comp].idxmax(), 'time_step']
             print(f"{label:10s}: {max_value:15,.0f} m³ at timestep {timestep:3.0f}")
-        
-        # Conservation check
-        print_section("Conservation Check")
-        total_in = total_source
-        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 'reservoir ET losses', 'hydroworks spills'])
-        total_stored = total_storage_change
-        
-        print(f"Total in:          {total_in:15,.0f} m³")
-        print(f"Total out:         {total_out:15,.0f} m³")
-        print(f"Net storage:       {total_stored:15,.0f} m³")
-        
-        balance = total_in - total_out - total_stored
-        print(f"Balance residual:  {balance:15,.0f} m³")
         
         print("\n" + "=" * 50)
 
@@ -1922,9 +2035,9 @@ class WaterSystemVisualizer:
                     linestyle=':', alpha=0.3)
             ax1.axhline(y=release_capacity, color=colors[idx], 
                     linestyle='--', alpha=0.3)
-        
+            
         # Customize main plot
-        ax1.set_xlabel('Water Level [m]')
+        ax1.set_xlabel('Water Level [m a.s.l.]')
         ax1.set_ylabel('Release Rate [m³/s]')
         ax1.set_title(f'Monthly Release Functions for {storage_node.id}')
         ax1.grid(True, alpha=0.3)
@@ -2059,132 +2172,345 @@ class WaterSystemVisualizer:
         
         plt.tight_layout()
         return self._save_plot("demand_satisfaction")
-    
 
-    def plot_sink_outflows(self):
+    def plot_reservoir_volumes(self):
         """
-        Create time series plots showing outflows at all sink nodes in the system.
-        Includes statistical analysis and cumulative volumes.
+        Create time series plots showing volume and water elevation for all reservoir (storage) nodes.
         
         Returns:
             str: Path to the saved plot file
         """
-        # Find sink nodes in the system
+        # Find storage nodes in the system
+        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], StorageNode)]
+        
+        if not storage_nodes:
+            print("No storage nodes (reservoirs) found in the system.")
+            return None
+            
+        # Create figure with subplots - one per reservoir
+        n_nodes = len(storage_nodes)
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 4*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
+        
+        # Plot for each reservoir
+        for idx, (node_id, node) in enumerate(storage_nodes):
+            ax1 = axes[idx]
+            ax2 = ax1.twinx()  # Create secondary y-axis for elevation
+            
+            # Get volume and elevation data
+            # Note: storage and water_level arrays have one extra value for the next timestep
+            # We'll use all but the last value to match with time steps
+            volumes = node.storage[:-1]  # Exclude last storage value
+            water_levels = node.water_level[:-1]  # Exclude last water level
+            time_steps = range(len(volumes))  # Create matching time steps array
+            capacity = node.capacity
+            
+            # Plot volume time series
+            line1 = ax1.plot(time_steps, volumes, color='blue', 
+                            label='Storage Volume', linewidth=2)
+            
+            # Add capacity line
+            cap_line = ax1.axhline(y=capacity, color='red', linestyle='--', 
+                                label=f'Capacity ({capacity:,.0f} m³)')
+            
+            # Plot water elevation
+            line2 = ax2.plot(time_steps, water_levels, color='green', 
+                            label='Water Level', linewidth=2)
+            
+            # Customize subplot
+            ax1.set_title(f'{node_id}')
+            ax1.set_ylabel('Volume [m³]')
+            ax2.set_ylabel('Water Level [m.a.s.l]')
+            ax1.grid(True, alpha=0.3)
+            
+            # Combine legends from both axes
+            lines = line1 + line2 + [cap_line]
+            labels = [l.get_label() for l in lines]
+            ax1.legend(lines, labels, loc='upper left')
+        
+        # Add common x-label to bottom subplot
+        axes[-1].set_xlabel('Time Step')
+        
+        plt.tight_layout()
+        return self._save_plot("reservoir_volumes")
+    
+    def plot_sink_outflows(self):
+        #set fontsize for all labels to 16
+        plt.rcParams.update({'font.size': 14})
+        """
+        Create time series plots showing system inflows (top) and sink outflows (bottom).
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Find sink nodes and supply nodes in the system
         sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
                     if isinstance(data['node'], SinkNode)]
+        supply_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], SupplyNode)]
         
         if not sink_nodes:
             print("No sink nodes found in the system.")
             return None
             
-        # Create figure with subplots - one for flows, one for cumulative volumes
+        # Create figure with subplots - inflows at top, outflows at bottom
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
         
         # Color scheme using color cycle
-        colors = plt.cm.tab10(np.linspace(0, 1, len(sink_nodes)))
+        colors = plt.cm.tab10(np.linspace(0, 1, max(len(sink_nodes), len(supply_nodes))))
         
         time_steps = range(self.system.time_steps)
-        dt = self.system.dt  # Get timestep duration for volume calculations
         
-        # Store data for statistical analysis
-        all_flows = {}
-        all_volumes = {}
+        # Plot system inflows (top)
+        total_inflows = np.zeros(len(time_steps))
+        for idx, (node_id, node) in enumerate(supply_nodes):
+            # Get supply rates for each timestep
+            inflows = [node.get_supply_rate(t) for t in time_steps]
+            total_inflows += np.array(inflows)
+            
+            # Plot inflow time series
+            ax1.plot(time_steps, inflows, color=colors[idx], 
+                    label=node_id, linewidth=2, marker='o', markersize=4)
         
-        # Plot flows and calculate volumes for each sink
+        # Plot total system inflow
+        ax1.plot(time_steps, total_inflows, color='black', linestyle='--',
+                label='Total System Inflow', linewidth=2)
+        # Plot a horizonal line at 25
+        ax1.axhline(y=25, color='red', linestyle='--', label='Navoi-TPP Demand ')
+        
+        # Plot sink outflows (bottom)
+        total_outflows = np.zeros(len(time_steps))
         for idx, (node_id, node) in enumerate(sink_nodes):
             # Calculate total inflow for each timestep
             flows = [sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
                     for t in time_steps]
-            all_flows[node_id] = flows
-            
-            # Calculate cumulative volumes
-            volumes = np.cumsum([flow * dt for flow in flows])
-            all_volumes[node_id] = volumes
+            total_outflows += np.array(flows)
             
             # Plot flow time series
-            ax1.plot(time_steps, flows, color=colors[idx], 
+            ax2.plot(time_steps, flows, color=colors[idx], 
                     label=node_id, linewidth=2, marker='o', markersize=4)
-            
-            # Plot cumulative volumes
-            ax2.plot(time_steps, volumes, color=colors[idx], 
-                    label=node_id, linewidth=2)
-            
-            # Calculate and display statistics for each sink
-            stats_text = (
-                f"{node_id} Statistics:\n"
-                f"Mean Flow: {np.mean(flows):.2f} m³/s\n"
-                f"Max Flow: {np.max(flows):.2f} m³/s\n"
-                f"Min Flow: {np.min(flows):.2f} m³/s\n"
-                f"Total Volume: {volumes[-1]/1e6:.2f} Mm³"
-            )
-            
-            # Add stats text box to flow plot
-            ax1.text(1.02, 0.9 - idx*0.2, stats_text,
-                    transform=ax1.transAxes,
-                    bbox=dict(boxstyle='round',
-                            facecolor='white',
-                            alpha=0.8),
-                    fontsize=9)
         
-        # Calculate and plot total system outflow
-        total_flows = np.zeros(len(time_steps))
-        for flows in all_flows.values():
-            total_flows += flows
-        
-        total_volumes = np.cumsum(total_flows * dt)
-        
-        ax1.plot(time_steps, total_flows, color='black', linestyle='--',
+        # Plot total system outflow
+        ax2.plot(time_steps, total_outflows, color='black', linestyle='--',
                 label='Total System Outflow', linewidth=2)
-        ax2.plot(time_steps, total_volumes, color='black', linestyle='--',
-                label='Total System Volume', linewidth=2)
         
-        # Add total system statistics
-        total_stats = (
-            f"Total System Statistics:\n"
-            f"Mean Flow: {np.mean(total_flows):.2f} m³/s\n"
-            f"Max Flow: {np.max(total_flows):.2f} m³/s\n"
-            f"Min Flow: {np.min(total_flows):.2f} m³/s\n"
-            f"Total Volume: {total_volumes[-1]/1e6:.2f} Mm³"
-        )
-        
-        ax1.text(1.02, 0.1, total_stats,
-                transform=ax1.transAxes,
-                bbox=dict(boxstyle='round',
-                        facecolor='lightgray',
-                        alpha=0.8),
-                fontsize=9)
-        
-        # Customize flow plot
-        ax1.set_title('Sink Node Outflows Over Time')
-        ax1.set_xlabel('Time Step')
+        # Customize inflow plot (top)
+        ax1.set_title('System Inflows')
         ax1.set_ylabel('Flow Rate [m³/s]')
         ax1.grid(True, alpha=0.3)
-        ax1.legend(bbox_to_anchor=(1.01, 1), loc='upper left')
+        ax1.legend(loc='upper left')
         
-        # Customize volume plot
-        ax2.set_title('Cumulative Sink Node Volumes')
+        # Customize outflow plot (bottom)
+        ax2.set_title('Sink Node Outflows')
         ax2.set_xlabel('Time Step')
-        ax2.set_ylabel('Volume [m³]')
+        ax2.set_ylabel('Flow Rate [m³/s]')
         ax2.grid(True, alpha=0.3)
-        ax2.legend(bbox_to_anchor=(1.01, 1), loc='upper left')
-        
-        # Add contribution percentages to volume plot
-        final_volumes = {node_id: vols[-1] for node_id, vols in all_volumes.items()}
-        total_volume = sum(final_volumes.values())
-        
-        volume_text = "Volume Contributions:\n"
-        for node_id, volume in final_volumes.items():
-            percentage = (volume / total_volume * 100) if total_volume > 0 else 0
-            volume_text += f"{node_id}: {percentage:.1f}%\n"
-        
-        ax2.text(1.02, 0.1, volume_text,
-                transform=ax2.transAxes,
-                bbox=dict(boxstyle='round',
-                        facecolor='white',
-                        alpha=0.8),
-                fontsize=9)
+        ax2.legend(loc='upper left')
         
         plt.tight_layout()
-        return self._save_plot("sink_outflows")
+        return self._save_plot("sink_outflows_and_inflows")
     
-    
+    def plot_hydroworks_flows(self, hydroworks_id):
+        """
+        Create a plot showing inflows and outflows for a specific HydroWorks node.
+        
+        Args:
+            hydroworks_id (str): ID of the HydroWorks node to visualize
+            
+        Returns:
+            str: Path to the saved plot file
+        """
+        try:
+            # Get the HydroWorks node
+            node_data = self.system.graph.nodes[hydroworks_id]
+            node = node_data['node']
+            
+            if not hasattr(node, 'distribution_params'):
+                print(f"Node {hydroworks_id} is not a HydroWorks node")
+                return None
+            
+            # Calculate time series for inflows and outflows
+            inflows = []
+            outflows = {}
+            time_steps = range(self.system.time_steps)
+            
+            # Initialize outflow dictionaries for each target
+            for target_id in node.outflow_edges.keys():
+                outflows[target_id] = []
+            
+            # Calculate flows for each time step
+            for t in time_steps:
+                # Calculate total inflow
+                total_inflow = sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+                inflows.append(total_inflow)
+                
+                # Calculate outflows to each target
+                for target_id, edge in node.outflow_edges.items():
+                    outflow = edge.get_edge_inflow(t)
+                    outflows[target_id].append(outflow)
+            
+            # Create figure with two subplots
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+            
+            # Plot 1: Time series of flows
+            ax1.plot(time_steps, inflows, 'b-', label='Total Inflow', linewidth=2)
+            
+            # Plot outflows with different colors
+            colors = plt.cm.tab20(np.linspace(0, 1, len(outflows)))
+            for (target_id, flows), color in zip(outflows.items(), colors):
+                ax1.plot(time_steps, flows, '-', color=color, label=f'Outflow to {target_id}', linewidth=2)
+            
+            # Calculate and display statistics
+            mean_inflow = np.mean(inflows)
+            stats_text = f"Mean Inflow: {mean_inflow:.2f} m³/s\n"
+            total_mean_outflow = 0
+            
+            for target_id, flows in outflows.items():
+                mean_flow = np.mean(flows)
+                total_mean_outflow += mean_flow
+                stats_text += f"Mean Outflow to {target_id}: {mean_flow:.2f} m³/s\n"
+            
+            balance_error = mean_inflow - total_mean_outflow
+            stats_text += f"Mean Balance Error: {balance_error:.2f} m³/s"
+            
+            ax1.text(0.02, 0.98, stats_text,
+                    transform=ax1.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            ax1.set_xlabel('Time Step')
+            ax1.set_ylabel('Flow Rate [m³/s]')
+            ax1.set_title(f'Flow Rates for {hydroworks_id}')
+            ax1.grid(True)
+            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            
+            # Plot 2: Distribution parameters over time
+            for target_id, params in node.distribution_params.items():
+                ax2.plot(time_steps, params[:len(time_steps)], '-', 
+                        label=f'Distribution to {target_id}', linewidth=2)
+            
+            ax2.set_xlabel('Time Step')
+            ax2.set_ylabel('Distribution Parameter')
+            ax2.set_title('Distribution Parameters Over Time')
+            ax2.grid(True)
+            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            
+            plt.tight_layout()
+            return self._save_plot(f"hydroworks_flows_{hydroworks_id}")
+            
+        except Exception as e:
+            print(f"Error plotting HydroWorks flows: {str(e)}")
+            return None
+
+    def plot_system_demands_vs_inflow(self):
+        """
+        Create a plot comparing total system inflow against total demands.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        try:
+            time_steps = range(self.system.time_steps)
+            
+            # Calculate total inflow (from supply nodes)
+            total_inflows = []
+            supply_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], SupplyNode)]
+            
+            for t in time_steps:
+                inflow = sum(node.get_supply_rate(t) for _, node in supply_nodes)
+                total_inflows.append(inflow)
+            
+            # Calculate total demands
+            total_demands = []
+            demand_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], DemandNode)]
+            
+            for t in time_steps:
+                demand = sum(node.get_demand_rate(t) for _, node in demand_nodes)
+                total_demands.append(demand)
+            
+            # Create figure
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+            
+            # Plot 1: Time series
+            ax1.plot(time_steps, total_inflows, 'b-', label='Total System Inflow', linewidth=2)
+            ax1.plot(time_steps, total_demands, 'r-', label='Total System Demand', linewidth=2)
+            
+            # Fill the deficit area
+            ax1.fill_between(time_steps, total_inflows, total_demands, 
+                            where=np.array(total_demands) > np.array(total_inflows),
+                            color='red', alpha=0.3, label='Deficit')
+            
+            # Fill the surplus area
+            ax1.fill_between(time_steps, total_inflows, total_demands,
+                            where=np.array(total_inflows) > np.array(total_demands),
+                            color='green', alpha=0.3, label='Surplus')
+            
+            # Calculate and display statistics
+            mean_inflow = np.mean(total_inflows)
+            mean_demand = np.mean(total_demands)
+            max_inflow = max(total_inflows)
+            max_demand = max(total_demands)
+            min_inflow = min(total_inflows)
+            min_demand = min(total_demands)
+            
+            total_inflow_volume = sum(total_inflows) * self.system.dt
+            total_demand_volume = sum(total_demands) * self.system.dt
+            
+            stats_text = (
+                f"Statistics:\n"
+                f"Mean Inflow: {mean_inflow:.2f} m³/s\n"
+                f"Mean Demand: {mean_demand:.2f} m³/s\n"
+                f"Max Inflow: {max_inflow:.2f} m³/s\n"
+                f"Max Demand: {max_demand:.2f} m³/s\n"
+                f"Min Inflow: {min_inflow:.2f} m³/s\n"
+                f"Min Demand: {min_demand:.2f} m³/s\n"
+                f"Total Inflow Volume: {total_inflow_volume:.2e} m³\n"
+                f"Total Demand Volume: {total_demand_volume:.2e} m³\n"
+                f"Volume Deficit: {(total_demand_volume - total_inflow_volume):.2e} m³"
+            )
+            
+            ax1.text(0.02, 0.98, stats_text,
+                    transform=ax1.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            ax1.set_xlabel('Time Step')
+            ax1.set_ylabel('Flow Rate [m³/s]')
+            ax1.set_title('System Inflow vs Total Demands')
+            ax1.grid(True)
+            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            
+            # Plot 2: Demand composition for each time step
+            bottom = np.zeros(len(time_steps))
+            colors = plt.cm.tab20(np.linspace(0, 1, len(demand_nodes)))
+            
+            for (node_id, node), color in zip(demand_nodes, colors):
+                demands = [node.get_demand_rate(t) for t in time_steps]
+                ax2.bar(time_steps, demands, bottom=bottom, label=node_id, color=color)
+                bottom += np.array(demands)
+            
+            # Add inflow line on top of stacked bars
+            ax2.plot(time_steps, total_inflows, 'k-', label='Total Inflow', linewidth=2)
+            
+            ax2.set_xlabel('Time Step')
+            ax2.set_ylabel('Flow Rate [m³/s]')
+            ax2.set_title('Demand Composition and Total Inflow')
+            ax2.grid(True)
+            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            
+            plt.tight_layout()
+            return self._save_plot("system_demands_vs_inflow")
+            
+        except Exception as e:
+            print(f"Error plotting system demands vs inflow: {str(e)}")
+            return None

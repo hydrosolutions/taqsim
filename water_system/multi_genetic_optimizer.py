@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
+from scoop import futures
 import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks
 
@@ -116,6 +117,7 @@ class MultiGeneticOptimizer:
         )
         """
         # Create individual and population
+        #self.toolbox.register("map", futures.map)
         self.toolbox.register("individual", self._create_individual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
         
@@ -329,7 +331,7 @@ class MultiGeneticOptimizer:
         
         return creator.Individual(genes)
 
-    def optimize(self, ngen=50, cxpb=0.6, mutpb=0.5):
+    def optimize(self, ngen=50, cxpb=0.9, mutpb=0.1):
         """Run genetic algorithm optimization with parameter validation"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)

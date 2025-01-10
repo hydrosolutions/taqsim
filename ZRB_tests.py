@@ -6,6 +6,25 @@ import webbrowser
 import os
 import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer
+import ctypes
+
+def prevent_sleep():
+    """Prevents the system from going to sleep."""
+    try:
+        # Windows only: Prevent system from sleeping
+        print("Preventing system from sleeping...")
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
+    except Exception as e:
+        print(f"Sleep prevention failed: {e}")
+
+def allow_sleep():
+    """Allows the system to sleep again."""
+    try:
+        # Windows only: Reset system sleep settings
+        print("Resetting sleep settings...")
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+    except Exception as e:
+        print(f"Failed to reset sleep settings: {e}")
 
 def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     """
@@ -43,8 +62,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             start_year=start_year,
             start_month=start_month,
             num_time_steps=num_time_steps,
-            field_efficiency=0.75,
-            conveyance_efficiency=0.65,
+            field_efficiency=1,
+            conveyance_efficiency=1,
             weight=1.0
         )
         demand_nodes.append(demand_node)
@@ -55,7 +74,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         #print(f"Created demand node: {row['name']}")
 
     # Demand Thermal powerplant Navoi (25 m³/s)
-    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=100)
+    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=1000)
     Jizzakh = DemandNode("Jizzakh", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', 
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=1)
     Kashkadarya = DemandNode("Kashkadarya", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', 
@@ -342,27 +361,40 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     # Run simulation
     system.simulate(num_time_steps)
 
-    vis=WaterSystemVisualizer(system, 'ZRB_system_optimized')
+    vis=WaterSystemVisualizer(system, 'ZRB_system')
     vis.plot_sink_outflows()
     vis.plot_demand_deficit_heatmap()
+    vis.plot_reservoir_volumes()
+    vis.print_water_balance_summary()
+    vis.plot_hydroworks_flows('HW-Karmana')
+    vis.plot_system_demands_vs_inflow()
+    vis.plot_network_layout_2()
 
+    # Get the storage node from the system's graph
+    storage_node = system.graph.nodes['RES-Akdarya']['node']
+    vis.plot_release_function(storage_node)
+    storage_node = system.graph.nodes['RES-Kattakurgan']['node']
+    vis.plot_release_function(storage_node)
+    
     html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
     
+
+    
     
     return system
 
-def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000):
     optimizer = MultiGeneticOptimizer(
         create_seasonal_ZRB_system,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=10
+        population_size=pop_size
     )
 
-    results = optimizer.optimize(ngen=100)
+    results = optimizer.optimize(ngen=ngen)
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -390,7 +422,7 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
 
       
     # Save optimization results
-    save_optimized_parameters(results, "optimized_parameters_ZRB.json")
+    save_optimized_parameters(results, f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}.json")
 
     # Run system with optimized parameters
     optimized_system = run_system_with_optimized_parameters(
@@ -441,6 +473,7 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     vis_ZRB.print_water_balance_summary()
     vis_ZRB.plot_reservoir_dynamics()
     vis_ZRB.plot_network_layout()
+    vis_ZRB.plot_network_layout_2()
 
     # Get the storage node from the system's graph
     storage_node = ZRB_system.graph.nodes['RES-Akdarya']['node']
@@ -462,14 +495,18 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
 # Run the sample tests
 if __name__ == "__main__":
+    prevent_sleep()
+    
     start_year = 2017
     start_month = 1
     num_time_steps = 12*3
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    #run_optimization(start_year, start_month, num_time_steps)
+    #run_optimization(start_year, start_month, num_time_steps, ngen=200, pop_size=2000)
     # Load parameters from file
-    loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen1000_pop50.json")
+
+   
+    loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen200_pop2000.json")
 
     # Create and run system with loaded parameters
     system = run_system_with_optimized_parameters(
@@ -478,6 +515,9 @@ if __name__ == "__main__":
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps
-)
+    )
+    
+
+    allow_sleep()
 
   

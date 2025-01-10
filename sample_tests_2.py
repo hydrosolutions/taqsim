@@ -297,6 +297,7 @@ if __name__ == "__main__":
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_reservoir_dynamics()
+    vis.plot_network_layout_2()
 
     # Get the storage node from the system's graph
     storage_node = optimized_system.graph.nodes['Reservoir']['node']
