@@ -162,11 +162,11 @@ class MultiGeneticOptimizer:
                     individual[i] = self._bound_parameter(value, bounds)
                     
                 else:
-                    # Hydroworks mutation (unchanged)
+                    # Hydroworks mutation - monthly parameters
                     hw_genes_processed = 0
                     for hw_id in self.hydroworks_ids:
                         n_targets = len(self.hydroworks_targets[hw_id])
-                        hw_genes = 12 * n_targets
+                        hw_genes = 12 * n_targets  # 12 months * number of targets
                         if hw_genes_processed + hw_genes > i:
                             local_idx = i - hw_genes_processed
                             month_idx = local_idx // n_targets
@@ -260,16 +260,13 @@ class MultiGeneticOptimizer:
             return (float('inf'),)
 
     def _decode_individual(self, individual):
-        """Convert individual's genes into parameter dictionaries for each structure"""
-        # Each reservoir has 60 genes (12 months * 5 parameters)
-        genes_per_reservoir = 12 * 5
+        genes_per_reservoir = 12 * 5  # 5 parameters * 12 months
         reservoir_params = {}
         hydroworks_params = {}
         
-        # Decode reservoir parameters (unchanged)
+        # Decode reservoir parameters
         for res_idx, res_id in enumerate(self.reservoir_ids):
             start_idx = res_idx * genes_per_reservoir
-            
             params = {
                 'h1': individual[start_idx:start_idx+12],
                 'h2': individual[start_idx+12:start_idx+24],
@@ -282,29 +279,30 @@ class MultiGeneticOptimizer:
         # Calculate start index for hydroworks genes
         hw_start = len(self.reservoir_ids) * genes_per_reservoir
         
-        # Decode hydroworks parameters - now using num_time_steps instead of fixed 12
+        # Decode hydroworks parameters - using 12 monthly values
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
             dist_params = {target: [] for target in self.hydroworks_targets[hw_id]}
             
-            # Extract and normalize parameters for each timestep
-            for t in range(self.num_time_steps):
-                t_start = hw_start + t * n_targets
-                t_end = t_start + n_targets
-                t_params = individual[t_start:t_end]
+            # Extract and normalize parameters for each month
+            for month in range(12):
+                month_start = hw_start + month * n_targets
+                month_end = month_start + n_targets
+                month_params = individual[month_start:month_end]
                 
-                # Normalize the timestep distribution
-                normalized_params = self._normalize_distribution(t_params)
+                # Normalize the monthly distribution
+                normalized_params = self._normalize_distribution(month_params)
                 
                 # Assign to each target
                 for target, param in zip(self.hydroworks_targets[hw_id], normalized_params):
                     dist_params[target].append(param)
             
+            # Store just the 12 monthly values
             hydroworks_params[hw_id] = dist_params
-            hw_start += self.num_time_steps * n_targets  # Update for next hydroworks
+            hw_start += 12 * n_targets
         
         return reservoir_params, hydroworks_params
-
+    
     def _create_individual(self):
         """Create an individual with parameters for all reservoirs and hydroworks"""
         genes = []
@@ -321,10 +319,10 @@ class MultiGeneticOptimizer:
                     param_values.append(value)  
                 genes.extend(param_values)
     
-        # Add genes for hydroworks - now using num_time_steps
+        # Add genes for hydroworks - 12 monthly values
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
-            for _ in range(self.num_time_steps):  # Changed from fixed 12
+            for _ in range(12):  # One set of parameters per month
                 raw_dist = [random.random() for _ in range(n_targets)]
                 normalized_dist = self._normalize_distribution(raw_dist)
                 genes.extend(normalized_dist)

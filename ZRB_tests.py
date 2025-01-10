@@ -62,8 +62,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             start_year=start_year,
             start_month=start_month,
             num_time_steps=num_time_steps,
-            field_efficiency=1,
-            conveyance_efficiency=1,
+            field_efficiency=0.75,
+            conveyance_efficiency=0.65,
             weight=1.0
         )
         demand_nodes.append(demand_node)
@@ -181,56 +181,56 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # HW-Ravadhoza distribution
     HW_Ravadhoza.set_distribution_parameters({
-        'HW-AkKaraDarya': [0.728] * num_time_steps,   
-        'HW-PC22': [0.103] * num_time_steps,           
-        'Toyloq': [0.066] * num_time_steps,           
-        'Urgut': [0.103] * num_time_steps              
+        'HW-AkKaraDarya': [0.728] * 12,   
+        'HW-PC22': [0.103] * 12,           
+        'Toyloq': [0.066] * 12,           
+        'Urgut': [0.103] * 12              
     })
 
     # HW-PC22 distribution
     HW_PC22.set_distribution_parameters({
-        'Bulungur': [0.361] * num_time_steps,          # 65/180
-        'Jomboy': [0.278] * num_time_steps,            # 50/180
-        'Jizzakh': [0.361] * num_time_steps            # 65/180
+        'Bulungur': [0.361] * 12,          # 65/180
+        'Jomboy': [0.278] * 12,            # 50/180
+        'Jizzakh': [0.361] * 12            # 65/180
     })
 
     # HW-EskiAnkhor distribution
     HW_EskiAnkhor.set_distribution_parameters({
-        'Pastdargom': [0.610] * num_time_steps,        # 125/205
-        'Nurobod': [0.390] * num_time_steps            # 80/205
+        'Pastdargom': [0.610] * 12,        # 125/205
+        'Nurobod': [0.390] * 12            # 80/205
     })
 
     # HW-AkKaraDarya distribution
     HW_AkKaraDarya.set_distribution_parameters({
-        'Oqdaryo': [0.353] * num_time_steps,           # 300/850
-        'HW-Damkodzha': [0.647] * num_time_steps       # 550/850
+        'Oqdaryo': [0.353] * 12,           # 300/850
+        'HW-Damkodzha': [0.647] * 12       # 550/850
     })
 
     # HW-Damkodzha distribution
     HW_Damkodzha.set_distribution_parameters({
-        'RES-Kattakurgan': [0.171] * num_time_steps,   # 100/585
-        'HW-Narpay': [0.137] * num_time_steps,         # 80/585
-        'HW-Confluence': [0.598] * num_time_steps,      # 350/585
-        'Kattaqorgon': [0.094] * num_time_steps        # 55/585
+        'RES-Kattakurgan': [0.171] * 12,   # 100/585
+        'HW-Narpay': [0.137] * 12,         # 80/585
+        'HW-Confluence': [0.598] * 12,      # 350/585
+        'Kattaqorgon': [0.094] * 12        # 55/585
     })
 
     # HW-Narpay distribution
     HW_Narpay.set_distribution_parameters({
-        'HW-Confluence': [0.510] * num_time_steps,      # 125/245
-        'Narpay': [0.327] * num_time_steps,            # 80/245
-        'Kattaqorgon': [0.163] * num_time_steps        # 40/245
+        'HW-Confluence': [0.510] * 12,      # 125/245
+        'Narpay': [0.327] * 12,            # 80/245
+        'Kattaqorgon': [0.163] * 12        # 40/245
     })
 
     # HW-Confluence distribution
     HW_Confluence.set_distribution_parameters({
-        'HW-Karmana': [1.0] * num_time_steps           # All flow goes to Karmana
+        'HW-Karmana': [1.0] * 12           # All flow goes to Karmana
     })
 
     # HW-Karmana distribution
     HW_Karmana.set_distribution_parameters({
-        'Navbahor': [0.078] * num_time_steps,          # 45/580
-        'Sink-Navoi': [0.862] * num_time_steps,    # 500/580
-        'Navoi-Powerplant': [0.060] * num_time_steps         # 35/580
+        'Navbahor': [0.078] * 12,          # 45/580
+        'Sink-Navoi': [0.862] * 12,    # 500/580
+        'Navoi-Powerplant': [0.060] * 12         # 35/580
     })
     
     return system
@@ -502,11 +502,11 @@ if __name__ == "__main__":
     num_time_steps = 12*3
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    #run_optimization(start_year, start_month, num_time_steps, ngen=200, pop_size=2000)
+    #run_optimization(start_year, start_month, num_time_steps, ngen=10, pop_size=10)
     # Load parameters from file
 
-   
-    loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen200_pop2000.json")
+    
+    loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen10_pop10.json")
 
     # Create and run system with loaded parameters
     system = run_system_with_optimized_parameters(
@@ -517,7 +517,7 @@ if __name__ == "__main__":
         num_time_steps=num_time_steps
     )
     
-
+    
     allow_sleep()
 
   
