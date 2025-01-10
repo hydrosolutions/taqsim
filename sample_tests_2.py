@@ -37,10 +37,12 @@ def create_test_system(start_year, start_month, num_time_steps):
     reservoir = StorageNode("Reservoir", hva_file='./data/Kattakurgan_H_V_A.csv', initial_storage=2e8, easting=500, northing=1000, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
                              start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, release_params=release_params)
     hydrowork2 = HydroWorks("Hydroworks", easting=1000, northing=1000)
-    demand1 = DemandNode("Demand1", easting=2000, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Kattaqorgon_17to22.csv', 
+    demand1 = DemandNode("Demand1", easting=1600, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Kattaqorgon_17to22.csv', 
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
     demand2 = DemandNode("Demand2", easting=2000, northing=800, csv_file='./data/ETblue/monthly_ETblue_Pastdargom_17to22.csv', 
-                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=10.0)
+                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
+    demand3 = DemandNode("Demand3", easting=2400, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Ishtixon_17to22.csv', 
+                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
     sink = SinkNode("RiverMouth", easting=3000, northing=1000)
 
     # Add nodes to the system
@@ -50,6 +52,7 @@ def create_test_system(start_year, start_month, num_time_steps):
     system.add_node(hydrowork2)
     system.add_node(demand1)
     system.add_node(demand2)
+    system.add_node(demand3)
     system.add_node(sink)
 
     # Connect nodes with edges
@@ -59,17 +62,18 @@ def create_test_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(reservoir, hydrowork2, capacity=80))   # 80 m³/s max flow from reservoir to demand
     system.add_edge(Edge(hydrowork2, demand1, capacity=50))   # 50 m³/s max flow from hydrowork to demand
     system.add_edge(Edge(hydrowork2, demand2, capacity=50))   # 50 m³/s max flow from hydrowork to demand
-    system.add_edge(Edge(demand1, sink, capacity=130))        # 50 m³/s max flow of excess to sink
+    system.add_edge(Edge(demand1, demand3, capacity=50))   # 50 m³/s max flow from hydrowork to demand
+    system.add_edge(Edge(demand3, sink, capacity=130))        # 50 m³/s max flow of excess to sink
     system.add_edge(Edge(demand2, sink, capacity=50))        # 50 m³/s max flow of excess to sink
 
     # Set monthly distribution parameters for edges
     hydrowork1.set_distribution_parameters({
-        'Demand1': [0.5]*num_time_steps,
-        'Reservoir': [0.5]*num_time_steps
+        'Demand1': [0.5]*12,
+        'Reservoir': [0.5]*12
     })
     hydrowork2.set_distribution_parameters({
-        'Demand1': [0.5]*num_time_steps,
-        'Demand2': [0.5]*num_time_steps
+        'Demand1': [0.5]*12,
+        'Demand2': [0.5]*12
     })
     return system
 
@@ -95,7 +99,7 @@ def generate_seasonal_supply(num_time_steps):
     Returns:
         list: A list of supply rates for each time step.
     """
-    base_supply = 20  # m³/s
+    base_supply = 40  # m³/s
     amplitude = 15    # m³/s
     supply_rates = []
     for t in range(num_time_steps):
@@ -172,6 +176,29 @@ def save_optimized_parameters(optimization_results, filename):
     
     print(f"Optimization results saved to {filename}")
 
+def load_parameters_from_file(filename):
+    """
+    Load previously saved optimized parameters from a file.
+    
+    Args:
+        filename (str): Path to the parameter file
+        
+    Returns:
+        dict: Dictionary containing the optimization results
+    """
+    import json
+    
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    
+    return {
+        'success': True,
+        'message': "Parameters loaded from file",
+        'objective_value': data['objective_value'],
+        'optimal_reservoir_parameters': data['reservoir_parameters'],
+        'optimal_hydroworks_parameters': data['hydroworks_parameters']
+    }
+
 def run_system_with_optimized_parameters(system_creator, optimization_results, 
                                        start_year, start_month, num_time_steps):
     """
@@ -233,16 +260,16 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
-def run_optimization(start_year=2017, start_month=1, num_time_steps=12):
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12, popsize=200, ngen=100):
     optimizer = MultiGeneticOptimizer(
         create_test_system,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=20
+        population_size=popsize
     )
 
-    results = optimizer.optimize(ngen=100)
+    results = optimizer.optimize(ngen=ngen)
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -274,18 +301,22 @@ if __name__ == "__main__":
     start_year=2017
     start_month=1
     num_time_steps=12*3
+    ngen=100
+    popsize=200
 
 
     #run_sample_tests(start_year, start_month, num_time_steps)
-    results=run_optimization(start_year, start_month, num_time_steps)
+    results=run_optimization(start_year, start_month, num_time_steps, popsize, ngen)
     
     # Save optimization results
-    save_optimized_parameters(results, "optimized_parameters_test_system.json")
+    save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")
 
+
+    loaded_results = load_parameters_from_file("optimized_parameters_test_system_2.json")
     # Run system with optimized parameters
     optimized_system = run_system_with_optimized_parameters(
         create_test_system,  # Your system creator function
-        results,
+        loaded_results,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps
@@ -296,12 +327,17 @@ if __name__ == "__main__":
     vis=WaterSystemVisualizer(optimized_system, 'optimized_test_system')
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
+    vis.plot_storage_dynamics()
     vis.plot_reservoir_dynamics()
-    vis.plot_network_layout_2()
+    vis.plot_network_layout()
+    vis.plot_demand_satisfaction()  
+    vis.plot_system_demands_vs_inflow()
 
+    """
     # Get the storage node from the system's graph
     storage_node = optimized_system.graph.nodes['Reservoir']['node']
     vis.plot_release_function(storage_node)
+    """
 
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
