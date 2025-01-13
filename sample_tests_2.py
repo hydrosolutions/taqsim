@@ -283,14 +283,14 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, popsize=
         print(f"\n{res_id}:")
         for param, values in params.items():
             print(f"{param}: ", end="")
-            print([f"{v:.3f}" for v in values])
+            print(f"{values:.3f}")
         
     print("\nOptimal Hydroworks Parameters:")
     for hw_id, params in results['optimal_hydroworks_parameters'].items():
         print(f"\n{hw_id}:")
         for target, values in params.items():
             print(f"{target}: ", end="")
-            print([f"{v:.3f}" for v in values])
+            print(f"{values:.3f}")
 
     optimizer.plot_convergence()
     return results
@@ -300,19 +300,18 @@ if __name__ == "__main__":
     start_year=2017
     start_month=1
     num_time_steps=12*3
-    ngen=100
+    ngen=10
     popsize=200
 
 
-    run_sample_tests(start_year, start_month, num_time_steps)
-    """
-    results=run_optimization(start_year, start_month, num_time_steps, popsize, ngen)
+    #run_sample_tests(start_year, start_month, num_time_steps)
+   # results=run_optimization(start_year, start_month, num_time_steps, popsize, ngen)
     
     # Save optimization results
-    save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")
+    #save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")
 
 
-    loaded_results = load_parameters_from_file("optimized_parameters_test_system_2.json")
+    loaded_results = load_parameters_from_file("optimized_parameters_test_system_ngen10_pop200.json")
     # Run system with optimized parameters
     optimized_system = run_system_with_optimized_parameters(
         create_test_system,  # Your system creator function
@@ -332,7 +331,6 @@ if __name__ == "__main__":
     vis.plot_network_layout()
     vis.plot_demand_satisfaction()  
     vis.plot_system_demands_vs_inflow()
-
     
     # Get the storage node from the system's graph
     storage_node = optimized_system.graph.nodes['Reservoir']['node']
@@ -342,4 +340,4 @@ if __name__ == "__main__":
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    """
+    

@@ -406,14 +406,14 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
         print(f"\n{res_id}:")
         for param, values in params.items():
             print(f"{param}: ", end="")
-            print([f"{v:.3f}" for v in values])
+            print(f"{values:.3f}")
         
     print("\nOptimal Hydroworks Parameters:")
     for hw_id, params in results['optimal_hydroworks_parameters'].items():
         print(f"\n{hw_id}:")
         for target, values in params.items():
             print(f"{target}: ", end="")
-            print([f"{v:.3f}" for v in values])
+            print(f"{values:.3f}")
 
     optimizer.plot_convergence()
 
@@ -497,10 +497,11 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*3
+    ngen = 10
+    pop_size = 10
     
-    run_sample_tests(start_year, start_month, num_time_steps)
-    #run_optimization(start_year, start_month, num_time_steps, ngen=10, pop_size=10)
-    # Load parameters from file
+    #run_sample_tests(start_year, start_month, num_time_steps)
+    run_optimization(start_year, start_month, num_time_steps, ngen, pop_size)
 
     """
     loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen10_pop10.json")

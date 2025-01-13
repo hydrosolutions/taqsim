@@ -43,8 +43,8 @@ class MultiGeneticOptimizer:
                 
                 # Set reservoir-specific bounds
                 self.reservoir_bounds[node_id] = {
-                    'h1': (min_level, max_level),  # Full range for h1
-                    'h2': (min_level, max_level),  # Full range for h2
+                    'h1': (min_level, mid_level),  # Full range for h1
+                    'h2': (mid_level, max_level),  # Full range for h2
                     'w': (0, total_capacity),      # From 0 to total outflow capacity
                     'm1': (1.47, 1.57),            # Standard slopes
                     'm2': (1.47, 1.57)             # Standard slopes
@@ -129,10 +129,10 @@ class MultiGeneticOptimizer:
 
     def _mutate_individual(self, individual, indpb=0.2):
         """Custom mutation operator with enforced parameter bounds"""
-        genes_per_reservoir = 12 * 5  # 5 parameters * 12 months
+        genes_per_reservoir = 5  # 5 parameters per reservoir
         
-        # Track which months need renormalization for each hydroworks
-        hw_updates = {hw_id: set() for hw_id in self.hydroworks_ids}
+        # Track which hydroworks need renormalization
+        hw_updates = set()
         
         for i in range(len(individual)):
             if random.random() < indpb:
@@ -140,8 +140,7 @@ class MultiGeneticOptimizer:
                     # Reservoir parameter mutation
                     res_idx = i // genes_per_reservoir
                     res_id = self.reservoir_ids[res_idx]
-                    local_idx = i % genes_per_reservoir
-                    param_idx = local_idx // 12
+                    param_idx = i % genes_per_reservoir
                     param_name = ['h1', 'h2', 'w', 'm1', 'm2'][param_idx]
                     bounds = self.reservoir_bounds[res_id][param_name]
                     
@@ -150,11 +149,11 @@ class MultiGeneticOptimizer:
                     
                     # Special handling for h2 to maintain h1 < h2
                     if param_name == 'h2':
-                        h1_idx = i - 12  # Index of corresponding h1 value
+                        h1_idx = i - 1  # Index of corresponding h1 value
                         min_bound = max(bounds[0], individual[h1_idx] + 0.1)
                         value = random.uniform(min_bound, bounds[1])
                     elif param_name == 'h1':
-                        h2_idx = i + 12  # Index of corresponding h2 value
+                        h2_idx = i + 1  # Index of corresponding h2 value
                         max_bound = min(bounds[1], individual[h2_idx] - 0.1)
                         value = random.uniform(bounds[0], max_bound)
                     
@@ -162,51 +161,49 @@ class MultiGeneticOptimizer:
                     individual[i] = self._bound_parameter(value, bounds)
                     
                 else:
-                    # Hydroworks mutation - monthly parameters
-                    hw_genes_processed = 0
+                    # Hydroworks parameter mutation
+                    hw_genes_start = len(self.reservoir_ids) * genes_per_reservoir
+                    offset = i - hw_genes_start
+                    
+                    # Find which hydroworks this gene belongs to
+                    hw_idx = 0
+                    gene_count = 0
                     for hw_id in self.hydroworks_ids:
                         n_targets = len(self.hydroworks_targets[hw_id])
-                        hw_genes = 12 * n_targets  # 12 months * number of targets
-                        if hw_genes_processed + hw_genes > i:
-                            local_idx = i - hw_genes_processed
-                            month_idx = local_idx // n_targets
-                            hw_updates[hw_id].add(month_idx)
-                            individual[i] = random.random()
+                        if gene_count + n_targets > offset:
+                            hw_updates.add(hw_id)
                             break
-                        hw_genes_processed += hw_genes
+                        gene_count += n_targets
+                        hw_idx += 1
+                    
+                    # Mutate the gene
+                    individual[i] = random.random()
         
-        # Normalize hydroworks distributions (unchanged)
+        # Normalize hydroworks distributions that were modified
         gene_idx = len(self.reservoir_ids) * genes_per_reservoir
         for hw_id in self.hydroworks_ids:
-            n_targets = len(self.hydroworks_targets[hw_id])
-            for month in hw_updates[hw_id]:
-                start_idx = gene_idx + month * n_targets
-                end_idx = start_idx + n_targets
-                month_params = individual[start_idx:end_idx]
-                normalized_params = self._normalize_distribution(month_params)
-                for j, param in enumerate(normalized_params):
-                    individual[start_idx + j] = param
-            gene_idx += 12 * n_targets
-        
+            if hw_id in hw_updates:
+                n_targets = len(self.hydroworks_targets[hw_id])
+                dist_values = individual[gene_idx:gene_idx + n_targets]
+                normalized_dist = self._normalize_distribution(dist_values)
+                for j, value in enumerate(normalized_dist):
+                    individual[gene_idx + j] = value
+            gene_idx += len(self.hydroworks_targets[hw_id])
         return individual,
 
     def _evaluate_individual(self, individual):
         """Evaluate fitness of an individual with bound checking"""
         # Verify all parameters are within bounds before evaluation
-        genes_per_reservoir = 12 * 5  # 5 parameters * 12 months
+        genes_per_reservoir = 5  # 5 parameters per reservoir
         
         try:
             # Check reservoir parameters
             for res_idx, res_id in enumerate(self.reservoir_ids):
                 start_idx = res_idx * genes_per_reservoir
                 for param_idx, param_name in enumerate(['h1', 'h2', 'w', 'm1', 'm2']):
-                    param_start = start_idx + param_idx * 12
-                    param_end = param_start + 12
                     bounds = self.reservoir_bounds[res_id][param_name]
-                    
-                    # Check and enforce bounds for each monthly value
-                    for i in range(param_start, param_end):
-                        individual[i] = self._bound_parameter(individual[i], bounds)
+                    i = start_idx + param_idx
+                    individual[i] = self._bound_parameter(individual[i], bounds)
             
             # Decode parameters and continue with evaluation
             reservoir_params, hydroworks_params = self._decode_individual(individual)
@@ -260,7 +257,7 @@ class MultiGeneticOptimizer:
             return (float('inf'),)
 
     def _decode_individual(self, individual):
-        genes_per_reservoir = 12 * 5  # 5 parameters * 12 months
+        genes_per_reservoir = 5  # 5 parameters per reservoir
         reservoir_params = {}
         hydroworks_params = {}
         
@@ -268,64 +265,55 @@ class MultiGeneticOptimizer:
         for res_idx, res_id in enumerate(self.reservoir_ids):
             start_idx = res_idx * genes_per_reservoir
             params = {
-                'h1': individual[start_idx:start_idx+12],
-                'h2': individual[start_idx+12:start_idx+24],
-                'w': individual[start_idx+24:start_idx+36],
-                'm1': individual[start_idx+36:start_idx+48],
-                'm2': individual[start_idx+48:start_idx+60]
+                'h1': individual[start_idx],
+                'h2': individual[start_idx + 1],
+                'w': individual[start_idx + 2],
+                'm1': individual[start_idx + 3],
+                'm2': individual[start_idx + 4]
             }
             reservoir_params[res_id] = params
         
         # Calculate start index for hydroworks genes
         hw_start = len(self.reservoir_ids) * genes_per_reservoir
         
-        # Decode hydroworks parameters - using 12 monthly values
+        # Decode hydroworks parameters - single annual distribution per target
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
-            dist_params = {target: [] for target in self.hydroworks_targets[hw_id]}
+            start_idx = hw_start
+            end_idx = start_idx + n_targets
             
-            # Extract and normalize parameters for each month
-            for month in range(12):
-                month_start = hw_start + month * n_targets
-                month_end = month_start + n_targets
-                month_params = individual[month_start:month_end]
-                
-                # Normalize the monthly distribution
-                normalized_params = self._normalize_distribution(month_params)
-                
-                # Assign to each target
-                for target, param in zip(self.hydroworks_targets[hw_id], normalized_params):
-                    dist_params[target].append(param)
+            # Get and normalize distribution parameters
+            dist_values = individual[start_idx:end_idx]
+            normalized_dist = self._normalize_distribution(dist_values)
             
-            # Store just the 12 monthly values
+            # Create parameter dictionary
+            dist_params = {}
+            for target, value in zip(self.hydroworks_targets[hw_id], normalized_dist):
+                dist_params[target] = value
+            
             hydroworks_params[hw_id] = dist_params
-            hw_start += 12 * n_targets
-        
-        return reservoir_params, hydroworks_params
+            hw_start += n_targets
+            
+            return reservoir_params, hydroworks_params
     
     def _create_individual(self):
         """Create an individual with parameters for all reservoirs and hydroworks"""
         genes = []
         
-        # Add genes for each reservoir (unchanged)
+        # Add genes for each reservoir 
         for res_id in self.reservoir_ids:
             for param in ['h1', 'h2', 'w', 'm1', 'm2']:
                 bounds = self.reservoir_bounds[res_id][param]
-                param_values = []
-                
-                for _ in range(12):
-                    value = getattr(self.toolbox, f"reservoir_{res_id}_{param}")()
-                    value = self._bound_parameter(value, bounds)
-                    param_values.append(value)  
-                genes.extend(param_values)
+                value = getattr(self.toolbox, f"reservoir_{res_id}_{param}")()
+                value = self._bound_parameter(value, bounds)
+                genes.append(value)
     
-        # Add genes for hydroworks - 12 monthly values
+        # Add genes for hydroworks
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
-            for _ in range(12):  # One set of parameters per month
-                raw_dist = [random.random() for _ in range(n_targets)]
-                normalized_dist = self._normalize_distribution(raw_dist)
-                genes.extend(normalized_dist)
+            raw_dist = [random.random() for _ in range(n_targets)]
+            normalized_dist = self._normalize_distribution(raw_dist)
+            genes.extend(normalized_dist)
         
         return creator.Individual(genes)
 
