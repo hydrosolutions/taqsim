@@ -501,11 +501,11 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12*3
     
-    #run_sample_tests(start_year, start_month, num_time_steps)
+    run_sample_tests(start_year, start_month, num_time_steps)
     #run_optimization(start_year, start_month, num_time_steps, ngen=10, pop_size=10)
     # Load parameters from file
 
-    
+    """
     loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen10_pop10.json")
 
     # Create and run system with loaded parameters
@@ -516,7 +516,7 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    
+    """
     
     allow_sleep()
 

@@ -513,51 +513,48 @@ class StorageNode(Node):
         Args:
             params (dict): Monthly release parameters
         """
-        if params is None:
-            # Default parameters for all months
-            level_range = self.hva_data['max_waterlevel'] - self.hva_data['min_waterlevel']
-            default_h1 = self.hva_data['min_waterlevel'] + 0.2 * level_range
-            default_h2 = self.hva_data['min_waterlevel'] + 0.9 * level_range
-            default_w = sum(edge.capacity for edge in self.outflow_edges.values())
+        # Validate parameters
+        required_params = ['h1', 'h2', 'w', 'm1', 'm2']
+        if not all(key in params for key in required_params):
+            missing = [key for key in required_params if key not in params]
+            raise ValueError(f"Missing release parameters: {missing}")
             
-            self.release_params = {
-                'h1': [default_h1] * 12,
-                'h2': [default_h2] * 12,
-                'w': [default_w] * 12,
-                'm1': [1.57] * 12,
-                'm2': [1.57] * 12
-            }
-        else:
-            # Validate parameters
-            required_params = ['h1', 'h2', 'w', 'm1', 'm2']
-            if not all(key in params for key in required_params):
-                missing = [key for key in required_params if key not in params]
-                raise ValueError(f"Missing release parameters: {missing}")
+        # Validate parameter values
+        h1 = params['h1']
+        h2 = params['h2']
+        w =  params['w']
+        m1 = params['m1']
+        m2 = params['m2']
+        
+        # Check level bounds against HVA data
+        if hasattr(self, 'hva_data'):
+            min_level = self.hva_data['min_waterlevel']
+            max_level = self.hva_data['max_waterlevel']
             
-            # Convert single values to monthly lists
-            monthly_params = {}
-            for param in required_params:
-                if isinstance(params[param], (int, float)):
-                    monthly_params[param] = [params[param]] * 12
-                elif len(params[param]) != 12:
-                    raise ValueError(f"Parameter {param} must have 12 monthly values")
-                else:
-                    monthly_params[param] = params[param]
+            if h1 < min_level or h1 > max_level:
+                raise ValueError(f"h1 ({h1}) outside valid range [{min_level}, {max_level}]")
+            if h2 < min_level or h2 > max_level:
+                raise ValueError(f"h2 ({h2}) outside valid range [{min_level}, {max_level}]")
+        
+        # Check level relationships
+        if h1 >= h2:
+            raise ValueError(f"h1 ({h1}) must be less than h2 ({h2})")
+        
+        # Check slope ranges (0 to π/2 radians)
+        if not (0 <= m1 < 1.571):
+            raise ValueError(f"m1 ({m1}) must be between 0 and π/2")
+        if not (0 <= m2 < 1.571):
+            raise ValueError(f"m2 ({m2}) must be between 0 and π/2")
+        
+        # Check base release rate
+        if w < 0:
+            raise ValueError(f"w ({w}) cannot be negative")
+        
+        
+        # Store parameters
+        self.release_params = params
 
-            # Validate parameter values
-            for month in range(12):
-                if monthly_params['h1'][month] >= monthly_params['h2'][month]:
-                    raise ValueError(f"Month {month+1}: h1 must be less than h2")
-                if monthly_params['w'][month] < 0:
-                    raise ValueError(f"Month {month+1}: w must be non-negative")
-                if not (0 <= monthly_params['m1'][month] < 1.571):
-                    raise ValueError(f"Month {month+1}: m1 must be between 0 and π/2 radians")
-                if not (0 <= monthly_params['m2'][month] < 1.571):
-                    raise ValueError(f"Month {month+1}: m2 must be between 0 and π/2 radians")
-            
-            self.release_params = monthly_params
-
-    def calculate_release(self, waterlevel, time_step):
+    def calculate_release(self, waterlevel):
         """
         Calculate the reservoir release based on current water level.
         
@@ -568,14 +565,11 @@ class StorageNode(Node):
         Returns:
             float: Calculated release rate [m³/s]
         """
-        # Convert time_step to month (0-11)
-        month = time_step % 12
-        
-        h1 = self.release_params['h1'][month]
-        h2 = self.release_params['h2'][month]
-        w = self.release_params['w'][month]
-        m1 = self.release_params['m1'][month]
-        m2 = self.release_params['m2'][month]
+        h1 = self.release_params['h1']
+        h2 = self.release_params['h2']
+        w = self.release_params['w']
+        m1 = self.release_params['m1']
+        m2 = self.release_params['m2']
         
         release = sum(edge.capacity for edge in self.outflow_edges.values())
         if waterlevel < self.hva_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
@@ -588,31 +582,7 @@ class StorageNode(Node):
             release = 0
         
         return release
-        """
-        if waterlevel < h1:
-            return 0
-        elif (waterlevel-h1)* np.tan(m1) < w:
-            return (waterlevel-h1)* np.tan(m1)
-        elif waterlevel <= h2:
-            return w
-        elif waterlevel < self.hva_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
-            return w + (waterlevel-h2)* np.tan(m2)
-        else:
-             # When at maximum water level, use the total outflow capacity
-            return sum(edge.capacity for edge in self.outflow_edges.values())
-        
-        
-        if waterlevel < self.hva_data['max_waterlevel']:
-            release = w + (waterlevel-h2)* np.tan(m2)
-        if waterlevel <= h2:
-            release = w
-        if (waterlevel-h1)* np.tan(m1) < w:
-            release = (waterlevel-h1)* np.tan(m1)
-        if waterlevel < h1:
-            release = 0
-       
-        return release
-        """
+
     
     def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
         """
@@ -840,7 +810,7 @@ class StorageNode(Node):
             
             # Calculate current water level and desired release
             current_level = self.get_level_from_volume(available_water)
-            target_release_rate = self.calculate_release(current_level, time_step)
+            target_release_rate = self.calculate_release(current_level)
             
             # Convert release rate to volume
             requested_outflow_volume = target_release_rate * dt

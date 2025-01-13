@@ -1946,7 +1946,7 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         return self._save_plot(f"monthly_water_balance_{storage_node.id}")
 
-    def plot_release_function(self, storage_node, months=None):
+    def plot_release_function(self, storage_node):
         """
         Create a plot showing the release function for a storage node with monthly variations.
         
@@ -1964,128 +1964,47 @@ class WaterSystemVisualizer:
         params = storage_node.release_params
         release_capacity = sum(edge.capacity for edge in storage_node.outflow_edges.values())
         
-        # Determine which months to plot
-        if months is None:
-            months = list(range(12))
-        elif isinstance(months, int):
-            months = [months-1]  # Convert to 0-based index
-        else:
-            months = [m-1 for m in months]  # Convert to 0-based indices
-        
         # Set up the plot
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+        fig, (ax1) = plt.subplots(1, 1, figsize=(12, 6))
         
-        # Color map for different months
-        colors = plt.cm.viridis(np.linspace(0, 1, len(months)))
-        
-        # Month names for legend
-        month_names = ['January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December']
-        
-        # Find overall min and max levels for consistent plotting
-        min_h1 = min(params['h1'])
-        max_h2 = max(params['h2'])
-        min_level = max(0, min_h1 - 2)
-        max_level = max_h2 + 2
-        
-        # Generate water levels for plotting
+        min_level = storage_node.hva_data['min_waterlevel']
+        max_level = storage_node.hva_data['max_waterlevel']
         levels = np.linspace(min_level, max_level, 200)
         
         # Plot release functions
         max_release = 0
-        for idx, month in enumerate(months):
-            releases = []
-            for h in levels:
-                release = release_capacity
-                if params['w'][month] + (h-params['h2'][month])* np.tan(params['m2'][month]) < release_capacity:
-                    release = params['w'][month] + (h-params['h2'][month])* np.tan(params['m2'][month])
-                if h <= params['h2'][month]:
-                    release = params['w'][month]
-                if (h-params['h1'][month])* np.tan(params['m1'][month]) < params['w'][month]:
-                    release = (h-params['h1'][month])* np.tan(params['m1'][month])
-                if h <= params['h1'][month]:
-                    release = 0
-                """
-                if h <= params['h1'][month]:
-                    release = 0
-                elif (h-params['h1'][month])* np.tan(params['m1'][month]) < params['w'][month]:
-                    release = (h-params['h1'][month])* np.tan(params['m1'][month])
-                elif h <= params['h2'][month]:
-                    release = params['w'][month]
-                elif params['w'][month] + (h-params['h2'][month])* np.tan(params['m2'][month]) < release_capacity:
-                    release = params['w'][month] + (h-params['h2'][month])* np.tan(params['m2'][month])
-                else:
-                    release = release_capacity
-                """
-                releases.append(release)
-                max_release = max(max_release, release)
+        
+        releases = []
+        for h in levels:
+            release = release_capacity
+            if params['w']+ (h-params['h2'])* np.tan(params['m2']) < release_capacity:
+                release = params['w'] + (h-params['h2'])* np.tan(params['m2'])
+            if h <= params['h2']:
+                release = params['w']
+            if (h-params['h1'])* np.tan(params['m1']) < params['w']:
+                release = (h-params['h1'])* np.tan(params['m1'])
+            if h <= params['h1']:
+                release = 0
+
+            releases.append(release)
+            max_release = max(max_release, release)
             
-            # Plot main release function
-            ax1.plot(levels, releases, color=colors[idx], 
-                    label=f'{month_names[month]}', linewidth=2)
-            
-            # Add vertical lines for h1 and h2
-            ax1.axvline(x=params['h1'][month], color=colors[idx], 
-                    linestyle='--', alpha=0.3)
-            ax1.axvline(x=params['h2'][month], color=colors[idx], 
-                    linestyle=':', alpha=0.3)
-            
-            # Add horizontal line for base release w
-            ax1.axhline(y=params['w'][month], color=colors[idx], 
-                    linestyle=':', alpha=0.3)
-            ax1.axhline(y=release_capacity, color=colors[idx], 
-                    linestyle='--', alpha=0.3)
+        # Plot main release function
+        ax1.plot(levels, releases, linewidth=2)
+        
+        # Add vertical lines for h1 and h2
+        ax1.axvline(x=params['h1'],linestyle='--', alpha=0.3)
+        ax1.axvline(x=params['h2'],linestyle=':', alpha=0.3)
+        
+        # Add horizontal line for base release w
+        ax1.axhline(y=params['w'], linestyle=':', alpha=0.3)
+        ax1.axhline(y=release_capacity, linestyle='--', alpha=0.3)
             
         # Customize main plot
         ax1.set_xlabel('Water Level [m a.s.l.]')
         ax1.set_ylabel('Release Rate [m³/s]')
         ax1.set_title(f'Monthly Release Functions for {storage_node.id}')
-        ax1.grid(True, alpha=0.3)
-        ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        
-        # Plot parameter variations
-        param_data = {
-            'h1': {'values': params['h1'], 'label': 'Low Level (h₁)', 'color': 'red'},
-            'h2': {'values': params['h2'], 'label': 'High Level (h₂)', 'color': 'blue'},
-            'w': {'values': params['w'], 'label': 'Base Release (w)', 'color': 'green'},
-            'm1': {'values': params['m1'], 'label': 'Low Slope (m₁)', 'color': 'purple'},
-            'm2': {'values': params['m2'], 'label': 'High Slope (m₂)', 'color': 'orange'}
-        }
-        
-        # Plot normalized parameter variations
-        for param, data in param_data.items():
-            values = data['values']
-            normalized = [(v - min(values)) / (max(values) - min(values)) if max(values) != min(values) else 0.5 
-                        for v in values]
-            ax2.plot(range(1, 13), normalized, 
-                    label=f"{data['label']} ({min(values):.1f}-{max(values):.1f})",
-                    color=data['color'], marker='o', linewidth=2)
-        
-        # Customize parameter variation plot
-        ax2.set_xlabel('Month')
-        ax2.set_ylabel('Normalized Parameter Value')
-        ax2.set_title('Monthly Parameter Variations')
-        ax2.grid(True, alpha=0.3)
-        ax2.set_xticks(range(1, 13))
-        ax2.set_xticklabels([name[:3] for name in month_names], rotation=45)
-        ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        
-        # Add summary statistics
-        stats_text = (
-            f"Parameter Ranges:\n"
-            f"h₁: {min(params['h1']):.1f} - {max(params['h1']):.1f} m\n"
-            f"h₂: {min(params['h2']):.1f} - {max(params['h2']):.1f} m\n"
-            f"w: {min(params['w']):.1f} - {max(params['w']):.1f} m³/s\n"
-            f"m₁: {min(params['m1']):.3f} - {max(params['m1']):.3f} rad\n"
-            f"m₂: {min(params['m2']):.3f} - {max(params['m2']):.3f} rad"
-        )
-        
-        ax2.text(1.35, 0.5, stats_text,
-                transform=ax2.transAxes,
-                verticalalignment='center',
-                bbox=dict(boxstyle='round',
-                        facecolor='white',
-                        alpha=0.8))
+        ax1.grid(True, alpha=0.3)        
         
         plt.tight_layout()
         return self._save_plot(f"release_function_{storage_node.id}")
