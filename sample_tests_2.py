@@ -68,12 +68,12 @@ def create_test_system(start_year, start_month, num_time_steps):
 
     # Set monthly distribution parameters for edges
     hydrowork1.set_distribution_parameters({
-        'Demand1': [0.5]*12,
-        'Reservoir': [0.5]*12
+        'Demand1': 0.5,
+        'Reservoir': 0.5
     })
     hydrowork2.set_distribution_parameters({
-        'Demand1': [0.5]*12,
-        'Demand2': [0.5]*12
+        'Demand1': 0.5,
+        'Demand2': 0.5
     })
     return system
 

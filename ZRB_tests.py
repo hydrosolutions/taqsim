@@ -181,56 +181,56 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # HW-Ravadhoza distribution
     HW_Ravadhoza.set_distribution_parameters({
-        'HW-AkKaraDarya': [0.728] * 12,   
-        'HW-PC22': [0.103] * 12,           
-        'Toyloq': [0.066] * 12,           
-        'Urgut': [0.103] * 12              
+        'HW-AkKaraDarya': 0.728,   
+        'HW-PC22': 0.103,           
+        'Toyloq': 0.066,           
+        'Urgut': 0.103              
     })
 
     # HW-PC22 distribution
     HW_PC22.set_distribution_parameters({
-        'Bulungur': [0.361] * 12,          # 65/180
-        'Jomboy': [0.278] * 12,            # 50/180
-        'Jizzakh': [0.361] * 12            # 65/180
+        'Bulungur': 0.361,          # 65/180
+        'Jomboy': 0.278,            # 50/180
+        'Jizzakh': 0.361            # 65/180
     })
 
     # HW-EskiAnkhor distribution
     HW_EskiAnkhor.set_distribution_parameters({
-        'Pastdargom': [0.610] * 12,        # 125/205
-        'Nurobod': [0.390] * 12            # 80/205
+        'Pastdargom': 0.610,        # 125/205
+        'Nurobod': 0.390            # 80/205
     })
 
     # HW-AkKaraDarya distribution
     HW_AkKaraDarya.set_distribution_parameters({
-        'Oqdaryo': [0.353] * 12,           # 300/850
-        'HW-Damkodzha': [0.647] * 12       # 550/850
+        'Oqdaryo': 0.353,           # 300/850
+        'HW-Damkodzha': 0.647       # 550/850
     })
 
     # HW-Damkodzha distribution
     HW_Damkodzha.set_distribution_parameters({
-        'RES-Kattakurgan': [0.171] * 12,   # 100/585
-        'HW-Narpay': [0.137] * 12,         # 80/585
-        'HW-Confluence': [0.598] * 12,      # 350/585
-        'Kattaqorgon': [0.094] * 12        # 55/585
+        'RES-Kattakurgan': 0.171,   # 100/585
+        'HW-Narpay': 0.137,         # 80/585
+        'HW-Confluence': 0.598,      # 350/585
+        'Kattaqorgon': 0.094        # 55/585
     })
 
     # HW-Narpay distribution
     HW_Narpay.set_distribution_parameters({
-        'HW-Confluence': [0.510] * 12,      # 125/245
-        'Narpay': [0.327] * 12,            # 80/245
-        'Kattaqorgon': [0.163] * 12        # 40/245
+        'HW-Confluence': 0.510,      # 125/245
+        'Narpay': 0.327,            # 80/245
+        'Kattaqorgon': 0.163        # 40/245
     })
 
     # HW-Confluence distribution
     HW_Confluence.set_distribution_parameters({
-        'HW-Karmana': [1.0] * 12           # All flow goes to Karmana
+        'HW-Karmana': 1.0           # All flow goes to Karmana
     })
 
     # HW-Karmana distribution
     HW_Karmana.set_distribution_parameters({
-        'Navbahor': [0.078] * 12,          # 45/580
-        'Sink-Navoi': [0.862] * 12,    # 500/580
-        'Navoi-Powerplant': [0.060] * 12         # 35/580
+        'Navbahor': 0.078,          # 45/580
+        'Sink-Navoi': 0.862,    # 500/580
+        'Navoi-Powerplant': 0.060         # 35/580
     })
     
     return system
@@ -379,9 +379,6 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    
-
-    
     
     return system
 
