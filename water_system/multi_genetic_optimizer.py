@@ -43,8 +43,8 @@ class MultiGeneticOptimizer:
                 
                 # Set reservoir-specific bounds
                 self.reservoir_bounds[node_id] = {
-                    'h1': (min_level, mid_level),  # Full range for h1
-                    'h2': (mid_level, max_level),  # Full range for h2
+                    'h1': (min_level, max_level),  # Full range for h1
+                    'h2': (min_level, max_level),  # Full range for h2
                     'w': (0, total_capacity),      # From 0 to total outflow capacity
                     'm1': (1.47, 1.57),            # Standard slopes
                     'm2': (1.47, 1.57)             # Standard slopes
@@ -300,14 +300,18 @@ class MultiGeneticOptimizer:
         """Create an individual with parameters for all reservoirs and hydroworks"""
         genes = []
         
-        # Add genes for each reservoir 
+
         for res_id in self.reservoir_ids:
-            for param in ['h1', 'h2', 'w', 'm1', 'm2']:
-                bounds = self.reservoir_bounds[res_id][param]
-                value = getattr(self.toolbox, f"reservoir_{res_id}_{param}")()
-                value = self._bound_parameter(value, bounds)
+             # Get bounds for this reservoir
+            bounds = self.reservoir_bounds[res_id]
+            h1 = random.uniform(bounds['h1'][0], bounds['h1'][1])
+            h2 = random.uniform(h1, bounds['h2'][1])
+            genes.extend([h1, h2])
+            # Generate remaining parameters with their bounds
+            for param in ['w', 'm1', 'm2']:
+                value = random.uniform(bounds[param][0], bounds[param][1])
                 genes.append(value)
-    
+        
         # Add genes for hydroworks
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])

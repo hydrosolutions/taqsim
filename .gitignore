@@ -152,7 +152,7 @@ cython_debug/
 #.idea/
 
 # Images
-.json
+*.json
 .png
 *.png
 figures/*
