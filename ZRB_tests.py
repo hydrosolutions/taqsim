@@ -382,16 +382,19 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     
     return system
 
-def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000):
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
     optimizer = MultiGeneticOptimizer(
         create_seasonal_ZRB_system,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=pop_size
+        ngen=ngen,
+        population_size=pop_size,
+        cxpb=cxpb,
+        mutpb=mutpb
     )
 
-    results = optimizer.optimize(ngen=ngen)
+    results = optimizer.optimize()
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -399,6 +402,8 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
     print(f"Message: {results['message']}")
     print(f"Population size: {results['population_size']}")
     print(f"Generations: {results['generations']}")
+    print(f"Corss-over probability: {results['crossover_probability']}")
+    print(f"Mutation probability: {results['mutation_probability']}")
     print(f"Final objective value: {results['objective_value']:,.0f} m³")
     
     print("\nOptimal Reservoir Parameters:")
@@ -419,17 +424,8 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
 
       
     # Save optimization results
-    save_optimized_parameters(results, f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}.json")
+    save_optimized_parameters(results, f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
 
-    # Run system with optimized parameters
-    optimized_system = run_system_with_optimized_parameters(
-        create_seasonal_ZRB_system,  # Your system creator function
-        results,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps
-    )
-    
     return results
 
 def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
@@ -482,12 +478,18 @@ if __name__ == "__main__":
     num_time_steps = 12*3
     ngen = 10
     pop_size = 10
+    cxpb = 0.5
+    mutpb = 0.2
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    run_optimization(start_year, start_month, num_time_steps, ngen, pop_size)
+    run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+
+    # Save optimization results
+    #save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop}_cxpb{cxpb}_mutpb{mutpb}.json")
+
 
     """
-    loaded_results = load_parameters_from_file("optimized_parameters_ZRB_ngen10_pop10.json")
+    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop}_cxpb{cxpb}_mutpb{mutpb}.json")
 
     # Create and run system with loaded parameters
     system = run_system_with_optimized_parameters(

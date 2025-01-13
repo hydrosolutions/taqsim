@@ -36,7 +36,7 @@ def create_test_system(start_year, start_month, num_time_steps):
     hydrowork1 = HydroWorks("Hydroworks1", easting=200, northing=1000)
     reservoir = StorageNode("Reservoir", hva_file='./data/Kattakurgan_H_V_A.csv', initial_storage=2e8, easting=500, northing=1000, evaporation_file='./data/Reservoir_ET_2010_2023.csv', 
                              start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, release_params=release_params)
-    hydrowork2 = HydroWorks("Hydroworks", easting=1000, northing=1000)
+    hydrowork2 = HydroWorks("Hydroworks2", easting=1000, northing=1000)
     demand1 = DemandNode("Demand1", easting=1600, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Kattaqorgon_17to22.csv', 
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
     demand2 = DemandNode("Demand2", easting=2000, northing=800, csv_file='./data/ETblue/monthly_ETblue_Pastdargom_17to22.csv', 
@@ -259,16 +259,19 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
-def run_optimization(start_year=2017, start_month=1, num_time_steps=12, popsize=200, ngen=100):
+def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, popsize=200, cxpb=0.8, mutpb=0.2):
     optimizer = MultiGeneticOptimizer(
         create_test_system,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
-        population_size=popsize
+        ngen=ngen,
+        population_size=popsize, 
+        cxpb=cxpb,
+        mutpb=mutpb
     )
 
-    results = optimizer.optimize(ngen=ngen)
+    results = optimizer.optimize()
 
     print("\nOptimization Results:")
     print("-" * 50)
@@ -302,10 +305,12 @@ if __name__ == "__main__":
     num_time_steps=12*3
     ngen=10
     popsize=200
+    cxpb=0.8
+    mutpb=0.2
 
 
     #run_sample_tests(start_year, start_month, num_time_steps)
-    results=run_optimization(start_year, start_month, num_time_steps, popsize, ngen)
+    results=run_optimization(start_year, start_month, num_time_steps, ngen, popsize, cxpb, mutpb)
     
     # Save optimization results
     #save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")

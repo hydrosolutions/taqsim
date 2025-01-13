@@ -10,12 +10,15 @@ class MultiGeneticOptimizer:
     Enhanced genetic algorithm optimizer for water systems with multiple reservoirs
     and hydroworks nodes.
     """
-    def __init__(self, system_creator, start_year, start_month, num_time_steps, population_size=50):
+    def __init__(self, system_creator, start_year, start_month, num_time_steps, ngen=50, population_size=50, cxpb=0.9, mutpb=0.5):
         self.system_creator = system_creator
         self.start_year = start_year
         self.start_month = start_month
         self.num_time_steps = num_time_steps
         self.population_size = population_size
+        self.ngen = ngen
+        self.cxpb = cxpb
+        self.mutpb = mutpb
         
         # Get initial system to identify reservoirs and hydroworks
         test_system = self.system_creator(self.start_year, self.start_month, self.num_time_steps)  # Create test system to analyze structure
@@ -357,7 +360,7 @@ class MultiGeneticOptimizer:
         
         return creator.Individual(genes)
 
-    def optimize(self, ngen=50, cxpb=0.9, mutpb=0.5):
+    def optimize(self):
         """Run genetic algorithm optimization with parameter validation"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
@@ -370,7 +373,7 @@ class MultiGeneticOptimizer:
         
         # Run genetic algorithm
         final_pop, logbook = algorithms.eaSimple(
-            pop, self.toolbox, cxpb=cxpb, mutpb=mutpb, ngen=ngen, 
+            pop, self.toolbox, cxpb=self.cxpb, mutpb=self.mutpb, ngen=self.ngen, 
             stats=stats, verbose=True
         )
         
@@ -382,24 +385,14 @@ class MultiGeneticOptimizer:
         # Get best individual
         best_ind = tools.selBest(final_pop, 1)[0]
         reservoir_params, hydroworks_params = self._decode_individual(best_ind)
-        """
-        # Validate and print decoded parameters
-        print("\nOptimal Parameters:")
-        for res_id, params in reservoir_params.items():
-            print(f"\n{res_id}:")
-            for param_name, values in params.items():
-                print(f"{param_name}: {[f'{v:.3f}' for v in values]}")
-                
-                # Verify bounds
-                bounds = self.reservoir_bounds[res_id][param_name]
-                if any(v < bounds[0] or v > bounds[1] for v in values):
-                    print(f"Warning: Some {param_name} values outside bounds {bounds}")
-        """
+
         return {
             'success': True,
             'message': "Optimization completed successfully",
             'population_size': self.population_size,
-            'generations': ngen,
+            'generations': self.ngen,
+            'crossover_probability': self.cxpb,
+            'mutation_probability': self.mutpb,
             'objective_value': best_ind.fitness.values[0],
             'optimal_reservoir_parameters': reservoir_params,
             'optimal_hydroworks_parameters': hydroworks_params
@@ -424,5 +417,5 @@ class MultiGeneticOptimizer:
         plt.grid(True)
         plt.tight_layout()
         
-        plt.savefig('convergence.png')
+        plt.savefig(f'convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         plt.close()
