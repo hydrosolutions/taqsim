@@ -305,12 +305,12 @@ if __name__ == "__main__":
 
 
     #run_sample_tests(start_year, start_month, num_time_steps)
-   # results=run_optimization(start_year, start_month, num_time_steps, popsize, ngen)
+    results=run_optimization(start_year, start_month, num_time_steps, popsize, ngen)
     
     # Save optimization results
     #save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")
 
-
+    """
     loaded_results = load_parameters_from_file("optimized_parameters_test_system_ngen10_pop200.json")
     # Run system with optimized parameters
     optimized_system = run_system_with_optimized_parameters(
@@ -340,4 +340,4 @@ if __name__ == "__main__":
     html_file=vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    
+    """

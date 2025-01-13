@@ -429,24 +429,7 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-
-    # Visualize the optimized system
-    print("Optimized system visualization:")
-    vis=WaterSystemVisualizer(optimized_system, 'optimized_ZRB_system')
-    vis.plot_demand_deficit_heatmap()
-    vis.print_water_balance_summary()
-    vis.plot_reservoir_dynamics()
-
-    # Get the storage node from the system's graph
-    storage_node = optimized_system.graph.nodes['RES-Akdarya']['node']
-    vis.plot_release_function(storage_node)
-    storage_node = optimized_system.graph.nodes['RES-Kattakurgan']['node']
-    vis.plot_release_function(storage_node)
-
-    html_file=vis.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
-
+    
     return results
 
 def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):

@@ -109,21 +109,14 @@ class MultiGeneticOptimizer:
                     low,
                     high
                 )
-        """
-        # Create attribute for hydroworks distribution
-        self.toolbox.register(
-            "hydroworks_dist",
-            random.random
-        )
-        """
+
         # Create individual and population
-        #self.toolbox.register("map", futures.map)
         self.toolbox.register("individual", self._create_individual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
         
         # Register genetic operators
         self.toolbox.register("evaluate", self._evaluate_individual)
-        self.toolbox.register("mate", tools.cxTwoPoint)
+        self.toolbox.register("mate", self._crossover)
         self.toolbox.register("mutate", self._mutate_individual)
         self.toolbox.register("select", tools.selTournament, tournsize=5)
 
@@ -191,12 +184,55 @@ class MultiGeneticOptimizer:
             gene_idx += len(self.hydroworks_targets[hw_id])
         return individual,
 
+    def _crossover(self, ind1, ind2):
+        """
+        Custom crossover that treats each reservoir and hydrowork as a complete package.
+        Each reservoir (with its 5 parameters) or hydrowork (with its distribution parameters)
+        is swapped as a complete unit between parents.
+        """
+        # Create copies of the individuals as proper DEAP individuals
+        child1, child2 = creator.Individual(list(ind1)), creator.Individual(list(ind2))
+        
+        # Handle reservoirs as packages
+        genes_per_reservoir = 5  # h1, h2, w, m1, m2
+        
+        # For each reservoir, decide if we swap its complete package
+        for res_idx in range(len(self.reservoir_ids)):
+            start_idx = res_idx * genes_per_reservoir
+            end_idx = start_idx + genes_per_reservoir
+            
+            # 50% chance to swap this reservoir's complete package
+            if random.random() < 0.5:
+                # Swap all parameters for this reservoir
+                child1[start_idx:end_idx], child2[start_idx:end_idx] = \
+                    child2[start_idx:end_idx], child1[start_idx:end_idx]
+        
+        # Handle hydroworks as packages
+        hw_start = len(self.reservoir_ids) * genes_per_reservoir
+        current_idx = hw_start
+        
+        # For each hydrowork, decide if we swap its complete distribution package
+        for hw_id in self.hydroworks_ids:
+            n_targets = len(self.hydroworks_targets[hw_id])
+            hw_end = current_idx + n_targets
+            
+            # 50% chance to swap this hydrowork's complete package
+            if random.random() < 0.5:
+                # Swap all distribution parameters for this hydrowork
+                child1[current_idx:hw_end], child2[current_idx:hw_end] = \
+                    child2[current_idx:hw_end], child1[current_idx:hw_end]
+            
+            current_idx = hw_end
+        
+        return child1, child2
+
     def _evaluate_individual(self, individual):
         """Evaluate fitness of an individual with bound checking"""
         # Verify all parameters are within bounds before evaluation
         genes_per_reservoir = 5  # 5 parameters per reservoir
         
         try:
+            """
             # Check reservoir parameters
             for res_idx, res_id in enumerate(self.reservoir_ids):
                 start_idx = res_idx * genes_per_reservoir
@@ -204,7 +240,7 @@ class MultiGeneticOptimizer:
                     bounds = self.reservoir_bounds[res_id][param_name]
                     i = start_idx + param_idx
                     individual[i] = self._bound_parameter(individual[i], bounds)
-            
+            """
             # Decode parameters and continue with evaluation
             reservoir_params, hydroworks_params = self._decode_individual(individual)
             
@@ -294,7 +330,7 @@ class MultiGeneticOptimizer:
             hydroworks_params[hw_id] = dist_params
             hw_start += n_targets
             
-            return reservoir_params, hydroworks_params
+        return reservoir_params, hydroworks_params
     
     def _create_individual(self):
         """Create an individual with parameters for all reservoirs and hydroworks"""
@@ -321,7 +357,7 @@ class MultiGeneticOptimizer:
         
         return creator.Individual(genes)
 
-    def optimize(self, ngen=50, cxpb=0.9, mutpb=0.1):
+    def optimize(self, ngen=50, cxpb=0.9, mutpb=0.5):
         """Run genetic algorithm optimization with parameter validation"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
