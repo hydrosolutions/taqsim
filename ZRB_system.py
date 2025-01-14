@@ -233,18 +233,6 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     
     return system
 
-def save_water_balance_to_csv(water_system, filename):
-    """
-    Save the water balance table of a water system to a CSV file.
-    
-    Args:
-    water_system (WaterSystem): The water system to save the balance for.
-    filename (str): The name of the CSV file to save to.
-    """
-    balance_table = water_system.get_water_balance()
-    balance_table.to_csv(filename, index=False)
-    print(f"Water balance table saved to {filename}")
-
 def load_optimized_parameters(system, optimization_results):
     """
     Load optimized parameters into an existing water system.
@@ -442,7 +430,6 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     print("Simulation complete")
     
     print('ZRB system visualization:')
-    save_water_balance_to_csv(ZRB_system, "balance_table_ZRB_system.csv")
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
     vis_ZRB.print_water_balance_summary()
     vis_ZRB.plot_reservoir_dynamics()
