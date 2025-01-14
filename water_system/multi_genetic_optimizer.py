@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
 from scoop import futures
 import random
-from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks
+from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
 
 class MultiGeneticOptimizer:
     """
@@ -263,8 +263,9 @@ class MultiGeneticOptimizer:
             # Run simulation
             system.simulate(self.num_time_steps)
             
-            # Calculate weighted deficits using node weights
-            total_weighted_deficit = 0
+            total_penalty = 0
+            
+            # Calculate weighted demand deficits
             for node_id, node_data in system.graph.nodes(data=True):
                 if isinstance(node_data['node'], DemandNode):
                     node = node_data['node']
@@ -272,24 +273,24 @@ class MultiGeneticOptimizer:
                         demand = node.get_demand_rate(t)
                         satisfied = node.satisfied_demand[t]
                         deficit = (demand - satisfied) * system.dt
-                        weighted_deficit = deficit * node.weight  # Use node's weight attribute
-                        total_weighted_deficit += weighted_deficit
-            
-                # Calculate total spills with double weight
-                total_spills = 0
-                for node_id, node_data in system.graph.nodes(data=True):
-                    # Add reservoir spills
-                    if hasattr(node_data['node'], 'spillway_register'):
-                        total_spills += 100.0 * sum(node_data['node'].spillway_register) 
-                    
-                    # Add hydroworks spills
-                    if hasattr(node_data['node'], 'spill_register'):
-                        total_spills += 100.0 * sum(node_data['node'].spill_register)
+                        weighted_deficit = deficit * node.weight
+                        total_penalty += weighted_deficit
                 
-                # Combined objective (weighted deficits + weighted spills)
-                total_objective = total_weighted_deficit + total_spills
+                # Add minimum flow violations from sink nodes
+                elif isinstance(node_data['node'], SinkNode):
+                    node = node_data['node']
+                    total_deficit_volume = node.get_total_deficit_volume(system.dt)
+                    total_penalty += total_deficit_volume * node.weight
+                    
+                # Reservoir spills
+                elif hasattr(node_data['node'], 'spillway_register'):
+                    total_penalty += 100.0 * sum(node_data['node'].spillway_register)
+                
+                # Hydroworks spills
+                elif hasattr(node_data['node'], 'spill_register'):
+                    total_penalty += 100.0 * sum(node_data['node'].spill_register)
             
-            return (total_objective,)
+            return (total_penalty,)
      
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
