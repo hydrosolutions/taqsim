@@ -425,7 +425,7 @@ class DemandNode(Node):
 
     def __init__(self, id, demand_rates=None, easting=None, northing=None,
                  csv_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 field_efficiency=1, conveyance_efficiency=1, weight=1.0):
+                 field_efficiency=1, conveyance_efficiency=1, weight=1.0, non_consumptive_rate=0):
         """
         Initialize a DemandNode object.
 
@@ -456,6 +456,14 @@ class DemandNode(Node):
         if weight <= 0:
             raise ValueError("Weight must be positive")
         self.weight = weight
+
+        # Validate non consumptive flow
+        if non_consumptive_rate is not None:
+            if not isinstance(non_consumptive_rate, (int, float)):
+                raise ValueError("Non-consumptive rate must be a number")
+            if non_consumptive_rate < 0:
+                raise ValueError("Non-consumptive rate cannot be negative")
+            self.non_consumptive_rate = non_consumptive_rate
         
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
             self.demand_rates = self._initialize_demand_rates(
@@ -464,17 +472,23 @@ class DemandNode(Node):
         elif isinstance(demand_rates, (int, float)):
             if demand_rates < 0:
                 raise ValueError("Demand rate cannot be negative")
+            if demand_rates < self.non_consumptive_rate:
+                raise ValueError("Demand rate cannot be less than non-consumptive rate")
             self.demand_rates = [demand_rates/(self.field_efficiency*self.conveyance_efficiency)]
         elif isinstance(demand_rates, list):
             if not all(isinstance(rate, (int, float)) for rate in demand_rates):
                 raise ValueError("All demand rates must be numeric values")
             if any(rate < 0 for rate in demand_rates):
                 raise ValueError("Demand rates cannot be negative")
+            if any(rate < self.non_consumptive_rate for rate in demand_rates):
+                raise ValueError("Demand rates cannot be less than non-consumptive rate")
             self.demand_rates = [rate/(self.field_efficiency*self.conveyance_efficiency) for rate in demand_rates]
         else:
             raise ValueError("demand_rates must be a number or list of numbers or defined by CSV")
-            
-        self.satisfied_demand = []
+        
+        self.satisfied_consumptive_demand = []
+        self.satisfied_non_consumptive_demand = []
+        self.satisfied_demand_total = []
         self.excess_flow = []
     
     def _initialize_demand_rates(self, id, csv_file, start_year, start_month, 
@@ -572,16 +586,33 @@ class DemandNode(Node):
         try:
             total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
             current_demand = self.get_demand_rate(time_step)
-            satisfied = min(total_inflow, current_demand)
-            excess = max(0, total_inflow - current_demand)
+            non_consumptive_rate = self.non_consumptive_rate
             
-            self.satisfied_demand.append(satisfied)
+            # Satisfy consumptive demand first
+            consumptive_demand = current_demand - non_consumptive_rate
+            satisfied = min(total_inflow, consumptive_demand)
+            satisfied = max(0, satisfied)  # Ensure non-negative
+            self.satisfied_consumptive_demand.append(satisfied)
+            
+            # Then handle non-consumptive demand from remaining flow
+            remaining_flow = max(0, total_inflow - satisfied)
+            non_consumptive_satisfied = min(remaining_flow, non_consumptive_rate)
+            self.satisfied_non_consumptive_demand.append(non_consumptive_satisfied)
+            
+            # Calculate excess after satisfying both demands
+            excess = max(0, remaining_flow - non_consumptive_satisfied)
+            
+            total_satisfied = satisfied + non_consumptive_satisfied
+            self.satisfied_demand_total.append(total_satisfied)
             self.excess_flow.append(excess)
 
+            # Forward flow to outflow edges (excess + satisfied non-consumptive)
+            total_forward_flow = excess + non_consumptive_satisfied
             total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
+            
             if total_outflow_capacity > 0:
                 for edge in self.outflow_edges.values():
-                    edge_flow = (edge.capacity / total_outflow_capacity) * excess
+                    edge_flow = (edge.capacity / total_outflow_capacity) * total_forward_flow
                     edge.update(time_step, edge_flow)
             else:
                 for edge in self.outflow_edges.values():

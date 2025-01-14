@@ -124,9 +124,9 @@ class WaterSystemVisualizer:
                             row_data[f"{node_id}_ExcessVolume"] = node.spillway_register[time_step]
                         elif isinstance(node, DemandNode):
                             row_data[f"{node_id}_Demand"] = node.get_demand_rate(time_step)
-                            row_data[f"{node_id}_SatisfiedDemand"] = node.satisfied_demand[time_step]
+                            row_data[f"{node_id}_SatisfiedDemand"] = node.satisfied_consumptive_demand[time_step]
                             row_data[f"{node_id}_Deficit"] = (node.get_demand_rate(time_step) - 
-                                                            node.satisfied_demand[time_step])
+                                                            node.satisfied_consumptive_demand[time_step])
                     except Exception as e:
                         print(f"Warning: Error processing node {node_id} at time step {time_step}: {str(e)}")
 
@@ -177,6 +177,76 @@ class WaterSystemVisualizer:
         return filepath
           
     def plot_demand_deficit_heatmap(self):
+        """
+        Create enhanced heatmaps showing total demand deficits (both consumptive and non-consumptive)
+        across all demand nodes over time.
+        """
+        # Collect total deficits for each demand node
+        demand_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], DemandNode)]
+        
+        if not demand_nodes:
+            print("No demand nodes found in the system.")
+            return
+        
+        # Create DataFrames for different deficit types
+        total_data = pd.DataFrame(index=range(self.system.time_steps))
+        percentage_data = pd.DataFrame(index=range(self.system.time_steps))
+        
+        # Calculate deficits for each node and time step
+        for node_id, node in demand_nodes:
+            node_total_deficits = []
+            node_percentages = []
+            
+            for t in range(self.system.time_steps):
+                total_deficit = (node.get_demand_rate(t) - node.satisfied_demand_total[t])
+                node_total_deficits.append(total_deficit)
+                
+                # Calculate percentage based on total required flow
+                total_required = node.get_demand_rate(t)
+                if total_required > 0:
+                    percentage = (total_deficit / total_required) * 100
+                else:
+                    percentage = 0
+                node_percentages.append(percentage)
+            
+            total_data[node_id] = node_total_deficits
+            percentage_data[node_id] = node_percentages
+        
+        # Plot absolute deficits
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(total_data.T, cmap='YlOrRd', 
+                    xticklabels=total_data.index,
+                    yticklabels=total_data.columns,
+                    annot=False,
+                    cbar_kws={'label': 'Deficit [m³/s]'})
+        plt.xlabel('Time Step [month]', fontsize=16)
+        plt.ylabel('Demand Node', fontsize=16)
+        plt.title('Absolute Water Deficits', fontsize=18)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=14)
+        plt.legend(fontsize=14)
+        abs_filepath = self._save_plot("total_deficit_heatmap_absolute")
+        
+        # Plot percentage deficit
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(percentage_data.T, cmap='YlOrRd',
+                    xticklabels=percentage_data.index,
+                    yticklabels=percentage_data.columns,
+                    annot=False,
+                    cbar_kws={'label': 'Deficit [%]'})
+        plt.xlabel('Time Step [month]', fontsize=16)
+        plt.ylabel('Demand Node', fontsize=16)
+        plt.title('Percentage of Total Unmet Demand', fontsize=18)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=14)
+        plt.legend(fontsize=14)
+        pct_filepath = self._save_plot("total_deficit_heatmap_percentage")
+        
+        return abs_filepath, pct_filepath
+
+    def plot_demand_deficit_heatmap_old(self):
         """
         Create enhanced heatmaps showing demand deficits across all demand nodes over time.
         """
@@ -2045,7 +2115,7 @@ class WaterSystemVisualizer:
             
             # Get demand data
             target_demands = [node.get_demand_rate(t) for t in time_steps]
-            satisfied_demands = node.satisfied_demand[:len(time_steps)]
+            satisfied_demands = node.satisfied_demand_total[:len(time_steps)]
             unmet_demands = [target - satisfied for target, satisfied in 
                             zip(target_demands, satisfied_demands)]
             
@@ -2573,7 +2643,7 @@ class WaterSystemVisualizer:
         plt.xlabel('Time Step')
         plt.ylabel('Sink Node')
         plt.title('Absolute Flow Deficits Over Time')
-        abs_filepath = self._save_plot("flow_deficit_heatmap_absolute")
+        abs_filepath = self._save_plot("min_flow_requirement_heatmap_absolute")
         
         # Plot percentage deficits
         plt.figure(figsize=(12, 6))
@@ -2586,7 +2656,7 @@ class WaterSystemVisualizer:
         plt.xlabel('Time Step')
         plt.ylabel('Sink Node')
         plt.title('Percentage Flow Deficits Over Time')
-        pct_filepath = self._save_plot("flow_deficit_heatmap_percentage")
+        pct_filepath = self._save_plot("min_flow_requirement_heatmap_percentage")
         
         return abs_filepath, pct_filepath
 

@@ -271,7 +271,7 @@ class MultiGeneticOptimizer:
                     node = node_data['node']
                     for t in range(self.num_time_steps):
                         demand = node.get_demand_rate(t)
-                        satisfied = node.satisfied_demand[t]
+                        satisfied = node.satisfied_demand_total[t]
                         deficit = (demand - satisfied) * system.dt
                         weighted_deficit = deficit * node.weight
                         total_penalty += weighted_deficit

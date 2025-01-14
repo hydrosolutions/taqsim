@@ -367,7 +367,7 @@ class WaterSystem:
                 elif isinstance(node, DemandNode):
                     # Convert demand rates to volumes
                     demand_rate = node.get_demand_rate(t)
-                    satisfied_rate = node.satisfied_demand[t] if t < len(node.satisfied_demand) else 0
+                    satisfied_rate = node.satisfied_consumptive_demand[t] if t < len(node.satisfied_consumptive_demand) else 0
                     
                     volumes['demands'] += demand_rate * self.dt
                     volumes['supplied demand'] += satisfied_rate * self.dt

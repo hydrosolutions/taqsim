@@ -74,7 +74,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         #print(f"Created demand node: {row['name']}")
 
     # Demand Thermal powerplant Navoi (25 m³/s)
-    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=1000)
+    Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25, non_consumptive_rate=17, easting=186146.3,northing=4454459.3, weight=1000)
 
     # Reservoir
     release_params_kattakurgan = {
@@ -360,13 +360,13 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(system, 'ZRB_system')
-    vis.plot_sink_outflows()
     vis.plot_demand_deficit_heatmap()
-    vis.plot_reservoir_volumes()
     vis.print_water_balance_summary()
-    vis.plot_hydroworks_flows('HW-Karmana')
     vis.plot_system_demands_vs_inflow()
     vis.plot_network_layout_2()
+    vis.plot_minimum_flow_compliance()
+    vis.plot_flow_compliance_heatmap()
+    vis.print_flow_compliance_summary()
 
     # Get the storage node from the system's graph
     storage_node = system.graph.nodes['RES-Akdarya']['node']
@@ -476,15 +476,14 @@ if __name__ == "__main__":
     cxpb = 0.5
     mutpb = 0.2
     
-    run_sample_tests(start_year, start_month, num_time_steps)
-    #run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    #run_sample_tests(start_year, start_month, num_time_steps)
+    run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
 
     # Save optimization results
     #save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop}_cxpb{cxpb}_mutpb{mutpb}.json")
 
 
-    """
-    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop}_cxpb{cxpb}_mutpb{mutpb}.json")
+    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
 
     # Create and run system with loaded parameters
     system = run_system_with_optimized_parameters(
@@ -494,7 +493,6 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    """
     
     allow_sleep()
 

@@ -43,7 +43,7 @@ def create_test_system(start_year, start_month, num_time_steps):
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
     demand3 = DemandNode("Demand3", easting=2400, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Ishtixon_17to22.csv', 
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
-    sink = SinkNode("RiverMouth",min_flow=7, easting=3000, northing=1000)
+    sink = SinkNode("RiverMouth",min_flow=7, weight=10, easting=3000, northing=1000)
 
     # Add nodes to the system
     system.add_node(supply)
@@ -327,10 +327,10 @@ if __name__ == "__main__":
     mutpb=0.2
 
     # Sample tests
-    run_sample_tests(start_year, start_month, num_time_steps)
+    #run_sample_tests(start_year, start_month, num_time_steps)
     
     # Optimization 
-    #results=run_optimization(start_year, start_month, num_time_steps, ngen, popsize, cxpb, mutpb)
+    results=run_optimization(start_year, start_month, num_time_steps, ngen, popsize, cxpb, mutpb)
     #save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")
     
     """
