@@ -227,27 +227,192 @@ class SupplyNode(Node):
 
 class SinkNode(Node):
     """
-    Represents a point where water exits the system.
+    Represents a point where water exits the system with minimum flow requirements.
+    Minimum flows can be specified either as a constant or loaded from a CSV file.
+    
+    Attributes:
+        id (str): Unique identifier for the node
+        min_flows (list): List of minimum required flow rates for each timestep
+        flow_history (list): Record of actual flows for each timestep
+        flow_deficits (list): Record of flow requirement deficits for each timestep
+        weight (float): Weight factor for minimum flow violations in optimization
     """
+
+    def __init__(self, id, min_flow=None, easting=None, northing=None, weight=1.0,
+                 min_flow_csv_file=None, start_year=None, start_month=None, num_time_steps=None):
+        """
+        Initialize a SinkNode object.
+
+        Args:
+            id (str): Unique identifier for the node
+            min_flow (float, optional): Constant minimum required flow rate in m³/s
+            easting (float, optional): Easting coordinate
+            northing (float, optional): Northing coordinate
+            weight (float, optional): Weight factor for minimum flow violations
+            csv_file (str, optional): Path to CSV file containing minimum flow data
+            start_year (int, optional): Starting year for CSV data import
+            start_month (int, optional): Starting month (1-12) for CSV data import
+            num_time_steps (int, optional): Number of time steps to import from CSV
+        """
+        super().__init__(id, easting, northing)
+        
+        if weight <= 0:
+            raise ValueError("Weight must be positive")
+        self.weight = weight
+        
+        # Initialize tracking lists
+        self.flow_history = []
+        self.flow_deficits = []
+
+        # Initialize minimum flows based on input method
+        if all(param is not None for param in [min_flow_csv_file, start_year, start_month, num_time_steps]):
+            self.min_flows = self._initialize_min_flows(
+                id, min_flow_csv_file, start_year, start_month, num_time_steps, min_flow
+            )
+        elif isinstance(min_flow, (int, float)):
+            if min_flow < 0:
+                raise ValueError("Minimum flow cannot be negative")
+            self.min_flows = [min_flow]
+        else:
+            self.min_flows = [0]  # Default to no minimum flow requirement
+            
+    def _initialize_min_flows(self, id, csv_file, start_year, start_month, 
+                            num_time_steps, default_flow):
+        """
+        Initialize minimum flows from CSV file.
+        
+        Args:
+            id (str): Node identifier for error messages
+            csv_file (str): Path to CSV file
+            start_year (int): Start year for data
+            start_month (int): Start month for data
+            num_time_steps (int): Number of time steps
+            default_flow (float): Default flow to use if CSV import fails
+            
+        Returns:
+            list: Initialized minimum flows
+        """
+        try:
+            flow_data = self.import_flow_data(csv_file, start_year, start_month, num_time_steps)
+            
+            # Check if data is valid
+            if not (flow_data.empty or 
+                flow_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
+                len(flow_data['Q']) < num_time_steps):
+                return flow_data['Q'].tolist()
+            
+            # Print warning for invalid data
+            print(f"Warning: Using default minimum flow ({default_flow if default_flow is not None else 0}) "
+                  f"for node '{id}' due to insufficient data")
+            print(f"Requested period: {start_year}-{start_month:02d} to "
+                  f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
+            if not flow_data.empty:
+                print(f"Available data range: {flow_data['Date'].min():%Y-%m} to {flow_data['Date'].max():%Y-%m}")
+            
+            return [default_flow if default_flow is not None else 0] * num_time_steps
+                
+        except Exception as e:
+            print(f"Warning: Using default minimum flow ({default_flow if default_flow is not None else 0}) "
+                  f"for node '{id}' due to error: {str(e)}")
+            return [default_flow if default_flow is not None else 0] * num_time_steps
+
+    def import_flow_data(self, csv_file, start_year, start_month, num_time_steps):
+        """
+        Import minimum flow data from a CSV file for a specified time period.
+        
+        Args:
+            csv_file (str): Path to the CSV file containing flow data
+            start_year (int): Starting year for the data
+            start_month (int): Starting month (1-12) for the data
+            num_time_steps (int): Number of time steps to import
+            
+        Returns:
+            DataFrame: Filtered DataFrame containing the requested data period
+        """
+        try:
+            # Read the CSV file into a pandas DataFrame
+            flow_data = pd.read_csv(csv_file, parse_dates=['Date'])
+            
+            if 'Date' not in flow_data.columns or 'Q' not in flow_data.columns:
+                raise ValueError("CSV file must contain 'Date' and 'Q' columns")
+        
+            # Filter the DataFrame to find the start point
+            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
+            end_date = start_date + pd.DateOffset(months=num_time_steps)
+            
+            return flow_data[(flow_data['Date'] >= start_date) & (flow_data['Date'] < end_date)]
+            
+        except FileNotFoundError:
+            raise ValueError(f"Flow data file not found: {csv_file}")
+        except Exception as e:
+            raise ValueError(f"Failed to import flow data: {str(e)}")
+
+    def get_min_flow(self, time_step):
+        """
+        Get the minimum flow requirement for a specific time step.
+
+        Args:
+            time_step (int): The time step for which to retrieve the minimum flow
+
+        Returns:
+            float: The minimum flow requirement for the specified time step,
+                  or the last known requirement if out of range
+        """
+        if time_step < len(self.min_flows):
+            return self.min_flows[time_step]
+        return self.min_flows[-1]
 
     def update(self, time_step, dt):
         """
         Update the SinkNode's state for the given time step.
-
-        This method calculates the total inflow to the sink node.
-        Sink nodes remove all incoming water from the system.
+        Calculates actual flow and deficit relative to minimum requirement.
 
         Args:
-            time_step (int): The current time step of the simulation.
-            dt (float): The duration of the time step in seconds.
-
+            time_step (int): The current time step of the simulation
+            dt (float): The duration of the time step in seconds
         """
         try:
-            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
-            # Sink nodes remove all incoming water from the system
+            # Calculate total inflow for this timestep
+            total_inflow = sum(edge.get_edge_outflow(time_step) 
+                             for edge in self.inflow_edges.values())
+            
+            # Record the actual flow
+            self.flow_history.append(total_inflow)
+            
+            # Calculate and record deficit if any
+            min_flow = self.get_min_flow(time_step)
+            deficit = max(0, min_flow - total_inflow)
+            self.flow_deficits.append(deficit)
+            
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
+            
+    def get_flow_deficit(self, time_step):
+        """
+        Get the flow deficit for a specific time step.
 
+        Args:
+            time_step (int): The time step for which to retrieve the deficit
+
+        Returns:
+            float: The flow deficit for the specified time step, or 0 if not available
+        """
+        if time_step < len(self.flow_deficits):
+            return self.flow_deficits[time_step]
+        return 0
+        
+    def get_total_deficit_volume(self, dt):
+        """
+        Calculate the total deficit volume across all time steps.
+
+        Args:
+            dt (float): The duration of each time step in seconds
+
+        Returns:
+            float: Total deficit volume in m³
+        """
+        return sum(deficit * dt for deficit in self.flow_deficits)
+    
 class DemandNode(Node):
     """
     Represents a point of water demand in the system.

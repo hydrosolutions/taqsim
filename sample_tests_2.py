@@ -43,7 +43,7 @@ def create_test_system(start_year, start_month, num_time_steps):
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
     demand3 = DemandNode("Demand3", easting=2400, northing=1200, csv_file='./data/ETblue/monthly_ETblue_Ishtixon_17to22.csv', 
                          start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, field_efficiency=0.5, weight=1.0)
-    sink = SinkNode("RiverMouth", easting=3000, northing=1000)
+    sink = SinkNode("RiverMouth",min_flow=7, easting=3000, northing=1000)
 
     # Add nodes to the system
     system.add_node(supply)
@@ -222,6 +222,24 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     
     # Run simulation
     system.simulate(num_time_steps)
+
+    # Visualize the optimized system
+    vis=WaterSystemVisualizer(system, 'optimized_test_system')
+    vis.plot_demand_deficit_heatmap()
+    vis.print_water_balance_summary()
+    vis.plot_storage_dynamics()
+    vis.plot_reservoir_dynamics()
+    vis.plot_network_layout()
+    vis.plot_demand_satisfaction()  
+    vis.plot_system_demands_vs_inflow()
+    
+    # Get the storage node from the system's graph
+    storage_node = system.graph.nodes['Reservoir']['node']
+    vis.plot_release_function(storage_node)
+
+    html_file=vis.create_interactive_network_visualization()
+    print(f"Interactive visualization saved to: {html_file}")
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')
     
     return system
 
@@ -250,14 +268,14 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     vis.print_water_balance_summary()
     storage_node = test_system.graph.nodes['Reservoir']['node']
     vis.plot_release_function(storage_node)
-    vis.plot_reservoir_dynamics()
-    vis.plot_storage_dynamics()
-    vis.plot_storage_waterbalance(storage_node)
     vis.plot_demand_satisfaction()
+    vis.plot_minimum_flow_compliance()
+    vis.plot_flow_compliance_heatmap()
+    vis.print_flow_compliance_summary()
     
-    html_file=vis.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')    
+    #html_file=vis.create_interactive_network_visualization()
+    #print(f"Interactive visualization saved to: {html_file}")
+    #webbrowser.open(f'file://{os.path.abspath(html_file)}')    
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, popsize=200, cxpb=0.8, mutpb=0.2):
     optimizer = MultiGeneticOptimizer(
@@ -308,41 +326,21 @@ if __name__ == "__main__":
     cxpb=0.8
     mutpb=0.2
 
-
-    #run_sample_tests(start_year, start_month, num_time_steps)
-    results=run_optimization(start_year, start_month, num_time_steps, ngen, popsize, cxpb, mutpb)
+    # Sample tests
+    run_sample_tests(start_year, start_month, num_time_steps)
     
-    # Save optimization results
+    # Optimization 
+    #results=run_optimization(start_year, start_month, num_time_steps, ngen, popsize, cxpb, mutpb)
     #save_optimized_parameters(results, f"optimized_parameters_test_system_ngen{ngen}_pop{popsize}.json")
-
+    
     """
+    # Load optimized parameters from file and run the system
     loaded_results = load_parameters_from_file("optimized_parameters_test_system_ngen10_pop200.json")
-    # Run system with optimized parameters
     optimized_system = run_system_with_optimized_parameters(
-        create_test_system,  # Your system creator function
+        create_test_system,  
         loaded_results,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-
-    # Visualize the optimized system
-    print("Optimized system visualization:")
-    vis=WaterSystemVisualizer(optimized_system, 'optimized_test_system')
-    vis.plot_demand_deficit_heatmap()
-    vis.print_water_balance_summary()
-    vis.plot_storage_dynamics()
-    vis.plot_reservoir_dynamics()
-    vis.plot_network_layout()
-    vis.plot_demand_satisfaction()  
-    vis.plot_system_demands_vs_inflow()
-    
-    # Get the storage node from the system's graph
-    storage_node = optimized_system.graph.nodes['Reservoir']['node']
-    vis.plot_release_function(storage_node)
-    
-
-    html_file=vis.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
     """

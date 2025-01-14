@@ -75,10 +75,6 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # Demand Thermal powerplant Navoi (25 m³/s)
     Powerplant = DemandNode("Navoi-Powerplant", demand_rates=25,easting=186146.3,northing=4451659.3, weight=1000)
-    Jizzakh = DemandNode("Jizzakh", easting=376882.3,northing=4401307.9, csv_file='./data/Sink_Eski Tuyatortor_monthly_2000_2022.csv', 
-                         start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=1)
-    Kashkadarya = DemandNode("Kashkadarya", easting=272551,northing=4371872, csv_file='./data/Sink_Eski Ankhor_monthly_2000_2022.csv', 
-                             start_year=start_year, start_month=start_month, num_time_steps=num_time_steps, weight=1)
 
     # Reservoir
     release_params_kattakurgan = {
@@ -103,15 +99,18 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
                               num_time_steps=num_time_steps, release_params=release_params_akdarya)
     
     # Sink Nodes
-    sink_tuyatortor = SinkNode("Sink-Jizzakh", easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("Sink-Kashkadarya", easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", easting=153771,northing=4454402)
+    sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/Jizzakh_min_flow_monthly_2000_2022.csv', start_year=start_year, 
+                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
+    sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/Kashkadarya_min_flow_monthly_2000_2022.csv', start_year=start_year, 
+                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
+    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_1968_2020.csv', start_year=start_year, 
+                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
 
     # Add nodes to the system
     supply_node = [supply]  # List of supply nodes
     reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
     hydroworks = [HW_PC22,HW_EskiAnkhor, HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
-    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant, Jizzakh, Kashkadarya]  # List of demand nodes
+    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant]  # List of demand nodes
     sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
 
     # Iterate through each category and add nodes to the system
@@ -128,8 +127,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_PC22, Jomboy, capacity=50))
     system.add_edge(Edge(Bulungur, Jomboy, capacity=65))
     system.add_edge(Edge(Jomboy, Payariq, capacity=115))
-    system.add_edge(Edge(HW_PC22, Jizzakh, capacity=65))
-    system.add_edge(Edge(Jizzakh, sink_tuyatortor, capacity=65))
+    system.add_edge(Edge(HW_PC22, sink_tuyatortor, capacity=65))
+
 
     # Supply for Toyloq, Urgut, Samarqand
     system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
@@ -140,8 +139,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_EskiAnkhor, Pastdargom, capacity=125))
     system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=125))
     system.add_edge(Edge(HW_EskiAnkhor, Nurobod, capacity=80))
-    system.add_edge(Edge(Nurobod, Kashkadarya, capacity=80))
-    system.add_edge(Edge(Kashkadarya, sink_eskiankhor, capacity=80))
+    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=80))
 
     # HW_AkKaraDarya
     system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=300))
@@ -191,7 +189,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     HW_PC22.set_distribution_parameters({
         'Bulungur': 0.361,          # 65/180
         'Jomboy': 0.278,            # 50/180
-        'Jizzakh': 0.361            # 65/180
+        'Sink-Jizzakh': 0.361            # 65/180
     })
 
     # HW-EskiAnkhor distribution
@@ -448,20 +446,17 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
     vis_ZRB.print_water_balance_summary()
     vis_ZRB.plot_reservoir_dynamics()
+    vis_ZRB.plot_demand_deficit_heatmap()
     vis_ZRB.plot_network_layout()
-    vis_ZRB.plot_network_layout_2()
+    vis_ZRB.plot_minimum_flow_compliance()
+    vis_ZRB.plot_flow_compliance_heatmap()
+    vis_ZRB.print_flow_compliance_summary()
 
     # Get the storage node from the system's graph
     storage_node = ZRB_system.graph.nodes['RES-Akdarya']['node']
     vis_ZRB.plot_release_function(storage_node)
     storage_node = ZRB_system.graph.nodes['RES-Kattakurgan']['node']
     vis_ZRB.plot_release_function(storage_node)
-    
-    vis_ZRB.plot_demand_deficit_heatmap()
-    vis_ZRB.plot_storage_dynamics()
-    vis_ZRB.plot_network_layout()
-    vis_ZRB.plot_edge_flow_summary()
-    vis_ZRB.plot_edge_flows()
 
     html_file = vis_ZRB.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
@@ -481,8 +476,8 @@ if __name__ == "__main__":
     cxpb = 0.5
     mutpb = 0.2
     
-    #run_sample_tests(start_year, start_month, num_time_steps)
-    run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    run_sample_tests(start_year, start_month, num_time_steps)
+    #run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
 
     # Save optimization results
     #save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop}_cxpb{cxpb}_mutpb{mutpb}.json")

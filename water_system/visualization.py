@@ -2433,3 +2433,207 @@ class WaterSystemVisualizer:
         except Exception as e:
             print(f"Error plotting system demands vs inflow: {str(e)}")
             return None
+        
+    def plot_minimum_flow_compliance(self):
+        """
+        Create time series plots showing actual flows versus minimum flow requirements 
+        for all sink nodes that have minimum flow requirements.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        # Find sink nodes in the system that have minimum flow requirements
+        sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                    if isinstance(data['node'], SinkNode) and hasattr(data['node'], 'min_flows')]
+        
+        sink_nodes_with_requirements = [(id, node) for id, node in sink_nodes 
+                                    if any(flow > 0 for flow in node.min_flows)]
+        
+        if not sink_nodes_with_requirements:
+            print("No sink nodes with minimum flow requirements found in the system.")
+            return None
+            
+        # Create figure with subplots
+        n_nodes = len(sink_nodes_with_requirements)
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
+        
+        # Color scheme
+        colors = {
+            'actual': '#2196F3',    # Blue for actual flow
+            'minimum': '#FF9800',    # Orange for minimum requirement
+            'deficit': '#f44336'     # Red for deficit
+        }
+        
+        time_steps = range(self.system.time_steps)
+        
+        # Plot for each sink node
+        for idx, (node_id, node) in enumerate(sink_nodes_with_requirements):
+            ax = axes[idx]
+            
+            # Get flow data
+            min_flows = [node.get_min_flow(t) for t in time_steps]
+            actual_flows = node.flow_history[:len(time_steps)]
+            deficits = node.flow_deficits[:len(time_steps)]
+            
+            # Plot flows
+            ax.plot(time_steps, actual_flows, color=colors['actual'], 
+                    label='Actual Flow', linewidth=2)
+            ax.plot(time_steps, min_flows, color=colors['minimum'], 
+                    label='Minimum Required', linewidth=2, linestyle='--')
+            
+            # Fill deficit areas
+            ax.fill_between(time_steps, actual_flows, min_flows, 
+                        where=np.array(actual_flows) < np.array(min_flows),
+                        color=colors['deficit'], alpha=0.3, 
+                        label='Flow Deficit')
+            
+            # Calculate statistics
+            mean_actual = np.mean(actual_flows)
+            mean_required = np.mean(min_flows)
+            mean_deficit = np.mean(deficits)
+            compliance_rate = (sum(1 for a, m in zip(actual_flows, min_flows) if a >= m) 
+                            / len(time_steps) * 100)
+            
+            stats_text = (
+                f"Statistics:\n"
+                f"Mean Actual Flow: {mean_actual:.2f} m³/s\n"
+                f"Mean Required Flow: {mean_required:.2f} m³/s\n"
+                f"Mean Deficit: {mean_deficit:.2f} m³/s\n"
+                f"Compliance Rate: {compliance_rate:.1f}%"
+            )
+            
+            # Add stats text box
+            ax.text(0.02, 0.98, stats_text,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize subplot
+            ax.set_title(f'{node_id} Flow Compliance')
+            ax.set_ylabel('Flow Rate [m³/s]')
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc='center right')
+            
+            if idx == n_nodes - 1:  # Only add xlabel to bottom subplot
+                ax.set_xlabel('Time Step')
+        
+        plt.tight_layout()
+        return self._save_plot("minimum_flow_compliance")
+
+    def plot_flow_compliance_heatmap(self):
+        """
+        Create an enhanced heatmap showing flow compliance patterns for all sink nodes
+        with minimum flow requirements over time.
+        
+        Returns:
+            tuple: Paths to the saved absolute and percentage deficit plot files
+        """
+        # Find sink nodes with minimum flow requirements
+        sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                    if isinstance(data['node'], SinkNode) and hasattr(data['node'], 'min_flows')]
+        
+        sink_nodes_with_requirements = [(id, node) for id, node in sink_nodes 
+                                    if any(flow > 0 for flow in node.min_flows)]
+        
+        if not sink_nodes_with_requirements:
+            print("No sink nodes with minimum flow requirements found in the system.")
+            return None
+            
+        time_steps = range(self.system.time_steps)
+        
+        # Prepare data for heatmaps
+        absolute_deficits = {}
+        percentage_deficits = {}
+        
+        for node_id, node in sink_nodes_with_requirements:
+            deficits = node.flow_deficits[:len(time_steps)]
+            min_flows = [node.get_min_flow(t) for t in time_steps]
+            
+            absolute_deficits[node_id] = deficits
+            percentage_deficits[node_id] = [
+                (d / m * 100 if m > 0 else 0) 
+                for d, m in zip(deficits, min_flows)
+            ]
+        
+        # Create DataFrame for plotting
+        abs_df = pd.DataFrame(absolute_deficits)
+        pct_df = pd.DataFrame(percentage_deficits)
+        
+        # Plot absolute deficits
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(abs_df.T, cmap='YlOrRd', 
+                    xticklabels=time_steps,
+                    yticklabels=absolute_deficits.keys(),
+                    annot=False,
+                    cbar_kws={'label': 'Flow Deficit [m³/s]'})
+        plt.xlabel('Time Step')
+        plt.ylabel('Sink Node')
+        plt.title('Absolute Flow Deficits Over Time')
+        abs_filepath = self._save_plot("flow_deficit_heatmap_absolute")
+        
+        # Plot percentage deficits
+        plt.figure(figsize=(12, 6))
+        sns.heatmap(pct_df.T, cmap='YlOrRd', 
+                    xticklabels=time_steps,
+                    yticklabels=percentage_deficits.keys(),
+                    annot=False,
+                    vmin=0, vmax=100,
+                    cbar_kws={'label': 'Deficit [%]'})
+        plt.xlabel('Time Step')
+        plt.ylabel('Sink Node')
+        plt.title('Percentage Flow Deficits Over Time')
+        pct_filepath = self._save_plot("flow_deficit_heatmap_percentage")
+        
+        return abs_filepath, pct_filepath
+
+    def print_flow_compliance_summary(self):
+        """
+        Print a comprehensive summary of minimum flow compliance for all sink nodes.
+        """
+        # Find sink nodes with minimum flow requirements
+        sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                    if isinstance(data['node'], SinkNode) and hasattr(data['node'], 'min_flows')]
+        
+        sink_nodes_with_requirements = [(id, node) for id, node in sink_nodes 
+                                    if any(flow > 0 for flow in node.min_flows)]
+        
+        if not sink_nodes_with_requirements:
+            print("No sink nodes with minimum flow requirements found in the system.")
+            return
+        
+        print("\nMinimum Flow Compliance Summary")
+        print("=" * 50)
+        
+        for node_id, node in sink_nodes_with_requirements:
+            print(f"\nNode: {node_id}")
+            print("-" * 20)
+            
+            actual_flows = node.flow_history
+            min_flows = [node.get_min_flow(t) for t in range(len(actual_flows))]
+            deficits = node.flow_deficits
+            
+            # Calculate statistics
+            mean_actual = np.mean(actual_flows)
+            mean_required = np.mean(min_flows)
+            mean_deficit = np.mean(deficits)
+            max_deficit = max(deficits)
+            total_deficit_volume = node.get_total_deficit_volume(self.system.dt)
+            
+            # Calculate compliance metrics
+            compliant_steps = sum(1 for a, m in zip(actual_flows, min_flows) if a >= m)
+            compliance_rate = (compliant_steps / len(actual_flows) * 100)
+            
+            # Print statistics
+            print(f"Mean Actual Flow: {mean_actual:.2f} m³/s")
+            print(f"Mean Required Flow: {mean_required:.2f} m³/s")
+            print(f"Mean Flow Deficit: {mean_deficit:.2f} m³/s")
+            print(f"Maximum Flow Deficit: {max_deficit:.2f} m³/s")
+            print(f"Total Deficit Volume: {total_deficit_volume:,.0f} m³")
+            print(f"Compliance Rate: {compliance_rate:.1f}%")
+            print(f"Compliant Time Steps: {compliant_steps}/{len(actual_flows)}")
+            
+        print("\n" + "=" * 50)
