@@ -33,16 +33,14 @@ class MultiGeneticOptimizer:
         for node_id, node_data in test_system.graph.nodes(data=True):
             if isinstance(node_data['node'], StorageNode):
                 self.reservoir_ids.append(node_id)
-                # Get bounds from HVA data and outflow capacity
                 reservoir = node_data['node']
                 
                 # Get water level bounds from HVA data
                 min_level = reservoir.hva_data['min_waterlevel']
                 max_level = reservoir.hva_data['max_waterlevel']
-                mid_level = min_level + (max_level - min_level) / 2
-
-                # Calculate total outflow capacity
-                total_capacity = sum(edge.capacity for edge in reservoir.outflow_edges.values())
+                
+                # Calculate total outflow capacity using numpy
+                total_capacity = np.sum([edge.capacity for edge in reservoir.outflow_edges.values()])
                 
                 # Set reservoir-specific bounds
                 self.reservoir_bounds[node_id] = {
@@ -56,9 +54,7 @@ class MultiGeneticOptimizer:
             elif isinstance(node_data['node'], HydroWorks):
                 self.hydroworks_ids.append(node_id)
                 # Get target nodes for each hydroworks
-                self.hydroworks_targets[node_id] = list(
-                    node_data['node'].outflow_edges.keys()
-                )
+                self.hydroworks_targets[node_id] = list(node_data['node'].outflow_edges.keys())
         
         # Set up DEAP genetic algorithm components
         creator.create("FitnessMulti", base.Fitness, weights=(-1.0,))  # Minimize objective
@@ -74,7 +70,7 @@ class MultiGeneticOptimizer:
         
     def _normalize_distribution(self, values):
         """
-        Normalize a list of values to sum to 1.0
+        Normalize a list of values to sum to 1.0 using numpy for efficiency.
         
         Args:
             values (list): List of values to normalize
@@ -82,15 +78,16 @@ class MultiGeneticOptimizer:
         Returns:
             list: Normalized values that sum to 1.0
         """
-        total = sum(values)
+        values = np.array(values)
+        total = np.sum(values)
         if total == 0:
             # If all values are 0, return equal distribution
-            return [1.0/len(values)] * len(values)
-        return [v/total for v in values]
+            return np.full_like(values, 1.0 / len(values))
+        return values / total
     
     def _bound_parameter(self, value, bounds):
         """
-        Helper method to ensure a parameter stays within bounds.
+        Helper method to ensure a parameter stays within bounds using numpy for efficiency.
         
         Args:
             value (float): Parameter value to check
@@ -99,7 +96,7 @@ class MultiGeneticOptimizer:
         Returns:
             float: Value clamped to bounds
         """
-        return max(bounds[0], min(bounds[1], value))
+        return np.clip(value, bounds[0], bounds[1])
 
     def _setup_genetic_operators(self):
         """Configure genetic algorithm operators for multiple structures with dynamic bounds"""
@@ -231,19 +228,9 @@ class MultiGeneticOptimizer:
 
     def _evaluate_individual(self, individual):
         """Evaluate fitness of an individual with bound checking"""
-        # Verify all parameters are within bounds before evaluation
         genes_per_reservoir = 5  # 5 parameters per reservoir
         
         try:
-            """
-            # Check reservoir parameters
-            for res_idx, res_id in enumerate(self.reservoir_ids):
-                start_idx = res_idx * genes_per_reservoir
-                for param_idx, param_name in enumerate(['h1', 'h2', 'w', 'm1', 'm2']):
-                    bounds = self.reservoir_bounds[res_id][param_name]
-                    i = start_idx + param_idx
-                    individual[i] = self._bound_parameter(individual[i], bounds)
-            """
             # Decode parameters and continue with evaluation
             reservoir_params, hydroworks_params = self._decode_individual(individual)
             
@@ -267,31 +254,27 @@ class MultiGeneticOptimizer:
             
             # Calculate weighted demand deficits
             for node_id, node_data in system.graph.nodes(data=True):
-                if isinstance(node_data['node'], DemandNode):
-                    node = node_data['node']
-                    for t in range(self.num_time_steps):
-                        demand = node.get_demand_rate(t)
-                        satisfied = node.satisfied_demand_total[t]
-                        deficit = (demand - satisfied) * system.dt
-                        weighted_deficit = deficit * node.weight
-                        total_penalty += weighted_deficit
+                node = node_data['node']
                 
-                # Add minimum flow violations from sink nodes
-                elif isinstance(node_data['node'], SinkNode):
-                    node = node_data['node']
+                if isinstance(node, DemandNode):
+                    demand = np.array([node.get_demand_rate(t) for t in range(self.num_time_steps)])
+                    satisfied = np.array(node.satisfied_demand_total)
+                    deficit = (demand - satisfied) * system.dt
+                    weighted_deficit = deficit * node.weight
+                    total_penalty += np.sum(weighted_deficit)
+                
+                elif isinstance(node, SinkNode):
                     total_deficit_volume = node.get_total_deficit_volume(system.dt)
                     total_penalty += total_deficit_volume * node.weight
                     
-                # Reservoir spills
-                elif hasattr(node_data['node'], 'spillway_register'):
-                    total_penalty += 100.0 * sum(node_data['node'].spillway_register)
+                elif hasattr(node, 'spillway_register'):
+                    total_penalty += 100.0 * np.sum(node.spillway_register)
                 
-                # Hydroworks spills
-                elif hasattr(node_data['node'], 'spill_register'):
-                    total_penalty += 100.0 * sum(node_data['node'].spill_register)
+                elif hasattr(node, 'spill_register'):
+                    total_penalty += 100.0 * np.sum(node.spill_register)
             
             return (total_penalty,)
-     
+        
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
             return (float('inf'),)
@@ -327,9 +310,7 @@ class MultiGeneticOptimizer:
             normalized_dist = self._normalize_distribution(dist_values)
             
             # Create parameter dictionary
-            dist_params = {}
-            for target, value in zip(self.hydroworks_targets[hw_id], normalized_dist):
-                dist_params[target] = value
+            dist_params = {target: value for target, value in zip(self.hydroworks_targets[hw_id], normalized_dist)}
             
             hydroworks_params[hw_id] = dist_params
             hw_start += n_targets
@@ -339,26 +320,25 @@ class MultiGeneticOptimizer:
     def _create_individual(self):
         """Create an individual with parameters for all reservoirs and hydroworks"""
         genes = []
-        
 
         for res_id in self.reservoir_ids:
-             # Get bounds for this reservoir
+            # Get bounds for this reservoir
             bounds = self.reservoir_bounds[res_id]
-            h1 = random.uniform(bounds['h1'][0], bounds['h1'][1])
-            h2 = random.uniform(h1, bounds['h2'][1])
+            h1 = np.random.uniform(bounds['h1'][0], bounds['h1'][1])
+            h2 = np.random.uniform(h1, bounds['h2'][1])
             genes.extend([h1, h2])
             # Generate remaining parameters with their bounds
             for param in ['w', 'm1', 'm2']:
-                value = random.uniform(bounds[param][0], bounds[param][1])
+                value = np.random.uniform(bounds[param][0], bounds[param][1])
                 genes.append(value)
-        
+
         # Add genes for hydroworks
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
-            raw_dist = [random.random() for _ in range(n_targets)]
+            raw_dist = np.random.random(n_targets)
             normalized_dist = self._normalize_distribution(raw_dist)
             genes.extend(normalized_dist)
-        
+
         return creator.Individual(genes)
 
     def optimize(self):
@@ -417,6 +397,5 @@ class MultiGeneticOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        #plt.savefig(f'convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
-        plt.show()
+        plt.savefig(f'convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         plt.close()
