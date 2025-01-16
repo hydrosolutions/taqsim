@@ -1,7 +1,4 @@
-import networkx as nx 
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import webbrowser
 import os
 import json
@@ -484,14 +481,14 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*3
-    ngen = 10
-    pop_size = 1000
+    ngen = 20
+    pop_size = 50
     cxpb = 0.5
     mutpb = 0.2
     
     #run_sample_tests(start_year, start_month, num_time_steps)
     results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-    """
+    
     print("Optimization complete")
     
     # Save optimization results
@@ -510,7 +507,7 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    """
+    
     allow_sleep()
 
   

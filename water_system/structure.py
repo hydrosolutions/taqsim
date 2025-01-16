@@ -216,9 +216,9 @@ class SupplyNode(Node):
 
             total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
             if total_capacity > 0:
+                edge_flow = current_supply_rate / total_capacity
                 for edge in self.outflow_edges.values():
-                    edge_flow = (edge.capacity / total_capacity) * current_supply_rate
-                    edge.update(time_step, edge_flow)
+                    edge.update(time_step, edge.capacity * edge_flow)
             else:
                 for edge in self.outflow_edges.values():
                     edge.update(time_step, 0)
@@ -373,16 +373,11 @@ class SinkNode(Node):
         """
         try:
             # Calculate total inflow for this timestep
-            total_inflow = sum(edge.get_edge_outflow(time_step) 
-                             for edge in self.inflow_edges.values())
+            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
             
-            # Record the actual flow
+            # Record the actual flow and deficit if any
             self.flow_history.append(total_inflow)
-            
-            # Calculate and record deficit if any
-            min_flow = self.get_min_flow(time_step)
-            deficit = max(0, min_flow - total_inflow)
-            self.flow_deficits.append(deficit)
+            self.flow_deficits.append(max(0, self.get_min_flow(time_step) - total_inflow))
             
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
@@ -778,7 +773,6 @@ class StorageNode(Node):
             release = 0
         
         return release
-
     
     def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
         """
@@ -987,7 +981,7 @@ class StorageNode(Node):
             dt (float): The length of the time step in seconds.
         """
         try:
-            inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            inflow = np.sum([edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values()])
             previous_storage = self.storage[-1]
             
             # Convert flow rates (m³/s) to volumes (m³) for the time step
@@ -1100,7 +1094,7 @@ class HydroWorks(Node):
         
         # Initialize with equal distribution for 12 months
         self.distribution_params = {
-            edge_id: [equal_distribution] * 12 
+            edge_id: np.full(12, equal_distribution)
             for edge_id in self.outflow_edges
         }
 
@@ -1131,24 +1125,24 @@ class HydroWorks(Node):
                 new_params[node_id] = float(params)
             else:
                 raise ValueError(
-                    f"Parameters for edge to {node_id} must be a single values"
+                    f"Parameters for edge to {node_id} must be a single value"
                 )
             
         # Verify all parameters are valid
-        if not 0 <= new_params[node_id] <= 1:
-            raise ValueError(
-                f"Distribution parameter for edge to {node_id} must be between 0 and 1"
-            )
+        for node_id, params in new_params.items():
+            if not np.all((0 <= params) & (params <= 1)):
+                raise ValueError(
+                    f"Distribution parameters for edge to {node_id} must be between 0 and 1"
+                )
         
         # Verify parameters sum to 1
-        total = sum(new_params[node_id] for node_id in new_params)
-        total += sum(
-            self.distribution_params[node_id]
-            for node_id in self.outflow_edges
-            if node_id not in new_params
+        total = np.sum([params for params in new_params.values()], axis=0)
+        total += np.sum(
+            [self.distribution_params[node_id] for node_id in self.outflow_edges if node_id not in new_params],
+            axis=0
         )
         
-        if abs(total - 1.0) > 1e-10:  # Allow for small floating point errors
+        if not np.allclose(total, 1.0, atol=1e-10):  # Allow for small floating point errors
             raise ValueError(f"Distribution parameters must sum to 1. Got {total}")
     
         # Update parameters
@@ -1168,8 +1162,7 @@ class HydroWorks(Node):
         """
         try:
             # Calculate total inflow
-            total_inflow = sum(edge.get_edge_outflow(time_step) 
-                             for edge in self.inflow_edges.values())
+            total_inflow = np.sum([edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values()])
             
             # Verify distribution parameters are properly set
             if not self.distribution_params:

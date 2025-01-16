@@ -226,7 +226,6 @@ class WaterSystemVisualizer:
         plt.title('Absolute Water Deficits', fontsize=18)
         plt.xticks(fontsize=12)
         plt.yticks(fontsize=14)
-        plt.legend(fontsize=14)
         abs_filepath = self._save_plot("total_deficit_heatmap_absolute")
         
         # Plot percentage deficit
@@ -241,7 +240,6 @@ class WaterSystemVisualizer:
         plt.title('Percentage of Total Unmet Demand', fontsize=18)
         plt.xticks(fontsize=12)
         plt.yticks(fontsize=14)
-        plt.legend(fontsize=14)
         pct_filepath = self._save_plot("total_deficit_heatmap_percentage")
         
         return abs_filepath, pct_filepath
