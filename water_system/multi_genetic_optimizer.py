@@ -121,68 +121,53 @@ class MultiGeneticOptimizer:
         self.toolbox.register("select", tools.selTournament, tournsize=5)
 
     def _mutate_individual(self, individual, indpb=0.2):
-        """Custom mutation operator with enforced parameter bounds"""
+        """Custom mutation operator with enforced parameter bounds using numpy for efficiency"""
         genes_per_reservoir = 5  # 5 parameters per reservoir
+        
+        # Convert individual to numpy array for vectorized operations
+        individual = np.array(individual)
         
         # Track which hydroworks need renormalization
         hw_updates = set()
         
-        for i in range(len(individual)):
-            if random.random() < indpb:
-                if i < len(self.reservoir_ids) * genes_per_reservoir:
-                    # Reservoir parameter mutation
-                    res_idx = i // genes_per_reservoir
-                    res_id = self.reservoir_ids[res_idx]
-                    param_idx = i % genes_per_reservoir
-                    param_name = ['h1', 'h2', 'w', 'm1', 'm2'][param_idx]
+        # Reservoir parameter mutation
+        for res_idx, res_id in enumerate(self.reservoir_ids):
+            start_idx = res_idx * genes_per_reservoir
+            end_idx = start_idx + genes_per_reservoir
+            for param_idx, param_name in enumerate(['h1', 'h2', 'w', 'm1', 'm2']):
+                if random.random() < indpb:
                     bounds = self.reservoir_bounds[res_id][param_name]
-                    
-                    # Generate new value
-                    value = random.uniform(bounds[0], bounds[1])
+                    value = np.random.uniform(bounds[0], bounds[1])
                     
                     # Special handling for h2 to maintain h1 < h2
                     if param_name == 'h2':
-                        h1_idx = i - 1  # Index of corresponding h1 value
-                        min_bound = max(bounds[0], individual[h1_idx] + 0.1)
-                        value = random.uniform(min_bound, bounds[1])
+                        min_bound = max(bounds[0], individual[start_idx] + 0.1)
+                        value = np.random.uniform(min_bound, bounds[1])
                     elif param_name == 'h1':
-                        h2_idx = i + 1  # Index of corresponding h2 value
-                        max_bound = min(bounds[1], individual[h2_idx] - 0.1)
-                        value = random.uniform(bounds[0], max_bound)
+                        max_bound = min(bounds[1], individual[start_idx + 1] - 0.1)
+                        value = np.random.uniform(bounds[0], max_bound)
                     
                     # Enforce bounds for all parameters
-                    individual[i] = self._bound_parameter(value, bounds)
-                    
-                else:
-                    # Hydroworks parameter mutation
-                    hw_genes_start = len(self.reservoir_ids) * genes_per_reservoir
-                    offset = i - hw_genes_start
-                    
-                    # Find which hydroworks this gene belongs to
-                    hw_idx = 0
-                    gene_count = 0
-                    for hw_id in self.hydroworks_ids:
-                        n_targets = len(self.hydroworks_targets[hw_id])
-                        if gene_count + n_targets > offset:
-                            hw_updates.add(hw_id)
-                            break
-                        gene_count += n_targets
-                        hw_idx += 1
-                    
-                    # Mutate the gene
-                    individual[i] = random.random()
+                    individual[start_idx + param_idx] = self._bound_parameter(value, bounds)
+        
+        # Hydroworks parameter mutation
+        hw_genes_start = len(self.reservoir_ids) * genes_per_reservoir
+        for hw_idx, hw_id in enumerate(self.hydroworks_ids):
+            n_targets = len(self.hydroworks_targets[hw_id])
+            start_idx = hw_genes_start + sum(len(self.hydroworks_targets[hw]) for hw in self.hydroworks_ids[:hw_idx])
+            end_idx = start_idx + n_targets
+            if random.random() < indpb:
+                hw_updates.add(hw_id)
+                individual[start_idx:end_idx] = np.random.random(n_targets)
         
         # Normalize hydroworks distributions that were modified
-        gene_idx = len(self.reservoir_ids) * genes_per_reservoir
-        for hw_id in self.hydroworks_ids:
-            if hw_id in hw_updates:
-                n_targets = len(self.hydroworks_targets[hw_id])
-                dist_values = individual[gene_idx:gene_idx + n_targets]
-                normalized_dist = self._normalize_distribution(dist_values)
-                for j, value in enumerate(normalized_dist):
-                    individual[gene_idx + j] = value
-            gene_idx += len(self.hydroworks_targets[hw_id])
-        return individual,
+        for hw_id in hw_updates:
+            n_targets = len(self.hydroworks_targets[hw_id])
+            start_idx = hw_genes_start + sum(len(self.hydroworks_targets[hw]) for hw in self.hydroworks_ids[:self.hydroworks_ids.index(hw_id)])
+            end_idx = start_idx + n_targets
+            individual[start_idx:end_idx] = self._normalize_distribution(individual[start_idx:end_idx])
+        
+        return creator.Individual(individual.tolist()),
 
     def _crossover(self, ind1, ind2):
         """
@@ -190,41 +175,39 @@ class MultiGeneticOptimizer:
         Each reservoir (with its 5 parameters) or hydrowork (with its distribution parameters)
         is swapped as a complete unit between parents.
         """
-        # Create copies of the individuals as proper DEAP individuals
-        child1, child2 = creator.Individual(list(ind1)), creator.Individual(list(ind2))
+        # Convert individuals to numpy arrays for vectorized operations
+        ind1, ind2 = np.array(ind1), np.array(ind2)
         
         # Handle reservoirs as packages
         genes_per_reservoir = 5  # h1, h2, w, m1, m2
+        num_reservoirs = len(self.reservoir_ids)
         
-        # For each reservoir, decide if we swap its complete package
-        for res_idx in range(len(self.reservoir_ids)):
-            start_idx = res_idx * genes_per_reservoir
-            end_idx = start_idx + genes_per_reservoir
-            
-            # 50% chance to swap this reservoir's complete package
-            if random.random() < 0.5:
-                # Swap all parameters for this reservoir
-                child1[start_idx:end_idx], child2[start_idx:end_idx] = \
-                    child2[start_idx:end_idx], child1[start_idx:end_idx]
+        # Create masks for crossover
+        reservoir_mask = np.random.rand(num_reservoirs) < 0.5
+        
+        for res_idx in range(num_reservoirs):
+            if reservoir_mask[res_idx]:
+                start_idx = res_idx * genes_per_reservoir
+                end_idx = start_idx + genes_per_reservoir
+                ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
+                    ind2[start_idx:end_idx], ind1[start_idx:end_idx]
         
         # Handle hydroworks as packages
-        hw_start = len(self.reservoir_ids) * genes_per_reservoir
+        hw_start = num_reservoirs * genes_per_reservoir
         current_idx = hw_start
         
-        # For each hydrowork, decide if we swap its complete distribution package
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
             hw_end = current_idx + n_targets
             
-            # 50% chance to swap this hydrowork's complete package
             if random.random() < 0.5:
-                # Swap all distribution parameters for this hydrowork
-                child1[current_idx:hw_end], child2[current_idx:hw_end] = \
-                    child2[current_idx:hw_end], child1[current_idx:hw_end]
+                ind1[current_idx:hw_end], ind2[current_idx:hw_end] = \
+                    ind2[current_idx:hw_end], ind1[current_idx:hw_end]
             
             current_idx = hw_end
         
-        return child1, child2
+        # Convert back to list and return as DEAP individuals
+        return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
     def _evaluate_individual(self, individual):
         """Evaluate fitness of an individual with bound checking"""
@@ -284,7 +267,8 @@ class MultiGeneticOptimizer:
         reservoir_params = {}
         hydroworks_params = {}
         
-        # Decode reservoir parameters
+        # Decode reservoir parameters using numpy slicing for efficiency
+        individual = np.array(individual)
         for res_idx, res_id in enumerate(self.reservoir_ids):
             start_idx = res_idx * genes_per_reservoir
             params = {
@@ -299,7 +283,7 @@ class MultiGeneticOptimizer:
         # Calculate start index for hydroworks genes
         hw_start = len(self.reservoir_ids) * genes_per_reservoir
         
-        # Decode hydroworks parameters - single annual distribution per target
+        # Decode hydroworks parameters using numpy slicing for efficiency
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
             start_idx = hw_start
