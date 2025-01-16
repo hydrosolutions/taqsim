@@ -485,17 +485,21 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12*3
     ngen = 10
-    pop_size = 10
+    pop_size = 1000
     cxpb = 0.5
     mutpb = 0.2
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    run_ipynb_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-
-    # Save optimization results
-    #save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop}_cxpb{cxpb}_mutpb{mutpb}.json")
-
+    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     """
+    print("Optimization complete")
+    
+    # Save optimization results
+    print("Saving optimization results...")
+    save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
+    print("Optimization results saved")
+    
+    
     loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
 
     # Create and run system with loaded parameters

@@ -10,6 +10,7 @@ import pandas as pd
 from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode
 from .edge import Edge
 from .visualization import WaterSystemVisualizer
+import numpy as np
 
 class WaterSystem:
     """
@@ -333,99 +334,86 @@ class WaterSystem:
         if self.time_steps == 0:
             return pd.DataFrame()
         
-        # Initialize lists to store data
-        balance_data = []
         
-        for t in range(self.time_steps):
+        # Initialize arrays to store data
+        time_steps = np.arange(self.time_steps)
+        storage_start = np.zeros(self.time_steps)
+        storage_end = np.zeros(self.time_steps)
+        storage_change = np.zeros(self.time_steps)
+        reservoir_et_losses = np.zeros(self.time_steps)
+        reservoir_spills = np.zeros(self.time_steps)
+        hydroworks_spills = np.zeros(self.time_steps)
+        source = np.zeros(self.time_steps)
+        sink = np.zeros(self.time_steps)
+        edge_losses = np.zeros(self.time_steps)
+        demands = np.zeros(self.time_steps)
+        supplied_demand = np.zeros(self.time_steps)
+        unmet_demand = np.zeros(self.time_steps)
         
-            # Initialize volumes for current timestep
-            volumes = {
-                'time_step': t,
-                'storage_start': 0.0, # Storage at start of timestep
-                'storage_end': 0.0,  # Storage at end of timestep
-                'storage_change': 0.0,  # Change in storage (current - previous)
-                'reservoir ET losses': 0.0,    # Reservoir evaporation losses
-                'reservoir spills': 0.0,    # Reservoir spills
-                'hydroworks spills': 0.0,  # Add hydroworks spills
-                'source': 0.0,    # Supply node contributions
-                'sink': 0.0,   # Sink node outflows
-                'edge losses': 0.0,    # Edge losses
-                'demands': 0.0,   # Total demand
-                'supplied demand': 0.0,  # Satisfied demand
-                'unmet demand': 0.0,  # Unsatisfied demand
-            }
+        for node_id, node_data in self.graph.nodes(data=True):
+            node = node_data['node']
             
-            # Calculate volumes for each component
-            for node_id, node_data in self.graph.nodes(data=True):
-                node = node_data['node']
+            if isinstance(node, SupplyNode):
+                supply_rates = np.array([node.get_supply_rate(t) for t in time_steps])
+                source += supply_rates * self.dt
                 
-                if isinstance(node, SupplyNode):
-                    # Convert supply rate to volume
-                    supply_rate = node.get_supply_rate(t)
-                    volumes['source'] += supply_rate * self.dt
-                    
-                elif isinstance(node, DemandNode):
-                    # Convert demand rates to volumes
-                    demand_rate = node.get_demand_rate(t)
-                    satisfied_rate = node.satisfied_consumptive_demand[t] if t < len(node.satisfied_consumptive_demand) else 0
-                    
-                    volumes['demands'] += demand_rate * self.dt
-                    volumes['supplied demand'] += satisfied_rate * self.dt
-                    volumes['unmet demand'] += (demand_rate - satisfied_rate) * self.dt
-                    
-                elif isinstance(node, StorageNode):
-                    # Add current storage
-                    if t < len(node.storage)-1:
-                        volumes['storage_end'] += node.storage[t+1]
+            elif isinstance(node, DemandNode):
+                demand_rates = np.array([node.get_demand_rate(t) for t in time_steps])
+                satisfied_rates = np.array([node.satisfied_consumptive_demand[t] if t < len(node.satisfied_consumptive_demand) else 0 for t in time_steps])
                 
-                        volumes['storage_start'] += node.storage[t]
-
-                        # Calculate storage change (current - previous)
-                        storage_change = node.storage[t+1] - node.storage[t]
-                        volumes['storage_change'] += storage_change
-                        volumes['reservoir ET losses'] += node.evaporation_losses[t]
-                    else:  # Last timestep
-                        # Set storage change to 0 for last timestep
-                        volumes['storage_change'] += 0
-                        volumes['storage_end'] += node.storage[t]
-                        volumes['storage_start'] += node.storage[t]
-                    
-                    # Add spills
-                    if t < len(node.spillway_register):
-                        volumes['reservoir spills'] += node.spillway_register[t]
+                demands += demand_rates * self.dt
+                supplied_demand += satisfied_rates * self.dt
+                unmet_demand += (demand_rates - satisfied_rates) * self.dt
                 
-                elif isinstance(node, HydroWorks):
-                    if t < len(node.spill_register):
-                        volumes['hydroworks spills'] += node.spill_register[t]
+            elif isinstance(node, StorageNode):
+                storage = np.array(node.storage[:self.time_steps+1])
+                storage_start += storage[:-1]
+                storage_end += storage[1:]
+                storage_change = storage_end - storage_start
+                reservoir_et_losses += np.array(node.evaporation_losses[:self.time_steps])
+                reservoir_spills += np.array(node.spillway_register[:self.time_steps])
                 
-                elif isinstance(node, SinkNode):
-                    for edge in node.inflow_edges.values():
-                        outflow_rate = edge.get_edge_outflow(t)
-                        volumes['sink'] += outflow_rate * self.dt
-            
-            # Calculate total losses from all edges
-            for _, _, edge_data in self.graph.edges(data=True):
-                edge = edge_data['edge']
-                if t < len(edge.losses):
-                    volumes['edge losses'] += edge.losses[t] * self.dt
-            
-            # Calculate balance error
-            # For each timestep: source = supplied + outflow + losses + spills + storage_change
-            volumes['balance_error'] = (
-                volumes['source'] 
-                - volumes['supplied demand']
-                - volumes['sink']
-                - volumes['edge losses']
-                - volumes['reservoir spills']
-                - volumes['reservoir ET losses']
-                - volumes['hydroworks spills']
-                - volumes['storage_change']
-            )
-            
-            balance_data.append(volumes)
+            elif isinstance(node, HydroWorks):
+                hydroworks_spills += np.array(node.spill_register[:self.time_steps])
+                
+            elif isinstance(node, SinkNode):
+                for edge in node.inflow_edges.values():
+                    outflow_rates = np.array([edge.get_edge_outflow(t) for t in time_steps])
+                    sink += outflow_rates * self.dt
         
-        # Create DataFrame and round values
-        df = pd.DataFrame(balance_data)
+        for _, _, edge_data in self.graph.edges(data=True):
+            edge = edge_data['edge']
+            edge_losses += np.array(edge.losses[:self.time_steps]) * self.dt
+        
+        balance_error = (
+            source 
+            - supplied_demand
+            - sink
+            - edge_losses
+            - reservoir_spills
+            - reservoir_et_losses
+            - hydroworks_spills
+            - storage_change
+        )
+        
+        # Create DataFrame
+        df = pd.DataFrame({
+            'time_step': time_steps,
+            'storage_start': storage_start,
+            'storage_end': storage_end,
+            'storage_change': storage_change,
+            'reservoir ET losses': reservoir_et_losses,
+            'reservoir spills': reservoir_spills,
+            'hydroworks spills': hydroworks_spills,
+            'source': source,
+            'sink': sink,
+            'edge losses': edge_losses,
+            'demands': demands,
+            'supplied demand': supplied_demand,
+            'unmet demand': unmet_demand,
+            'balance_error': balance_error
+        })
+        
         numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
         df[numeric_cols] = df[numeric_cols].round(3)
         
