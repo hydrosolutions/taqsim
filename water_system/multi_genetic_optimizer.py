@@ -120,7 +120,7 @@ class MultiGeneticOptimizer:
         self.toolbox.register("mutate", self._mutate_individual)
         self.toolbox.register("select", tools.selTournament, tournsize=5)
 
-    def _mutate_individual(self, individual, indpb=0.2):
+    def _mutate_individual(self, individual, indpb=0.5):
         """Custom mutation operator with enforced parameter bounds using numpy for efficiency"""
         genes_per_reservoir = 5  # 5 parameters per reservoir
         
@@ -175,7 +175,6 @@ class MultiGeneticOptimizer:
         Each reservoir (with its 5 parameters) or hydrowork (with its distribution parameters)
         is swapped as a complete unit between parents.
         """
-        # Convert individuals to numpy arrays for vectorized operations
         ind1, ind2 = np.array(ind1), np.array(ind2)
         
         # Handle reservoirs as packages

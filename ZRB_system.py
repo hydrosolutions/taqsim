@@ -45,7 +45,6 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     HW_Confluence=HydroWorks("HW-Confluence", easting=239889.6,northing=4433214.0)
     HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
     HW_EskiAnkhor=HydroWorks("HW-EskiAnkhor", easting=315015,northing=4390976)
-    HW_PC22=HydroWorks("HW-PC22", easting=362679.7,northing=4379566.2)
     
     # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,utm_easting,utm_northing,longitude,latitude,csv_path)
     Demand_info = pd.read_csv('./data/DemandNode_Info.csv', sep=',')
@@ -106,7 +105,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     # Add nodes to the system
     supply_node = [supply]  # List of supply nodes
     reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
-    hydroworks = [HW_PC22,HW_EskiAnkhor, HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
+    hydroworks = [HW_EskiAnkhor, HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
     demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant]  # List of demand nodes
     sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
 
@@ -119,12 +118,11 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
 
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, HW_PC22, capacity=125))
-    system.add_edge(Edge(HW_PC22, Bulungur, capacity=65))
-    system.add_edge(Edge(HW_PC22, Jomboy, capacity=50))
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=65))
+    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=50))
     system.add_edge(Edge(Bulungur, Jomboy, capacity=65))
     system.add_edge(Edge(Jomboy, Payariq, capacity=115))
-    system.add_edge(Edge(HW_PC22, sink_tuyatortor, capacity=65))
+    system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=65))
 
 
     # Supply for Toyloq, Urgut, Samarqand
@@ -151,7 +149,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=65))
     system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
     system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=55))
+    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=40))
     system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=95))
     system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=95))
 
@@ -161,7 +159,6 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(Narpay, Paxtachi, capacity=80))
     system.add_edge(Edge(Paxtachi, Karmana, capacity=80))
     system.add_edge(Edge(Karmana, sink_downstream, capacity=80))
-    system.add_edge(Edge(HW_Narpay, Kattaqorgon, capacity=40))
 
     # HW_Confluence
     system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=530))
@@ -173,21 +170,17 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
 
-
+    """
     # HW-Ravadhoza distribution
     HW_Ravadhoza.set_distribution_parameters({
-        'HW-AkKaraDarya': 0.728,   
-        'HW-PC22': 0.103,           
-        'Toyloq': 0.066,           
-        'Urgut': 0.103              
+        'HW-AkKaraDarya': 0.7,        
+        'Toyloq': 0.05,           
+        'Urgut': 0.1,
+        'Bulungur': 0.05,          
+        'Jomboy': 0.05,            
+        'Sink-Jizzakh': 0.05               
     })
 
-    # HW-PC22 distribution
-    HW_PC22.set_distribution_parameters({
-        'Bulungur': 0.361,          # 65/180
-        'Jomboy': 0.278,            # 50/180
-        'Sink-Jizzakh': 0.361            # 65/180
-    })
 
     # HW-EskiAnkhor distribution
     HW_EskiAnkhor.set_distribution_parameters({
@@ -212,8 +205,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     # HW-Narpay distribution
     HW_Narpay.set_distribution_parameters({
         'HW-Confluence': 0.510,      # 125/245
-        'Narpay': 0.327,            # 80/245
-        'Kattaqorgon': 0.163        # 40/245
+        'Narpay': 0.49,            # 80/245
     })
 
     # HW-Confluence distribution
@@ -227,7 +219,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'Sink-Navoi': 0.862,    # 500/580
         'Navoi-Powerplant': 0.060         # 35/580
     })
-    
+    """
     return system
 
 def load_optimized_parameters(system, optimization_results):
@@ -434,6 +426,7 @@ def run_ipynb_optimization(start_year=2017, start_month=1, num_time_steps=12, ng
     print(f"Mutation probability: {results['mutation_probability']}")
     print(f"Final objective value: {results['objective_value']:,.0f} m³")
 
+    save_optimized_parameters(results, f"./GA_experiments/optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
     #optimizer.plot_convergence()
     return results
 
@@ -482,13 +475,13 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12*3
     ngen = 20
-    pop_size = 50
+    pop_size = 10
     cxpb = 0.5
     mutpb = 0.2
     
     #run_sample_tests(start_year, start_month, num_time_steps)
     results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-    
+    """
     print("Optimization complete")
     
     # Save optimization results
@@ -507,7 +500,7 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    
+    """
     allow_sleep()
 
   
