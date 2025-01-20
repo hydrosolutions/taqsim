@@ -59,14 +59,14 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     # Reservoir
     release_params_kattakurgan = {
-        'h1': 500.0,
+        'h1': 504.0,
         'h2': 511.0,
         'w': 5.0,
         'm1': 1.5,
         'm2': 1.5,
     }
     release_params_akdarya = {
-        'h1': 486.0,
+        'h1': 490.0,
         'h2': 496.0,
         'w': 10.0,
         'm1': 1.5,
@@ -74,10 +74,10 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     }
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e8,
                                  evaporation_file='./data/reservoir_et_2010_2019_predicted.csv', start_year=start_year, start_month=start_month, 
-                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan)
+                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
     RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=6e7, 
                               evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
-                              num_time_steps=num_time_steps, release_params=release_params_akdarya)
+                              num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/Jizzakh_min_flow_monthly_2000_2022.csv', start_year=start_year, 
@@ -464,15 +464,17 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12*3
     ngen = 20
-    pop_size = 200
+    pop_size = 20
     cxpb = 0.5
     mutpb = 0.2
     
-    #run_sample_tests(start_year, start_month, num_time_steps)
-    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    
+    """
     loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen100_pop2000_cxpb0.8_mutpb0.4.json")
 
     # Create and run system with loaded parameters
+    
     system = run_system_with_optimized_parameters(
         create_seasonal_ZRB_system,
         loaded_results,
@@ -480,15 +482,5 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-
     """
-    print("Optimization complete")
-    
-    # Save optimization results
-    print("Saving optimization results...")
-    save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
-    print("Optimization results saved")
-    
-    """
-
   

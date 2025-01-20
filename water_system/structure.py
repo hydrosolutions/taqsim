@@ -645,7 +645,7 @@ class StorageNode(Node):
 
     def __init__(self, id, hva_file, initial_storage=0, easting=None, northing=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 release_params=None):
+                 release_params=None, dead_storage=0):
         """
         Initialize a StorageNode object.
 
@@ -676,9 +676,10 @@ class StorageNode(Node):
         self._volume_to_level = None
         self._level_to_area = None
         self.evaporation_losses = []
-
         # Load height-volume-area data
         self._load_hva_data(hva_file)
+
+        self.dead_storage_level = self.get_level_from_volume(dead_storage)
         # Initialize evaporation rates
         self.evaporation_rates = self._initialize_evaporation_rates(
             id, evaporation_file, start_year, start_month, num_time_steps
@@ -719,11 +720,11 @@ class StorageNode(Node):
         
         # Check level bounds against HVA data
         if hasattr(self, 'hva_data'):
-            min_level = self.hva_data['min_waterlevel']
+            min_level = self.dead_storage_level
             max_level = self.hva_data['max_waterlevel']
             
             if h1 < min_level or h1 > max_level:
-                raise ValueError(f"h1 ({h1}) outside valid range [{min_level}, {max_level}]")
+                raise ValueError(f"h1 ({h1}) outside valid range [dead storage level:{min_level}, {max_level}]")
             if h2 < min_level or h2 > max_level:
                 raise ValueError(f"h2 ({h2}) outside valid range [{min_level}, {max_level}]")
         
@@ -1174,7 +1175,7 @@ class HydroWorks(Node):
             # Distribute flow according to parameters, recording spills when capacity is exceeded
             for edge_id, edge in self.outflow_edges.items():
                 # Calculate target flow based on distribution parameter
-                target_flow = total_inflow * self.distribution_params[edge_id]
+                target_flow = float(total_inflow * self.distribution_params[edge_id])
                 
                 # If target exceeds capacity, record the excess as spill
                 if target_flow > edge.capacity:

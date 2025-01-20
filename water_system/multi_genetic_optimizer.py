@@ -35,7 +35,7 @@ class MultiGeneticOptimizer:
                 reservoir = node_data['node']
                 
                 # Get water level bounds from HVA data
-                min_level = reservoir.hva_data['min_waterlevel']
+                min_level = reservoir.dead_storage_level
                 max_level = reservoir.hva_data['max_waterlevel']
                 
                 # Calculate total outflow capacity using numpy
