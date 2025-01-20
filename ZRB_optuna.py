@@ -3,10 +3,9 @@ import webbrowser
 import os
 import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer
-import ctypes
-import cProfile
-import pstats
-import io
+import optuna
+import plotly
+from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
 
 def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     """
@@ -418,7 +417,7 @@ def run_ipynb_optimization(start_year=2017, start_month=1, num_time_steps=12, ng
     print(f"Final objective value: {results['objective_value']:,.0f} m³")
 
     save_optimized_parameters(results, f"./GA_experiments/optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
-    #optimizer.plot_convergence()
+    optimizer.plot_convergence()
     return results
 
 def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
@@ -463,22 +462,35 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*3
-    ngen = 20
-    pop_size = 20
-    cxpb = 0.5
-    mutpb = 0.2
     
-    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-    
-    
-    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen100_pop2000_cxpb0.8_mutpb0.4.json")
+    def objective(trial):
+        population = trial.suggest_int('pop_size', 5, 20)
+        generations = trial.suggest_int('generations', 20, 21)
+        cxpb = trial.suggest_float('cxpb', 0.5, 1)
+        mutpb = trial.suggest_float('mutpb', 0.01, 0.8)
 
-    # Create and run system with loaded parameters
-    
-    system = run_system_with_optimized_parameters(
-        create_seasonal_ZRB_system,
-        loaded_results,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps
-    )
+        optimization_results = run_ipynb_optimization(start_year, start_month, num_time_steps, generations, population, cxpb, mutpb)
+        return optimization_results['objective_value']
+
+# Create a study
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=2)
+
+# Print the best parameters and fitness value
+print("Best Parameters:", study.best_params)
+print("Best Objective Value:", study.best_value)
+
+# save the study
+study_name = "ZRB_study"
+study_file = f"{study_name}.pkl"
+study.trials_dataframe().to_csv(f"{study_name}.csv")
+study.trials_dataframe().to_pickle(study_file)
+
+#save the plots
+plot_optimization_history(study).write_html(f"GA_experiments/{study_name}_history.html")
+plot_param_importances(study).write_html(f"GA_experiments/{study_name}_importances.html")
+plot_contour(study).write_html(f"GA_experiments/{study_name}_contour.html")
+plot_intermediate_values(study).write_html(f"GA_experiments/{study_name}_intermediate.html")
+plot_timeline(study).write_html(f"GA_experiments/{study_name}_timeline.html")
+plot_slice(study).write_html(f"GA_experiments/{study_name}_slice.html")
+plot_edf(study).write_html(f"GA_experiments/{study_name}_edf.html")

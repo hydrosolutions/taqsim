@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
-from scoop import futures
 import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
 import copy
@@ -379,5 +378,5 @@ class MultiGeneticOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        plt.savefig(f'GA_experiments/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         plt.close()
