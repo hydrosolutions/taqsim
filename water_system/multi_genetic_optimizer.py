@@ -4,14 +4,15 @@ from deap import base, creator, tools, algorithms
 from scoop import futures
 import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
+import copy
 
 class MultiGeneticOptimizer:
     """
     Enhanced genetic algorithm optimizer for water systems with multiple reservoirs
     and hydroworks nodes.
     """
-    def __init__(self, system_creator, start_year, start_month, num_time_steps, ngen=50, population_size=50, cxpb=0.9, mutpb=0.5):
-        self.system_creator = system_creator
+    def __init__(self, base_system, start_year, start_month, num_time_steps, ngen=50, population_size=50, cxpb=0.9, mutpb=0.5):
+        self.base_system = base_system 
         self.start_year = start_year
         self.start_month = start_month
         self.num_time_steps = num_time_steps
@@ -20,8 +21,6 @@ class MultiGeneticOptimizer:
         self.cxpb = cxpb
         self.mutpb = mutpb
         
-        # Get initial system to identify reservoirs and hydroworks
-        test_system = self.system_creator(self.start_year, self.start_month, self.num_time_steps)  # Create test system to analyze structure
         self.reservoir_ids = []
         self.hydroworks_ids = []
         self.hydroworks_targets = {}
@@ -30,7 +29,7 @@ class MultiGeneticOptimizer:
         self.reservoir_bounds = {}
         
         # Identify reservoirs and hydroworks in system
-        for node_id, node_data in test_system.graph.nodes(data=True):
+        for node_id, node_data in base_system.graph.nodes(data=True):
             if isinstance(node_data['node'], StorageNode):
                 self.reservoir_ids.append(node_id)
                 reservoir = node_data['node']
@@ -217,8 +216,8 @@ class MultiGeneticOptimizer:
             reservoir_params, hydroworks_params = self._decode_individual(individual)
             
             # Create and configure water system
-            system = self.system_creator(self.start_year, self.start_month, self.num_time_steps)
-            
+            system = copy.deepcopy(self.base_system)
+
             # Set parameters for all reservoirs
             for res_id, params in reservoir_params.items():
                 reservoir_node = system.graph.nodes[res_id]['node']

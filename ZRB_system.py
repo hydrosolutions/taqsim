@@ -4,24 +4,9 @@ import os
 import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer
 import ctypes
-
-def prevent_sleep():
-    """Prevents the system from going to sleep."""
-    try:
-        # Windows only: Prevent system from sleeping
-        print("Preventing system from sleeping...")
-        ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
-    except Exception as e:
-        print(f"Sleep prevention failed: {e}")
-
-def allow_sleep():
-    """Allows the system to sleep again."""
-    try:
-        # Windows only: Reset system sleep settings
-        print("Resetting sleep settings...")
-        ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
-    except Exception as e:
-        print(f"Failed to reset sleep settings: {e}")
+import cProfile
+import pstats
+import io
 
 def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     """
@@ -358,8 +343,12 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     return system
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
+    
+    ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
+
+    
     optimizer = MultiGeneticOptimizer(
-        create_seasonal_ZRB_system,
+        base_system=ZRB_system,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
@@ -404,8 +393,10 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
     return results
 
 def run_ipynb_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
+    ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
+
     optimizer = MultiGeneticOptimizer(
-        create_seasonal_ZRB_system,
+        base_system=ZRB_system,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
@@ -469,28 +460,17 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
 # Run the sample tests
 if __name__ == "__main__":
-    prevent_sleep()
-    
     start_year = 2017
     start_month = 1
     num_time_steps = 12*3
     ngen = 20
-    pop_size = 10
+    pop_size = 200
     cxpb = 0.5
     mutpb = 0.2
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-    """
-    print("Optimization complete")
-    
-    # Save optimization results
-    print("Saving optimization results...")
-    save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
-    print("Optimization results saved")
-    
-    
-    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
+    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen100_pop2000_cxpb0.8_mutpb0.4.json")
 
     # Create and run system with loaded parameters
     system = run_system_with_optimized_parameters(
@@ -500,7 +480,15 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
+
     """
-    allow_sleep()
+    print("Optimization complete")
+    
+    # Save optimization results
+    print("Saving optimization results...")
+    save_optimized_parameters(results, f"optimized_parameters_ZRB_system_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
+    print("Optimization results saved")
+    
+    """
 
   
