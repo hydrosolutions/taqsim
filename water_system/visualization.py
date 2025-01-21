@@ -694,7 +694,7 @@ class WaterSystemVisualizer:
             edge = d['edge']
             edge_labels[(u, v)] = (f'{edge.capacity} m³/s')
       
-        #nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, font_size=14, ax=ax, rotate=False, bbox=dict(facecolor='white', alpha=0.5))
+        nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, font_size=14, ax=ax, rotate=False, bbox=dict(facecolor='white', alpha=0.5))
 
         # Create the legend on the top right of the plot
         ax.legend(handles=legend_elements,

@@ -72,10 +72,10 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm2': 1.5,
     }
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e8,
-                                 evaporation_file='./data/reservoir_et_2010_2019_predicted.csv', start_year=start_year, start_month=start_month, 
+                                 evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
     RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=6e7, 
-                              evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
+                              evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
     # Sink Nodes
@@ -102,11 +102,11 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
 
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=65))
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=40))
     system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=50))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=65))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=115))
-    system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=65))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=40))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=90))
+    system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=35))
 
 
     # Supply for Toyloq, Urgut, Samarqand
@@ -115,27 +115,27 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
     system.add_edge(Edge(Urgut, Samarqand, capacity=125))
     system.add_edge(Edge(Samarqand, HW_EskiAnkhor, capacity=205))
-    system.add_edge(Edge(HW_EskiAnkhor, Pastdargom, capacity=125))
-    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=125))
-    system.add_edge(Edge(HW_EskiAnkhor, Nurobod, capacity=80))
-    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=80))
+    system.add_edge(Edge(HW_EskiAnkhor, Pastdargom, capacity=150))
+    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=150))
+    system.add_edge(Edge(HW_EskiAnkhor, Nurobod, capacity=60))
+    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=60))
 
     # HW_AkKaraDarya
-    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=300))
-    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=300))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=115))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=115))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=55))
+    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
+    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=90))
+    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=90))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=80))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
     # Damkodzha
     system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=65))
+    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
     system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
     system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=40))
-    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=95))
-    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=95))
+    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=90))
+    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=90))
+    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=90))
 
     # HW_Narpay
     system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
@@ -145,12 +145,12 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(Karmana, sink_downstream, capacity=80))
 
     # HW_Confluence
-    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=530))
+    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=400))
 
     # HW_Karmana
     system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
     system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
-    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=545))
+    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=400))
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
 
