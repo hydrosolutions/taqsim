@@ -73,10 +73,10 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm2': 1.5,
     }
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=4e8,
-                                 evaporation_file='./data/reservoir_et_2010_2019_predicted.csv', start_year=start_year, start_month=start_month, 
+                                 evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
     RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=6e7, 
-                              evaporation_file='./data/Reservoir_ET_2010_2023.csv', start_year=start_year, start_month=start_month, 
+                              evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
     # Sink Nodes
@@ -462,7 +462,7 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 if __name__ == "__main__":
     start_year = 2017
     start_month = 1
-    num_time_steps = 12*3
+    num_time_steps = 12*4
     ngen = 20
     pop_size = 20
     cxpb = 0.5
