@@ -472,25 +472,25 @@ if __name__ == "__main__":
         optimization_results = run_ipynb_optimization(start_year, start_month, num_time_steps, generations, population, cxpb, mutpb)
         return optimization_results['objective_value']
 
-# Create a study
-study = optuna.create_study(direction='minimize')
-study.optimize(objective, n_trials=2)
+    # Create a study
+    study = optuna.create_study(direction='minimize')
+    study.optimize(objective, n_trials=2)
 
-# Print the best parameters and fitness value
-print("Best Parameters:", study.best_params)
-print("Best Objective Value:", study.best_value)
+    # Print the best parameters and fitness value
+    print("Best Parameters:", study.best_params)
+    print("Best Objective Value:", study.best_value)
 
-# save the study
-study_name = "ZRB_study"
-study_file = f"{study_name}.pkl"
-study.trials_dataframe().to_csv(f"{study_name}.csv")
-study.trials_dataframe().to_pickle(study_file)
+    # save the study
+    study_name = "ZRB_study"
+    study_file = f"{study_name}.pkl"
+    study.trials_dataframe().to_csv(f"{study_name}.csv")
+    study.trials_dataframe().to_pickle(study_file)
 
-#save the plots
-plot_optimization_history(study).write_html(f"GA_experiments/{study_name}_history.html")
-plot_param_importances(study).write_html(f"GA_experiments/{study_name}_importances.html")
-plot_contour(study).write_html(f"GA_experiments/{study_name}_contour.html")
-plot_intermediate_values(study).write_html(f"GA_experiments/{study_name}_intermediate.html")
-plot_timeline(study).write_html(f"GA_experiments/{study_name}_timeline.html")
-plot_slice(study).write_html(f"GA_experiments/{study_name}_slice.html")
-plot_edf(study).write_html(f"GA_experiments/{study_name}_edf.html")
+    #save the plots
+    plot_optimization_history(study).write_html(f"GA_experiments/{study_name}_history.html")
+    plot_param_importances(study).write_html(f"GA_experiments/{study_name}_importances.html")
+    plot_contour(study).write_html(f"GA_experiments/{study_name}_contour.html")
+    plot_intermediate_values(study).write_html(f"GA_experiments/{study_name}_intermediate.html")
+    plot_timeline(study).write_html(f"GA_experiments/{study_name}_timeline.html")
+    plot_slice(study).write_html(f"GA_experiments/{study_name}_slice.html")
+    plot_edf(study).write_html(f"GA_experiments/{study_name}_edf.html")

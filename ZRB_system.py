@@ -456,17 +456,34 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 
 # Run the sample tests
 if __name__ == "__main__":
+    # Start profiling
+    profiler = cProfile.Profile()
+    profiler.enable()
+
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
     ngen = 20
-    pop_size = 20
+    pop_size = 50
     cxpb = 0.5
     mutpb = 0.2
     
-    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     
-    
+    # Stop profiling
+    profiler.disable()
+
+    # Save profiling stats
+    profile_output = 'cprofile_stats.prof'
+    profiler.dump_stats(profile_output)
+
+    # Display profiling stats
+    stream = io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+    stats.sort_stats('cumulative')  # Sort by cumulative time
+    stats.print_stats(40)  # Print top 20 functions
+    print(stream.getvalue())
+    """
     loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen100_pop2000_cxpb0.8_mutpb0.4.json")
 
     # Create and run system with loaded parameters
@@ -478,3 +495,4 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
+    """
