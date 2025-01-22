@@ -84,7 +84,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
     sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/Kashkadarya_min_flow_monthly_2000_2022.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_1968_2020.csv', start_year=start_year, 
+    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_norm_ts_2017_2022.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
 
     # Add nodes to the system
