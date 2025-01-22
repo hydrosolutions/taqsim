@@ -44,7 +44,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             start_month=start_month,
             num_time_steps=num_time_steps,
             field_efficiency=0.75,
-            conveyance_efficiency=0.65,
+            conveyance_efficiency=0.645,
             weight=1.0
         )
         demand_nodes.append(demand_node)
@@ -336,10 +336,6 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     storage_node = system.graph.nodes['RES-Kattakurgan']['node']
     vis.plot_release_function(storage_node)
     
-    html_file = vis.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    
     return system
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
@@ -462,7 +458,7 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 if __name__ == "__main__":
     start_year = 2017
     start_month = 1
-    num_time_steps = 12*4
+    num_time_steps = 12*6
     ngen = 20
     pop_size = 20
     cxpb = 0.5

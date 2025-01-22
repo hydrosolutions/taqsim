@@ -2395,6 +2395,135 @@ class WaterSystemVisualizer:
 
     def plot_system_demands_vs_inflow(self):
         """
+        Create a plot comparing total system inflow against total demands and minimum flow requirements.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        try:
+            time_steps = range(self.system.time_steps)
+            
+            # Calculate total inflow (from supply nodes)
+            total_inflows = []
+            supply_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], SupplyNode)]
+            
+            for t in time_steps:
+                inflow = sum(node.get_supply_rate(t) for _, node in supply_nodes)
+                total_inflows.append(inflow)
+            
+            # Calculate total demands and minimum flows
+            total_demands = []
+            demand_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], DemandNode)]
+
+            # Get sink nodes with minimum flow requirements
+            sink_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], SinkNode)]
+            
+            for t in time_steps:
+                demand = sum(node.get_demand_rate(t) for _, node in demand_nodes)
+                total_demands.append(demand)
+            
+            # Create figure
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+            
+            # Calculate total minimum flow requirements
+            total_min_flows = np.zeros(len(time_steps))
+            for _, node in sink_nodes:
+                if hasattr(node, 'get_min_flow'):
+                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                    total_min_flows += np.array(min_flows)
+            
+            # Calculate total system requirements (demands + minimum flows)
+            total_requirements = np.array(total_demands) + total_min_flows
+            
+            # Plot 1: Time series
+            ax1.plot(time_steps, total_inflows, 'b-', label='Total System Inflow', linewidth=2)
+            ax1.plot(time_steps, total_demands, 'purple',  label='Total System Demand', linewidth=2, linestyle='--')
+            ax1.plot(time_steps, total_requirements, 'r' , label='Total System Requirements\n(Demand + Min Flow)', 
+                    linewidth=2)
+            
+            # Fill the deficit area
+            ax1.fill_between(time_steps, total_inflows, total_requirements, 
+                            where=total_requirements > np.array(total_inflows),
+                            color='red', alpha=0.3, label='Deficit')
+            
+            # Fill the surplus area
+            ax1.fill_between(time_steps, total_inflows, total_requirements,
+                            where=np.array(total_inflows) > total_requirements,
+                            color='green', alpha=0.3, label='Surplus')
+            
+            
+            # Calculate additional statistics 
+            total_inflow_volume = sum(total_inflows) * self.system.dt
+            total_demand_volume = sum(total_demands) * self.system.dt
+            total_min_flow_volume = sum(total_min_flows) * self.system.dt
+            total_req_volume = total_demand_volume + total_min_flow_volume
+            
+            stats_text = (
+                f"Statistics:\n"
+                f"Total Inflow: {total_inflow_volume:.2e} m³\n"
+                f"Total Demand: {total_demand_volume:.2e} m³\n"
+                f"Total Min Flow Requirement: {total_min_flow_volume:.2e} m³\n"
+                f"Volume Deficit: {(total_req_volume - total_inflow_volume):.2e} m³"
+            )
+            
+            ax1.text(0.02, 0.98, stats_text,
+                    transform=ax1.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8), 
+                    fontsize=12)
+            
+            ax1.set_ylabel('Flow Rate [m³/s]', fontsize=12)
+            ax1.set_title('System Inflow vs Total Demands and Minimum Flow Requirements', fontsize=12)
+            ax1.grid(True)
+            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
+            
+            # Plot 2: Demand composition and minimum flows for each time step
+            bottom = np.zeros(len(time_steps))
+            
+            # Plot demand nodes
+            colors = plt.cm.tab20(np.linspace(0, 1, len(demand_nodes)))
+            for (node_id, node), color in zip(demand_nodes, colors):
+                demands = [node.get_demand_rate(t) for t in time_steps]
+                ax2.bar(time_steps, demands, bottom=bottom, label=node_id, color=color)
+                bottom += np.array(demands)
+            
+            # Add minimum flow requirements from sink nodes on top
+            min_flow_bottom = bottom.copy()
+            sink_colors = plt.cm.Purples(np.linspace(0.3, 0.7, len(sink_nodes)))
+            
+            for (node_id, node), color in zip(sink_nodes, sink_colors):
+                if hasattr(node, 'get_min_flow'):
+                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                    ax2.bar(time_steps, min_flows, bottom=min_flow_bottom, 
+                        label=f'{node_id} Min Flow', color=color, alpha=0.7)
+                    min_flow_bottom += np.array(min_flows)
+            
+            # Add inflow line on top of stacked bars
+            ax2.plot(time_steps, total_inflows, 'k-', label='Total Inflow', linewidth=2)
+            
+            ax2.set_xlabel('Time Step', fontsize=12)
+            ax2.set_ylabel('Flow Rate [m³/s]', fontsize=12)
+            ax2.set_title('Demand Composition, Minimum Flow Requirements, and Total Inflow', fontsize=12)
+            ax2.grid(True)
+            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
+            
+            plt.tight_layout()
+            return self._save_plot("system_demands_vs_inflow")
+            
+        except Exception as e:
+            print(f"Error plotting system demands vs inflow: {str(e)}")
+            return None
+    
+    def plot_system_demands_vs_inflow_old(self):
+        """
         Create a plot comparing total system inflow against total demands.
         
         Returns:
