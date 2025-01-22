@@ -464,17 +464,17 @@ if __name__ == "__main__":
     num_time_steps = 12*3
     
     def objective(trial):
-        population = trial.suggest_int('pop_size', 5, 20)
-        generations = trial.suggest_int('generations', 20, 21)
-        cxpb = trial.suggest_float('cxpb', 0.5, 1)
-        mutpb = trial.suggest_float('mutpb', 0.01, 0.8)
+        population = trial.suggest_int('pop_size', 500, 2000)
+        generations = trial.suggest_int('generations', 50, 200)
+        cxpb = trial.suggest_float('cxpb', 0.3, 1)
+        mutpb = trial.suggest_float('mutpb', 0.01, 0.9)
 
         optimization_results = run_ipynb_optimization(start_year, start_month, num_time_steps, generations, population, cxpb, mutpb)
         return optimization_results['objective_value']
 
     # Create a study
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=2)
+    study.optimize(objective, n_trials=100)
 
     # Print the best parameters and fitness value
     print("Best Parameters:", study.best_params)
