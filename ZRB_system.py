@@ -325,6 +325,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_system_demands_vs_inflow()
+    vis.plot_system_cons_demands_vs_inflow()
     vis.plot_network_layout_2()
     vis.plot_minimum_flow_compliance()
     vis.plot_flow_compliance_heatmap()
@@ -457,8 +458,8 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 # Run the sample tests
 if __name__ == "__main__":
     # Start profiling
-    profiler = cProfile.Profile()
-    profiler.enable()
+    #profiler = cProfile.Profile()
+    #profiler.enable()
 
     start_year = 2017
     start_month = 1
@@ -468,8 +469,9 @@ if __name__ == "__main__":
     cxpb = 0.5
     mutpb = 0.2
     
-    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     
+    """
     # Stop profiling
     profiler.disable()
 
@@ -495,4 +497,3 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    """

@@ -461,10 +461,10 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
 if __name__ == "__main__":
     start_year = 2017
     start_month = 1
-    num_time_steps = 12*3
+    num_time_steps = 12*6
     
     def objective(trial):
-        population = trial.suggest_int('pop_size', 500, 2000)
+        population = trial.suggest_int('pop_size', 5, 20)
         generations = trial.suggest_int('generations', 50, 200)
         cxpb = trial.suggest_float('cxpb', 0.3, 1)
         mutpb = trial.suggest_float('mutpb', 0.01, 0.9)
