@@ -12,6 +12,9 @@ import json
 import networkx as nx
 from datetime import datetime
 from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.io as pio
 
 class WaterSystemVisualizer:
     """
@@ -972,6 +975,207 @@ class WaterSystemVisualizer:
         return plot_paths
     
     def create_interactive_network_visualization(self):
+        """Creates an offline interactive network visualization using Plotly."""
+
+        def create_frame(timestep):
+            """
+            Create a frame for the given timestep in the water system simulation.
+            Parameters:
+            timestep (int): The current timestep for which the frame is being created.
+            Returns:
+            list: A list of Plotly Scatter traces representing the edges and nodes of the water system.
+            The function performs the following steps:
+            1. Initializes empty lists for node and edge traces.
+            2. Iterates over the edges to create edge traces:
+                - Determines the source and target nodes for each edge.
+                - Calculates the flow and flow percentage for the current timestep.
+                - Sets the color and width of the edge based on the flow percentage.
+                - Creates a Plotly Scatter trace for the edge with the calculated properties.
+            3. Iterates over different node types to create node traces:
+                - Filters nodes by their type and shape.
+                - Creates a Plotly Scatter trace for each node type with appropriate markers and properties.
+            4. Combines and returns the edge and node traces.
+            Note:
+            - The function assumes that `edges`, `nodes`, and `max_flow` are defined in the scope where this function is called.
+            - The `textposition` parameter in the edge trace is set to 'middle center'. Other possible values include:
+                - 'top left', 'top center', 'top right'
+                - 'middle left', 'middle right'
+                - 'bottom left', 'bottom center', 'bottom right'
+            """
+            node_traces = []
+            edge_traces = []
+            
+            # Create edge traces
+            for edge in edges:
+                source = next(n for n in nodes if n['id'] == edge['source'])
+                target = next(n for n in nodes if n['id'] == edge['target'])
+                flow = edge['flows'][timestep] if timestep < len(edge['flows']) else 0
+                flow_pct = flow / edge['capacity'] if edge['capacity'] > 0 else 0
+                
+                color = '#BFDBFE' if flow_pct < 0.5 else '#2563EB' if flow_pct < 0.8 else '#1E3A8A' if flow_pct == 1 else '#8B0000'
+                width = 1 + (flow / max_flow * 100) if flow > 0 else 1
+                
+                edge_trace = go.Scatter(
+                    x=[source['easting'], target['easting']],
+                    y=[source['northing'], target['northing']],
+                    mode='lines',
+                    line=dict(width=width, color=color),
+                    hoverinfo='none',
+                    showlegend=False
+                )
+                
+                # Add a separate trace for the text to display it on hover only
+                text_trace = go.Scatter(
+                    x=[(source['easting'] + target['easting']) / 2],
+                    y=[(source['northing'] + target['northing']) / 2],
+                    mode='markers',
+                    marker=dict(opacity=0),
+                    text=[f'{flow:.1f} m³/s'],
+                    hoverinfo='text',
+                    showlegend=False
+                )
+                edge_traces.append(edge_trace)
+                edge_traces.append(text_trace)
+                edge_traces.append(edge_trace)
+
+            # Create node traces by type
+            for node_type in ['Supply', 'Storage', 'Demand', 'Sink', 'Hydroworks']:
+                nodes_of_type = [n for n in nodes if n['shape'] == ('circle' if node_type in ['Demand', 'Hydroworks'] else 'square')]
+                
+                if nodes_of_type:
+                    node_trace = go.Scatter(
+                        x=[n['easting'] for n in nodes_of_type],
+                        y=[n['northing'] for n in nodes_of_type],
+                        mode='markers',
+                        marker=dict(
+                            symbol='circle' if node_type in ['Demand', 'Hydroworks'] else 'square',
+                            size=20,
+                            color=[n['color'] for n in nodes_of_type],
+                            line=dict(width=1, color='black')
+                        ),
+                        text=[n['id'] for n in nodes_of_type],
+                        hoverinfo='text',
+                        name=node_type, 
+                        showlegend=False
+                    )
+                    node_traces.append(node_trace)
+                    
+            return edge_traces + node_traces
+
+        # Collect node and edge data
+        nodes = []
+        edges = []
+        max_flow = 0
+        
+        for node_id, data in self.system.graph.nodes(data=True):
+            node = data['node']
+            node_type = type(node).__name__
+            
+            color = {
+                'SupplyNode': 'rgb(135, 206, 235)',
+                'StorageNode': 'rgb(144, 238, 144)',
+                'DemandNode': 'rgb(250, 128, 114)',
+                'SinkNode': 'rgb(211, 211, 211)',
+                'HydroWorks': 'rgb(255, 165, 0)'
+            }.get(node_type, 'gray')
+            
+            nodes.append({
+                'id': node_id,
+                'easting': float(node.easting),
+                'northing': float(node.northing),
+                'color': color,
+                'shape': 'circle' if node_type in ['DemandNode', 'HydroWorks'] else 'square'
+            })
+
+        for u, v, data in self.system.graph.edges(data=True):
+            edge = data['edge']
+            flows = [float(f) for f in edge.outflow] if edge.outflow else []
+            if flows:
+                max_flow = max(max_flow, max(flows))
+                
+            edges.append({
+                'source': u,
+                'target': v,
+                'capacity': float(edge.capacity),
+                'flows': flows
+            })
+
+        # Create animation frames
+        frames = [go.Frame(
+            data=create_frame(t),
+            name=f'frame{t}'
+        ) for t in range(self.system.time_steps)]
+
+        # Create initial figure
+        fig = go.Figure(
+            data=create_frame(0),
+            frames=frames,
+            layout=go.Layout(
+                title=dict(
+                    text='Water System Network',
+                    x=0.5,
+                    y=0.95
+                ),
+                width=1200,
+                height=800,
+                showlegend=True,
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=1.05,
+                    bgcolor='rgba(255, 255, 255, 0.8)'
+                ),
+                updatemenus=[dict(
+                    type='buttons',
+                    showactive=False,
+                    buttons=[
+                        dict(label='Play',
+                            method='animate',
+                            args=[None, dict(frame=dict(duration=1000, redraw=True),
+                                            fromcurrent=True,
+                                            mode='immediate')]),
+                        dict(label='Pause',
+                            method='animate',
+                            args=[[None], dict(frame=dict(duration=0, redraw=False),
+                                            mode='immediate')])
+                    ],
+                    x=0.1,
+                    y=1.1
+                )],
+                sliders=[dict(
+                    currentvalue=dict(
+                        prefix='Timestep: ',
+                        visible=True,
+                        xanchor='right'
+                    ),
+                    steps=[dict(
+                        method='animate',
+                        args=[[f'frame{k}'], dict(mode='immediate', frame=dict(duration=0))],
+                        label=str(k)
+                    ) for k in range(self.system.time_steps)]
+                )],
+                xaxis=dict(
+                    showgrid=False,
+                    zeroline=False,
+                    showticklabels=False
+                ),
+                yaxis=dict(
+                    showgrid=False,
+                    zeroline=False,
+                    showticklabels=False
+                ),
+                margin=dict(t=100, r=200)
+            )
+        )
+
+        # Save as standalone HTML
+        save_path = os.path.join(self.image_dir, f"{self.name}_network_vis.html")
+        pio.write_html(fig, save_path, auto_open=False, include_plotlyjs=True)
+        
+        return save_path
+
+    def create_interactive_network_visualization_old(self):
         """
         Create an interactive visualization of the water system network as a React component.
         Network shows flows changing over time with an interactive time slider.
@@ -2655,7 +2859,6 @@ class WaterSystemVisualizer:
             print(f"Error plotting system demands vs inflow: {str(e)}")
             return None
     
-
     def plot_system_demands_vs_inflow_old(self):
         """
         Create a plot comparing total system inflow against total demands.
