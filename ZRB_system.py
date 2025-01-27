@@ -328,6 +328,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_system_demands_vs_inflow()
     vis.plot_system_cons_demands_vs_inflow()
     vis.plot_network_layout_2()
+    vis.plot_network_layout()
     vis.plot_minimum_flow_compliance()
     vis.plot_flow_compliance_heatmap()
     vis.print_flow_compliance_summary()
@@ -491,7 +492,7 @@ if __name__ == "__main__":
     stats.print_stats(40)  # Print top 20 functions
     print(stream.getvalue())
     """
-    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen100_pop2000_cxpb0.8_mutpb0.4.json")
+    loaded_results = load_parameters_from_file(f"optuna_2_best.json.")
 
     # Create and run system with loaded parameters
     

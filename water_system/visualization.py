@@ -218,7 +218,7 @@ class WaterSystemVisualizer:
             percentage_data[node_id] = node_percentages
         
         # Plot absolute deficits
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(16, 6))
         sns.heatmap(total_data.T, cmap='YlOrRd', 
                     xticklabels=total_data.index,
                     yticklabels=total_data.columns,
@@ -227,12 +227,12 @@ class WaterSystemVisualizer:
         plt.xlabel('Time Step [month]', fontsize=16)
         plt.ylabel('Demand Node', fontsize=16)
         plt.title('Absolute Water Deficits', fontsize=18)
-        plt.xticks(fontsize=12)
+        plt.xticks(fontsize=11)
         plt.yticks(fontsize=14)
         abs_filepath = self._save_plot("total_deficit_heatmap_absolute")
         
         # Plot percentage deficit
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(16, 6))
         sns.heatmap(percentage_data.T, cmap='YlOrRd',
                     xticklabels=percentage_data.index,
                     yticklabels=percentage_data.columns,
@@ -241,7 +241,7 @@ class WaterSystemVisualizer:
         plt.xlabel('Time Step [month]', fontsize=16)
         plt.ylabel('Demand Node', fontsize=16)
         plt.title('Percentage of Total Unmet Demand', fontsize=18)
-        plt.xticks(fontsize=12)
+        plt.xticks(fontsize=11)
         plt.yticks(fontsize=14)
         pct_filepath = self._save_plot("total_deficit_heatmap_percentage")
         
@@ -3098,7 +3098,7 @@ class WaterSystemVisualizer:
         pct_df = pd.DataFrame(percentage_deficits)
         
         # Plot absolute deficits
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(16, 6))
         sns.heatmap(abs_df.T, cmap='YlOrRd', 
                     xticklabels=time_steps,
                     yticklabels=absolute_deficits.keys(),
@@ -3110,7 +3110,7 @@ class WaterSystemVisualizer:
         abs_filepath = self._save_plot("min_flow_requirement_heatmap_absolute")
         
         # Plot percentage deficits
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(16, 6))
         sns.heatmap(pct_df.T, cmap='YlOrRd', 
                     xticklabels=time_steps,
                     yticklabels=percentage_deficits.keys(),

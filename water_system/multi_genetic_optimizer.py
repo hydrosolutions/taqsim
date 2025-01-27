@@ -1,97 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
-import multiprocessing as mp
-from functools import partial
 import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
 import copy
-
-def evaluate_individual_worker(individual, genes_per_reservoir, reservoir_ids, hydroworks_ids, base_system, dt, num_time_steps):
-    """Worker function for parallel evaluation of individuals"""
-    try:
-        # Decode parameters and continue with evaluation
-        reservoir_params = {}
-        hydroworks_params = {}
-        
-        # Decode reservoir parameters
-        individual_array = np.array(individual)
-        for res_idx, res_id in enumerate(reservoir_ids):
-            start_idx = res_idx * genes_per_reservoir
-            params = {
-                'h1': individual_array[start_idx],
-                'h2': individual_array[start_idx + 1],
-                'w': individual_array[start_idx + 2],
-                'm1': individual_array[start_idx + 3],
-                'm2': individual_array[start_idx + 4]
-            }
-            reservoir_params[res_id] = params
-        
-        # Calculate start index for hydroworks genes
-        hw_start = len(reservoir_ids) * genes_per_reservoir
-        
-        # Decode hydroworks parameters
-        for hw_id in hydroworks_ids:
-            n_targets = len(base_system.graph.nodes[hw_id]['node'].outflow_edges)
-            start_idx = hw_start
-            end_idx = start_idx + n_targets
-            
-            # Get and normalize distribution parameters
-            dist_values = individual_array[start_idx:end_idx]
-            normalized_dist = dist_values / np.sum(dist_values)
-            
-            # Create parameter dictionary
-            dist_params = {target: value for target, value 
-                         in zip(base_system.graph.nodes[hw_id]['node'].outflow_edges.keys(), 
-                               normalized_dist)}
-            
-            hydroworks_params[hw_id] = dist_params
-            hw_start += n_targets
-            
-        # Create and configure water system
-        system = copy.deepcopy(base_system)
-
-        # Set parameters for all reservoirs
-        for res_id, params in reservoir_params.items():
-            reservoir_node = system.graph.nodes[res_id]['node']
-            reservoir_node.set_release_params(params)
-        
-        # Set parameters for all hydroworks
-        for hw_id, params in hydroworks_params.items():
-            hydroworks_node = system.graph.nodes[hw_id]['node']
-            hydroworks_node.set_distribution_parameters(params)
-        
-        # Run simulation
-        system.simulate(num_time_steps)
-        
-        total_penalty = 0
-        
-        # Calculate weighted demand deficits
-        for node_id, node_data in system.graph.nodes(data=True):
-            node = node_data['node']
-            
-            if isinstance(node, DemandNode):
-                demand = np.array([node.get_demand_rate(t) for t in range(num_time_steps)])
-                satisfied = np.array(node.satisfied_demand_total)
-                deficit = (demand - satisfied) * dt
-                weighted_deficit = deficit * node.weight
-                total_penalty += np.sum(weighted_deficit)
-            
-            elif isinstance(node, SinkNode):
-                total_deficit_volume = node.get_total_deficit_volume(dt)
-                total_penalty += total_deficit_volume * node.weight
-                
-            elif hasattr(node, 'spillway_register'):
-                total_penalty += 100.0 * np.sum(node.spillway_register)
-            
-            elif hasattr(node, 'spill_register'):
-                total_penalty += 100.0 * np.sum(node.spill_register)
-        
-        return total_penalty
-    
-    except Exception as e:
-        print(f"Error evaluating individual: {str(e)}")
-        return float('inf')
 
 class MultiGeneticOptimizer:
     """
@@ -153,14 +65,7 @@ class MultiGeneticOptimizer:
         
         # Store convergence history
         self.history = {'min': [], 'avg': [], 'std': []}
-        self.pool = mp.Pool(processes=4)
-
-    def __del__(self):
-        """Cleanup method to close the process pool"""
-        if hasattr(self, 'pool'):
-            self.pool.close()
-            self.pool.join()
-
+        
     def _normalize_distribution(self, values):
         """
         Normalize a list of values to sum to 1.0 using numpy for efficiency.
@@ -302,33 +207,58 @@ class MultiGeneticOptimizer:
         return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
     def _evaluate_individual(self, individual):
-        """
-        Evaluate fitness of an individual using parallel processing.
-        """
-        try:
-            # Create partial function with fixed arguments
-            worker_func = partial(
-                evaluate_individual_worker,
-                genes_per_reservoir=5,
-                reservoir_ids=self.reservoir_ids,
-                hydroworks_ids=self.hydroworks_ids,
-                base_system=self.base_system,
-                dt=self.base_system.dt,
-                num_time_steps=self.num_time_steps
-            )
-            
-            # Evaluate individual using process pool
-            result = self.pool.apply_async(worker_func, (individual,))
-            
-            # Get result with timeout
-            penalty = result.get(timeout=30)  # 30 second timeout
-            
-            return (penalty,)
-            
-        except Exception as e:
-            print(f"Error in parallel evaluation: {str(e)}")
-            return (float('inf'),)
+        """Evaluate fitness of an individual with bound checking"""
+        genes_per_reservoir = 5  # 5 parameters per reservoir
         
+        try:
+            # Decode parameters and continue with evaluation
+            reservoir_params, hydroworks_params = self._decode_individual(individual)
+            
+            # Create and configure water system
+            system = copy.deepcopy(self.base_system)
+
+            # Set parameters for all reservoirs
+            for res_id, params in reservoir_params.items():
+                reservoir_node = system.graph.nodes[res_id]['node']
+                reservoir_node.set_release_params(params)
+            
+            # Set parameters for all hydroworks
+            for hw_id, params in hydroworks_params.items():
+                hydroworks_node = system.graph.nodes[hw_id]['node']
+                hydroworks_node.set_distribution_parameters(params)
+            
+            # Run simulation
+            system.simulate(self.num_time_steps)
+            
+            total_penalty = 0
+            
+            # Calculate weighted demand deficits
+            for node_id, node_data in system.graph.nodes(data=True):
+                node = node_data['node']
+                
+                if isinstance(node, DemandNode):
+                    demand = np.array([node.get_demand_rate(t) for t in range(self.num_time_steps)])
+                    satisfied = np.array(node.satisfied_demand_total)
+                    deficit = (demand - satisfied) * system.dt
+                    weighted_deficit = deficit * node.weight
+                    total_penalty += np.sum(weighted_deficit)
+                
+                elif isinstance(node, SinkNode):
+                    total_deficit_volume = node.get_total_deficit_volume(system.dt)
+                    total_penalty += total_deficit_volume * node.weight
+                    
+                elif hasattr(node, 'spillway_register'):
+                    total_penalty += 100.0 * np.sum(node.spillway_register)
+                
+                elif hasattr(node, 'spill_register'):
+                    total_penalty += 100.0 * np.sum(node.spill_register)
+            
+            return (total_penalty,)
+        
+        except Exception as e:
+            print(f"Error evaluating individual: {str(e)}")
+            return (float('inf'),)
+
     def _decode_individual(self, individual):
         genes_per_reservoir = 5  # 5 parameters per reservoir
         reservoir_params = {}
@@ -417,10 +347,6 @@ class MultiGeneticOptimizer:
         # Get best individual
         best_ind = tools.selBest(final_pop, 1)[0]
         reservoir_params, hydroworks_params = self._decode_individual(best_ind)
-
-        # Clean up process pool
-        self.pool.close()
-        self.pool.join()
 
         return {
             'success': True,
