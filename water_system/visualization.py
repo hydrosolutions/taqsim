@@ -3124,6 +3124,58 @@ class WaterSystemVisualizer:
         
         return abs_filepath, pct_filepath
 
+    def plot_hydroworks_distributions(self, hydroworks_params):
+        """
+        Create a plot showing monthly distribution parameters for all hydroworks nodes.
+        
+        Args:
+            hydroworks_params (dict): Dictionary of hydroworks parameters from optimization results
+            
+        Returns:
+            str: Path to the saved plot file
+        """
+        if not hydroworks_params:
+            print("No hydroworks parameters provided")
+            return None
+            
+        # Count number of hydroworks nodes and their targets
+        n_hydroworks = len(hydroworks_params)
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        # Create figure with subplots for each hydroworks
+        fig, axes = plt.subplots(n_hydroworks, 1, figsize=(15, 6*n_hydroworks))
+        if n_hydroworks == 1:
+            axes = [axes]
+        
+        # Color scheme
+        colors = plt.cm.tab20(np.linspace(0, 1, max(len(params) for params in hydroworks_params.values())))
+        
+        # Plot distribution parameters for each hydroworks
+        for idx, (hw_id, params) in enumerate(hydroworks_params.items()):
+            ax = axes[idx]
+            
+            # Plot monthly values for each target
+            bottom = np.zeros(12)
+            for target_idx, (target, values) in enumerate(params.items()):
+                ax.bar(months, values, bottom=bottom, label=target, color=colors[target_idx])
+                bottom += values
+                
+                # Add value labels
+                for i, v in enumerate(values):
+                    if v >= 0.05:  # Only show labels for values >= 5%
+                        ax.text(i, bottom - v/2, f'{v:.2f}', 
+                            ha='center', va='center')
+            
+            # Customize subplot
+            ax.set_title(f'{hw_id} Monthly Distribution Parameters')
+            ax.set_ylabel('Distribution Fraction')
+            ax.grid(True, alpha=0.3)
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            
+        plt.tight_layout()
+        return self._save_plot("hydroworks_distributions")
+
     def print_flow_compliance_summary(self):
         """
         Print a comprehensive summary of minimum flow compliance for all sink nodes.

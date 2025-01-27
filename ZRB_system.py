@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import webbrowser
 import os
 import json
@@ -155,10 +156,9 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
 
-    """
     # HW-Ravadhoza distribution
     HW_Ravadhoza.set_distribution_parameters({
-        'HW-AkKaraDarya': 0.7,        
+        'HW-AkKaraDarya': [0.7]*12,        
         'Toyloq': 0.05,           
         'Urgut': 0.1,
         'Bulungur': 0.05,          
@@ -204,7 +204,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'Sink-Navoi': 0.862,    # 500/580
         'Navoi-Powerplant': 0.060         # 35/580
     })
-    """
+
     return system
 
 def load_optimized_parameters(system, optimization_results):
@@ -282,6 +282,8 @@ def save_optimized_parameters(optimization_results, filename):
             return [convert_to_float(x) for x in obj]
         elif isinstance(obj, (int, float)):
             return float(obj)
+        elif isinstance(obj, np.ndarray):  # Handle numpy arrays
+            return [float(x) for x in obj]
         return obj
     
     # Prepare data for saving
@@ -381,11 +383,13 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
             print(f"{values:.3f}")
         
     print("\nOptimal Hydroworks Parameters:")
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     for hw_id, params in results['optimal_hydroworks_parameters'].items():
         print(f"\n{hw_id}:")
         for target, values in params.items():
-            print(f"{target}: ", end="")
-            print(f"{values:.3f}")
+            print(f"{target}: [", end="")
+            print(", ".join(f"{v:.3f}" for v in values), end="")
+            print("]")
 
     optimizer.plot_convergence()
 
@@ -470,11 +474,12 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
-    ngen = 20
+    ngen = 2
     pop_size = 50
     cxpb = 0.5
     mutpb = 0.2
     
+    #run_sample_tests(start_year, start_month, num_time_steps)
     #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     
     """
@@ -492,7 +497,7 @@ if __name__ == "__main__":
     stats.print_stats(40)  # Print top 20 functions
     print(stream.getvalue())
     """
-    loaded_results = load_parameters_from_file(f"optuna_2_best.json.")
+    loaded_results = load_parameters_from_file(f"param_test.json.")
 
     # Create and run system with loaded parameters
     
@@ -503,3 +508,4 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
+    

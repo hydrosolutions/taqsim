@@ -1076,7 +1076,6 @@ class HydroWorks(Node):
         super().__init__(id, easting, northing)
         self.distribution_params = {}
         self.spill_register = []
-        self.num_timesteps = None  # Will be set when parameters are initialized
 
     def add_outflow(self, edge):
         """
@@ -1087,17 +1086,6 @@ class HydroWorks(Node):
             edge (Edge): The edge to be added as an outflow
         """
         super().add_outflow(edge)
-        
-        # When adding a new edge, redistribute parameters equally among all edges
-        # This will be overridden when set_distribution_parameters is called
-        n_edges = len(self.outflow_edges)
-        equal_distribution = 1.0 / n_edges
-        
-        # Initialize with equal distribution for 12 months
-        self.distribution_params = {
-            edge_id: np.full(12, equal_distribution)
-            for edge_id in self.outflow_edges
-        }
 
     def set_distribution_parameters(self, parameters):
         """
@@ -1123,10 +1111,15 @@ class HydroWorks(Node):
         # Process and validate parameters
         for node_id, params in parameters.items():
             if isinstance(params, (int, float)):
-                new_params[node_id] = float(params)
+                # If single value provided, use it for all months
+                new_params[node_id] = np.full(12, float(params))
+            elif isinstance(params, (list, np.ndarray)) and len(params) == 12:
+                # If monthly values provided, convert to array
+                new_params[node_id] = np.array(params, dtype=float)
             else:
                 raise ValueError(
-                    f"Parameters for edge to {node_id} must be a single value"
+                    f"Parameters for edge to {node_id} must be either a single value "
+                    f"or a list of 12 monthly values"
                 )
             
         # Verify all parameters are valid
@@ -1136,15 +1129,17 @@ class HydroWorks(Node):
                     f"Distribution parameters for edge to {node_id} must be between 0 and 1"
                 )
         
-        # Verify parameters sum to 1
-        total = np.sum([params for params in new_params.values()], axis=0)
-        total += np.sum(
-            [self.distribution_params[node_id] for node_id in self.outflow_edges if node_id not in new_params],
-            axis=0
-        )
-        
-        if not np.allclose(total, 1.0, atol=1e-10):  # Allow for small floating point errors
-            raise ValueError(f"Distribution parameters must sum to 1. Got {total}")
+        # Verify parameters sum to 1 for each month
+        for month in range(12):
+            total = sum(params[month] for params in new_params.values())
+            total += sum(
+                self.distribution_params[node_id][month] 
+                for node_id in self.outflow_edges 
+                if node_id not in new_params
+            )
+            
+            if not np.isclose(total, 1.0, atol=1e-10):  # Allow for small floating point errors
+                raise ValueError(f"Distribution parameters for month {month + 1} sum to {total}, must sum to 1")
     
         # Update parameters
         self.distribution_params.update(new_params)
@@ -1169,13 +1164,16 @@ class HydroWorks(Node):
             if not self.distribution_params:
                 raise ValueError("Distribution parameters not set")
             
+            # Get current month's parameters (assuming monthly time steps)
+            current_month = time_step % 12
+            
             # Track total spill for this time step
             total_spill = 0
             
             # Distribute flow according to parameters, recording spills when capacity is exceeded
             for edge_id, edge in self.outflow_edges.items():
                 # Calculate target flow based on distribution parameter
-                target_flow = float(total_inflow * self.distribution_params[edge_id])
+                target_flow = float(total_inflow * self.distribution_params[edge_id][current_month])
                 
                 # If target exceeds capacity, record the excess as spill
                 if target_flow > edge.capacity:
