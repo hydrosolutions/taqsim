@@ -474,14 +474,14 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
-    ngen = 2
-    pop_size = 50
-    cxpb = 0.5
-    mutpb = 0.2
+    ngen = 50
+    pop_size = 500
+    cxpb = 0.43
+    mutpb = 0.53
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-    
+    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    save_optimized_parameters(results, f"param_test.json")
     """
     # Stop profiling
     profiler.disable()
@@ -496,7 +496,7 @@ if __name__ == "__main__":
     stats.sort_stats('cumulative')  # Sort by cumulative time
     stats.print_stats(40)  # Print top 20 functions
     print(stream.getvalue())
-    """
+    
     loaded_results = load_parameters_from_file(f"param_test.json.")
 
     # Create and run system with loaded parameters
@@ -508,4 +508,5 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
+    """
     

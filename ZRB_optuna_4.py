@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import webbrowser
 import os
 import json
@@ -83,7 +84,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
     sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/Kashkadarya_min_flow_monthly_2000_2022.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_norm_ts_2017_2022.csv', start_year=start_year, 
+    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_plus_norm_1968_2022.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
 
     # Add nodes to the system
@@ -154,56 +155,6 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
 
-    """
-    # HW-Ravadhoza distribution
-    HW_Ravadhoza.set_distribution_parameters({
-        'HW-AkKaraDarya': 0.7,        
-        'Toyloq': 0.05,           
-        'Urgut': 0.1,
-        'Bulungur': 0.05,          
-        'Jomboy': 0.05,            
-        'Sink-Jizzakh': 0.05               
-    })
-
-
-    # HW-EskiAnkhor distribution
-    HW_EskiAnkhor.set_distribution_parameters({
-        'Pastdargom': 0.610,        # 125/205
-        'Nurobod': 0.390            # 80/205
-    })
-
-    # HW-AkKaraDarya distribution
-    HW_AkKaraDarya.set_distribution_parameters({
-        'Oqdaryo': 0.353,           # 300/850
-        'HW-Damkodzha': 0.647       # 550/850
-    })
-
-    # HW-Damkodzha distribution
-    HW_Damkodzha.set_distribution_parameters({
-        'RES-Kattakurgan': 0.171,   # 100/585
-        'HW-Narpay': 0.137,         # 80/585
-        'HW-Confluence': 0.598,      # 350/585
-        'Kattaqorgon': 0.094        # 55/585
-    })
-
-    # HW-Narpay distribution
-    HW_Narpay.set_distribution_parameters({
-        'HW-Confluence': 0.510,      # 125/245
-        'Narpay': 0.49,            # 80/245
-    })
-
-    # HW-Confluence distribution
-    HW_Confluence.set_distribution_parameters({
-        'HW-Karmana': 1.0           # All flow goes to Karmana
-    })
-
-    # HW-Karmana distribution
-    HW_Karmana.set_distribution_parameters({
-        'Navbahor': 0.078,          # 45/580
-        'Sink-Navoi': 0.862,    # 500/580
-        'Navoi-Powerplant': 0.060         # 35/580
-    })
-    """
     return system
 
 def load_optimized_parameters(system, optimization_results):
@@ -281,6 +232,8 @@ def save_optimized_parameters(optimization_results, filename):
             return [convert_to_float(x) for x in obj]
         elif isinstance(obj, (int, float)):
             return float(obj)
+        elif isinstance(obj, np.ndarray):  # Handle numpy arrays
+            return [float(x) for x in obj]
         return obj
     
     # Prepare data for saving
@@ -295,101 +248,6 @@ def save_optimized_parameters(optimization_results, filename):
         json.dump(save_data, f, indent=2)
     
     print(f"Optimization results saved to {filename}")
-
-def run_system_with_optimized_parameters(system_creator, optimization_results, 
-                                       start_year, start_month, num_time_steps):
-    """
-    Create and run a water system using optimized parameters.
-    
-    Args:
-        system_creator (function): Function that creates the water system
-        optimization_results (dict): Results from optimization or loaded from file
-        start_year (int): Start year for simulation
-        start_month (int): Start month (1-12)
-        num_time_steps (int): Number of time steps to simulate
-        
-    Returns:
-        WaterSystem: Simulated system with optimized parameters
-    """
-    # Create new system
-    system = system_creator(start_year, start_month, num_time_steps)
-    
-    # Load optimized parameters
-    system = load_optimized_parameters(system, optimization_results)
-    
-    # Run simulation
-    system.simulate(num_time_steps)
-
-    vis=WaterSystemVisualizer(system, 'ZRB_system')
-    vis.plot_demand_deficit_heatmap()
-    vis.print_water_balance_summary()
-    vis.plot_system_demands_vs_inflow()
-    vis.plot_network_layout_2()
-    vis.plot_minimum_flow_compliance()
-    vis.plot_flow_compliance_heatmap()
-    vis.print_flow_compliance_summary()
-
-    # Get the storage node from the system's graph
-    storage_node = system.graph.nodes['RES-Akdarya']['node']
-    vis.plot_release_function(storage_node)
-    storage_node = system.graph.nodes['RES-Kattakurgan']['node']
-    vis.plot_release_function(storage_node)
-    
-    html_file = vis.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    
-    return system
-
-def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
-    
-    ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
-
-    
-    optimizer = MultiGeneticOptimizer(
-        base_system=ZRB_system,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps,
-        ngen=ngen,
-        population_size=pop_size,
-        cxpb=cxpb,
-        mutpb=mutpb
-    )
-
-    results = optimizer.optimize()
-
-    print("\nOptimization Results:")
-    print("-" * 50)
-    print(f"Success: {results['success']}")
-    print(f"Message: {results['message']}")
-    print(f"Population size: {results['population_size']}")
-    print(f"Generations: {results['generations']}")
-    print(f"Corss-over probability: {results['crossover_probability']}")
-    print(f"Mutation probability: {results['mutation_probability']}")
-    print(f"Final objective value: {results['objective_value']:,.0f} m³")
-    
-    print("\nOptimal Reservoir Parameters:")
-    for res_id, params in results['optimal_reservoir_parameters'].items():
-        print(f"\n{res_id}:")
-        for param, values in params.items():
-            print(f"{param}: ", end="")
-            print(f"{values:.3f}")
-        
-    print("\nOptimal Hydroworks Parameters:")
-    for hw_id, params in results['optimal_hydroworks_parameters'].items():
-        print(f"\n{hw_id}:")
-        for target, values in params.items():
-            print(f"{target}: ", end="")
-            print(f"{values:.3f}")
-
-    optimizer.plot_convergence()
-
-      
-    # Save optimization results
-    save_optimized_parameters(results, f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
-
-    return results
 
 def run_ipynb_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
     ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
@@ -420,43 +278,6 @@ def run_ipynb_optimization(start_year=2017, start_month=1, num_time_steps=12, ng
     optimizer.plot_convergence()
     return results
 
-def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
-
-    print("\n" + "="*50 + "\n")
-
-    # Definition of simulation period
-    start_year = start_year
-    start_month = start_month
-    num_time_steps = num_time_steps
-    ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
-
-    print("ZRB system simulation:")
-    ZRB_system._check_network()
-    ZRB_system.simulate(num_time_steps)
-    print("Simulation complete")
-    
-    print('ZRB system visualization:')
-    vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
-    vis_ZRB.print_water_balance_summary()
-    vis_ZRB.plot_reservoir_dynamics()
-    vis_ZRB.plot_demand_deficit_heatmap()
-    vis_ZRB.plot_network_layout()
-    vis_ZRB.plot_minimum_flow_compliance()
-    vis_ZRB.plot_flow_compliance_heatmap()
-    vis_ZRB.print_flow_compliance_summary()
-
-    # Get the storage node from the system's graph
-    storage_node = ZRB_system.graph.nodes['RES-Akdarya']['node']
-    vis_ZRB.plot_release_function(storage_node)
-    storage_node = ZRB_system.graph.nodes['RES-Kattakurgan']['node']
-    vis_ZRB.plot_release_function(storage_node)
-
-    html_file = vis_ZRB.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
-
-    print("Visualizations complete")
-
 # Run the sample tests
 if __name__ == "__main__":
     start_year = 2017
@@ -464,17 +285,17 @@ if __name__ == "__main__":
     num_time_steps = 12*6
     
     def objective(trial):
-        population = trial.suggest_int('pop_size', 5, 20)
+        population = trial.suggest_int('pop_size', 1000, 2000 )
         generations = trial.suggest_int('generations', 50, 200)
-        cxpb = trial.suggest_float('cxpb', 0.3, 1)
-        mutpb = trial.suggest_float('mutpb', 0.01, 0.9)
+        cxpb = trial.suggest_float('cxpb', 0, 1)
+        mutpb = trial.suggest_float('mutpb', 0, 1)
 
         optimization_results = run_ipynb_optimization(start_year, start_month, num_time_steps, generations, population, cxpb, mutpb)
         return optimization_results['objective_value']
 
     # Create a study
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=50)
 
     # Print the best parameters and fitness value
     print("Best Parameters:", study.best_params)
@@ -490,7 +311,6 @@ if __name__ == "__main__":
     plot_optimization_history(study).write_html(f"GA_experiments/{study_name}_history.html")
     plot_param_importances(study).write_html(f"GA_experiments/{study_name}_importances.html")
     plot_contour(study).write_html(f"GA_experiments/{study_name}_contour.html")
-    plot_intermediate_values(study).write_html(f"GA_experiments/{study_name}_intermediate.html")
     plot_timeline(study).write_html(f"GA_experiments/{study_name}_timeline.html")
     plot_slice(study).write_html(f"GA_experiments/{study_name}_slice.html")
     plot_edf(study).write_html(f"GA_experiments/{study_name}_edf.html")
