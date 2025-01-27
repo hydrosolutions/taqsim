@@ -84,7 +84,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
     sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/Kashkadarya_min_flow_monthly_2000_2022.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_norm_ts_2017_2022.csv', start_year=start_year, 
+    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_plus_norm_1968_2022.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
 
     # Add nodes to the system
@@ -322,7 +322,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(system, 'ZRB_system')
-    """
+    
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_system_demands_vs_inflow()
@@ -341,7 +341,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    
+    """
     return system
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
