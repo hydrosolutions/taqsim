@@ -246,57 +246,57 @@ class WaterSystem:
         total_capacity = sum(edge.capacity for edge in node.outflow_edges.values())
                 
         # Check value ranges and relationships
-       
-        h1 = node.release_params['h1']
-        h2 = node.release_params['h2']
-        w = node.release_params['w']
-        m1 = node.release_params['m1']
-        m2 = node.release_params['m2']
+        for current_month in range(12):
+            h1 = node.release_params['h1'][current_month]
+            h2 = node.release_params['h2'][current_month]
+            w = node.release_params['w'][current_month]
+            m1 = node.release_params['m1'][current_month]
+            m2 = node.release_params['m2'][current_month]
             
-        # Check level bounds against HVA data
-        if hasattr(node, 'hva_data'):
-            min_level = node.hva_data['min_waterlevel']
-            max_level = node.hva_data['max_waterlevel']
+            # Check level bounds against HVA data
+            if hasattr(node, 'hva_data'):
+                min_level = node.hva_data['min_waterlevel']
+                max_level = node.hva_data['max_waterlevel']
+                
+                if h1 < min_level or h1 > max_level:
+                    raise ValueError(
+                        f"StorageNode {node_id}: h1 ({h1}) outside valid range "
+                        f"[{min_level}, {max_level}]"
+                    )
+                if h2 < min_level or h2 > max_level:
+                    raise ValueError(
+                        f"StorageNode {node_id}: h2 ({h2}) outside valid range "
+                        f"[{min_level}, {max_level}]"
+                    )
             
-            if h1 < min_level or h1 > max_level:
+            # Check level relationships
+            if h1 >= h2:
                 raise ValueError(
-                    f"StorageNode {node_id}: h1 ({h1}) outside valid range "
-                    f"[{min_level}, {max_level}]"
+                    f"StorageNode {node_id}: h1 ({h1}) must be less than h2 ({h2})"
                 )
-            if h2 < min_level or h2 > max_level:
-                raise ValueError(
-                    f"StorageNode {node_id}: h2 ({h2}) outside valid range "
-                    f"[{min_level}, {max_level}]"
-                )
-        
-        # Check level relationships
-        if h1 >= h2:
-            raise ValueError(
-                f"StorageNode {node_id}: h1 ({h1}) must be less than h2 ({h2})"
-            )
-        
-        # Check slope ranges (0 to π/2 radians)
-        if not (0 <= m1 < 1.571):
-            raise ValueError(
-                f"StorageNode {node_id}: m1 ({m1}) must be between 0 and π/2"
-            )
-        if not (0 <= m2 < 1.571):
-            raise ValueError(
-                f"StorageNode {node_id}: m2 ({m2}) must be between 0 and π/2"
-            )
             
-        # Check base release rate
-        if w < 0:
-            raise ValueError(
-                f"StorageNode {node_id}: w ({w}) cannot be negative"
-            )
-        
-        # Check if base release rate exceeds total capacity
-        if w > total_capacity:
-            raise ValueError(
-                f"StorageNode {node_id}: Base release rate w ({w:.1f} m³/s) "
-                f"exceeds total outflow capacity ({total_capacity:.1f} m³/s)"
-            )
+            # Check slope ranges (0 to π/2 radians)
+            if not (0 <= m1 < 1.571):
+                raise ValueError(
+                    f"StorageNode {node_id}: m1 ({m1}) must be between 0 and π/2"
+                )
+            if not (0 <= m2 < 1.571):
+                raise ValueError(
+                    f"StorageNode {node_id}: m2 ({m2}) must be between 0 and π/2"
+                )
+                
+            # Check base release rate
+            if w < 0:
+                raise ValueError(
+                    f"StorageNode {node_id}: w ({w}) cannot be negative"
+                )
+            
+            # Check if base release rate exceeds total capacity
+            if w > total_capacity:
+                raise ValueError(
+                    f"StorageNode {node_id}: Base release rate w ({w:.1f} m³/s) "
+                    f"exceeds total outflow capacity ({total_capacity:.1f} m³/s)"
+                )
             
     def simulate(self, time_steps):
         """

@@ -379,8 +379,9 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
     for res_id, params in results['optimal_reservoir_parameters'].items():
         print(f"\n{res_id}:")
         for param, values in params.items():
-            print(f"{param}: ", end="")
-            print(f"{values:.3f}")
+            print(f"{param}: [", end="")
+            print(", ".join(f"{v:.3f}" for v in values), end="")
+            print("]")
         
     print("\nOptimal Hydroworks Parameters:")
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -453,11 +454,13 @@ def run_sample_tests(start_year=2017, start_month=1, num_time_steps=12):
     vis_ZRB.plot_flow_compliance_heatmap()
     vis_ZRB.print_flow_compliance_summary()
 
+    """
     # Get the storage node from the system's graph
     storage_node = ZRB_system.graph.nodes['RES-Akdarya']['node']
     vis_ZRB.plot_release_function(storage_node)
     storage_node = ZRB_system.graph.nodes['RES-Kattakurgan']['node']
     vis_ZRB.plot_release_function(storage_node)
+    """
 
     html_file = vis_ZRB.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
@@ -474,14 +477,14 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
-    ngen = 50
-    pop_size = 500
+    ngen = 10
+    pop_size = 50
     cxpb = 0.43
     mutpb = 0.53
     
     #run_sample_tests(start_year, start_month, num_time_steps)
     results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
-    save_optimized_parameters(results, f"param_test.json")
+    #save_optimized_parameters(results, f"param_test.json")
     """
     # Stop profiling
     profiler.disable()
@@ -496,8 +499,8 @@ if __name__ == "__main__":
     stats.sort_stats('cumulative')  # Sort by cumulative time
     stats.print_stats(40)  # Print top 20 functions
     print(stream.getvalue())
-    
-    loaded_results = load_parameters_from_file(f"param_test.json.")
+    """
+    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
 
     # Create and run system with loaded parameters
     
@@ -508,5 +511,5 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    """
+    
     

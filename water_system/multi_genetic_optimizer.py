@@ -119,52 +119,59 @@ class MultiGeneticOptimizer:
         self.toolbox.register("select", tools.selTournament, tournsize=5)
 
     def _mutate_individual(self, individual, indpb=0.5):
-        """Custom mutation operator with enforced parameter bounds using numpy for efficiency"""
-        genes_per_reservoir = 5  # 5 parameters per reservoir
+        """Custom mutation operator with enforced parameter bounds for monthly parameters"""
+        genes_per_reservoir_month = 5
         
-        # Convert individual to numpy array for vectorized operations
         individual = np.array(individual)
-        
-        # Track which hydroworks need renormalization
+        # Track which months need renormalization for each hydroworks
         hw_updates = set()
         
-        # Reservoir parameter mutation
+        # Mutate reservoir parameters for each month
         for res_idx, res_id in enumerate(self.reservoir_ids):
-            start_idx = res_idx * genes_per_reservoir
-            end_idx = start_idx + genes_per_reservoir
-            for param_idx, param_name in enumerate(['h1', 'h2', 'w', 'm1', 'm2']):
-                if random.random() < indpb:
-                    bounds = self.reservoir_bounds[res_id][param_name]
-                    value = np.random.uniform(bounds[0], bounds[1])
-                    
-                    # Special handling for h2 to maintain h1 < h2
-                    if param_name == 'h2':
-                        min_bound = max(bounds[0], individual[start_idx] + 0.1)
-                        value = np.random.uniform(min_bound, bounds[1])
-                    elif param_name == 'h1':
-                        max_bound = min(bounds[1], individual[start_idx + 1] - 0.1)
-                        value = np.random.uniform(bounds[0], max_bound)
-                    
-                    # Enforce bounds for all parameters
-                    individual[start_idx + param_idx] = self._bound_parameter(value, bounds)
+            for month in range(12):
+                start_idx = (res_idx * 12 * genes_per_reservoir_month) + (month * genes_per_reservoir_month)
+                
+                for param_idx, param_name in enumerate(['h1', 'h2', 'w', 'm1', 'm2']):
+                    if random.random() < indpb:
+                        bounds = self.reservoir_bounds[res_id][param_name]
+                        value = np.random.uniform(bounds[0], bounds[1])
+                        
+                        # Special handling for h2 to maintain h1 < h2
+                        if param_name == 'h2':
+                            min_bound = max(bounds[0], individual[start_idx] + 0.1)
+                            value = np.random.uniform(min_bound, bounds[1])
+                        elif param_name == 'h1':
+                            max_bound = min(bounds[1], individual[start_idx + 1] - 0.1)
+                            value = np.random.uniform(bounds[0], max_bound)
+                        
+                        individual[start_idx + param_idx] = self._bound_parameter(value, bounds)
+
+        # Mutate hydroworks parameters
+        hw_genes_start = len(self.reservoir_ids) * 12 * genes_per_reservoir_month
+        current_idx = hw_genes_start
         
-        # Hydroworks parameter mutation
-        hw_genes_start = len(self.reservoir_ids) * genes_per_reservoir
         for hw_idx, hw_id in enumerate(self.hydroworks_ids):
             n_targets = len(self.hydroworks_targets[hw_id])
-            start_idx = hw_genes_start + sum(len(self.hydroworks_targets[hw]) for hw in self.hydroworks_ids[:hw_idx])
-            end_idx = start_idx + n_targets
             if random.random() < indpb:
                 hw_updates.add(hw_id)
-                individual[start_idx:end_idx] = np.random.random(n_targets)
-        
+                for month in range(12):
+                    start_idx = current_idx + (month * n_targets)
+                    end_idx = start_idx + n_targets
+                    if end_idx <= len(individual):  # Check array bounds
+                        individual[start_idx:end_idx] = np.random.random(n_targets)
+            current_idx += 12 * n_targets  # Update index for next hydroworks
+
         # Normalize hydroworks distributions that were modified
+        current_idx = hw_genes_start
         for hw_id in hw_updates:
             n_targets = len(self.hydroworks_targets[hw_id])
-            start_idx = hw_genes_start + sum(len(self.hydroworks_targets[hw]) for hw in self.hydroworks_ids[:self.hydroworks_ids.index(hw_id)])
-            end_idx = start_idx + n_targets
-            individual[start_idx:end_idx] = self._normalize_distribution(individual[start_idx:end_idx])
-        
+            for month in range(12):
+                start_idx = current_idx + (month * n_targets)
+                end_idx = start_idx + n_targets
+                if end_idx <= len(individual):  # Check array bounds
+                    individual[start_idx:end_idx] = self._normalize_distribution(individual[start_idx:end_idx])
+            current_idx += 12 * n_targets  # Update index for next hydroworks
+
         return creator.Individual(individual.tolist()),
 
     def _crossover(self, ind1, ind2):
@@ -176,7 +183,7 @@ class MultiGeneticOptimizer:
         ind1, ind2 = np.array(ind1), np.array(ind2)
         
         # Handle reservoirs as packages
-        genes_per_reservoir = 5  # h1, h2, w, m1, m2
+        genes_per_reservoir = 5 * 12  # h1, h2, w, m1, m2
         num_reservoirs = len(self.reservoir_ids)
         
         # Create masks for crossover
@@ -260,74 +267,85 @@ class MultiGeneticOptimizer:
             return (float('inf'),)
 
     def _decode_individual(self, individual):
-        genes_per_reservoir = 5  # 5 parameters per reservoir
+        """Decode individual genes into monthly reservoir and hydroworks parameters"""
+        genes_per_reservoir_month = 5  # 5 parameters per month per reservoir
         reservoir_params = {}
         hydroworks_params = {}
         
-        # Decode reservoir parameters using numpy slicing for efficiency
+        # Convert individual to numpy array for efficient slicing
         individual = np.array(individual)
-        for res_idx, res_id in enumerate(self.reservoir_ids):
-            start_idx = res_idx * genes_per_reservoir
+        
+        # Decode reservoir parameters
+        current_idx = 0
+        for res_id in self.reservoir_ids:
             params = {
-                'h1': individual[start_idx],
-                'h2': individual[start_idx + 1],
-                'w': individual[start_idx + 2],
-                'm1': individual[start_idx + 3],
-                'm2': individual[start_idx + 4]
+                'h1': [], 'h2': [], 'w': [], 'm1': [], 'm2': []
             }
+            
+            # Get parameters for each month
+            for month in range(12):
+                start_idx = current_idx + month * genes_per_reservoir_month
+                params['h1'].append(individual[start_idx])
+                params['h2'].append(individual[start_idx + 1])
+                params['w'].append(individual[start_idx + 2])
+                params['m1'].append(individual[start_idx + 3])
+                params['m2'].append(individual[start_idx + 4])
+            
             reservoir_params[res_id] = params
+            current_idx += 12 * genes_per_reservoir_month
         
-        # Calculate start index for hydroworks genes
-        hw_start = len(self.reservoir_ids) * genes_per_reservoir
-        
-        # Decode hydroworks parameters for each month
+        # Decode hydroworks parameters (unchanged)
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
             dist_params = {}
             
-            # Initialize arrays for each target
             for target in self.hydroworks_targets[hw_id]:
                 dist_params[target] = np.zeros(12)
             
-            # Fill in monthly values for each target
             for month in range(12):
-                start_idx = hw_start + month * n_targets
+                start_idx = current_idx + month * n_targets
                 end_idx = start_idx + n_targets
                 
-                # Get and normalize distribution parameters for this month
                 dist_values = individual[start_idx:end_idx]
                 normalized_dist = self._normalize_distribution(dist_values)
                 
-                # Assign to each target
                 for target, value in zip(self.hydroworks_targets[hw_id], normalized_dist):
                     dist_params[target][month] = value
             
             hydroworks_params[hw_id] = dist_params
-            hw_start += 12 * n_targets  # Move to next hydroworks node
-            
+            current_idx += 12 * n_targets
+        
         return reservoir_params, hydroworks_params
-    
+   
     def _create_individual(self):
         """Create an individual with parameters for all reservoirs and hydroworks"""
         genes = []
 
+        # Add reservoir genes
         for res_id in self.reservoir_ids:
-            # Get bounds for this reservoir
             bounds = self.reservoir_bounds[res_id]
-            h1 = np.random.uniform(bounds['h1'][0], bounds['h1'][1])
-            h2 = np.random.uniform(h1, bounds['h2'][1])
-            genes.extend([h1, h2])
-            # Generate remaining parameters with their bounds
-            for param in ['w', 'm1', 'm2']:
-                value = np.random.uniform(bounds[param][0], bounds[param][1])
-                genes.append(value)
+            for month in range(12):
+                # Generate h1 and ensure h2 > h1
+                h1_bounds = bounds['h1']
+                h1 = np.random.uniform(h1_bounds[0], h1_bounds[1])
+                
+                h2_bounds = bounds['h2']
+                h2 = np.random.uniform(h1, h2_bounds[1])  # Ensure h2 > h1
+                
+                # Generate remaining parameters
+                w = np.random.uniform(bounds['w'][0], bounds['w'][1])
+                m1 = np.random.uniform(bounds['m1'][0], bounds['m1'][1])
+                m2 = np.random.uniform(bounds['m2'][0], bounds['m2'][1])
+                
+                genes.extend([h1, h2, w, m1, m2])
 
-        # Add genes for hydroworks with monthly parameters
+        # Add hydroworks genes
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
-            for month in range(12):  # Create parameters for each month
-                raw_dist = np.random.random(n_targets)
-                normalized_dist = self._normalize_distribution(raw_dist)
+            for month in range(12):
+                # Create random distribution that sums to 1
+                dist = np.random.random(n_targets)
+                normalized_dist = self._normalize_distribution(dist)
                 genes.extend(normalized_dist)
 
         return creator.Individual(genes)

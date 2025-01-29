@@ -701,9 +701,12 @@ class StorageNode(Node):
     def set_release_params(self, params):
         """
         Set and validate release function parameters.
+        Now supports both monthly and annual parameters.
         
         Args:
-            params (dict): Monthly release parameters
+            params (dict): Monthly release parameters with each parameter being either:
+                         - a single float (used for all months)
+                         - a list of 12 floats (one per month)
         """
         # Validate parameters
         required_params = ['h1', 'h2', 'w', 'm1', 'm2']
@@ -711,42 +714,52 @@ class StorageNode(Node):
             missing = [key for key in required_params if key not in params]
             raise ValueError(f"Missing release parameters: {missing}")
             
-        # Validate parameter values
-        h1 = params['h1']
-        h2 = params['h2']
-        w =  params['w']
-        m1 = params['m1']
-        m2 = params['m2']
-        
-        # Check level bounds against HVA data
-        if hasattr(self, 'hva_data'):
-            min_level = self.dead_storage_level
-            max_level = self.hva_data['max_waterlevel']
-            
-            if h1 < min_level or h1 > max_level:
-                raise ValueError(f"h1 ({h1}) outside valid range [dead storage level:{min_level}, {max_level}]")
-            if h2 < min_level or h2 > max_level:
-                raise ValueError(f"h2 ({h2}) outside valid range [{min_level}, {max_level}]")
-        
-        # Check level relationships
-        if h1 >= h2:
-            raise ValueError(f"h1 ({h1}) must be less than h2 ({h2})")
-        
-        # Check slope ranges (0 to π/2 radians)
-        if not (0 <= m1 < 1.571):
-            raise ValueError(f"m1 ({m1}) must be between 0 and π/2")
-        if not (0 <= m2 < 1.571):
-            raise ValueError(f"m2 ({m2}) must be between 0 and π/2")
-        
-        # Check base release rate
-        if w < 0:
-            raise ValueError(f"w ({w}) cannot be negative")
-        
-        
-        # Store parameters
-        self.release_params = params
+        # Convert single values to monthly lists
+        monthly_params = {}
+        for param, value in params.items():
+            if isinstance(value, (int, float)):
+                monthly_params[param] = [float(value)] * 12
+            elif isinstance(value, (list, np.ndarray)) and len(value) == 12:
+                monthly_params[param] = [float(v) for v in value]
+            else:
+                raise ValueError(f"Parameter {param} must be a number or list of 12 numbers")
 
-    def calculate_release(self, waterlevel):
+        # Validate monthly parameters
+        for month in range(12):
+            h1 = monthly_params['h1'][month]
+            h2 = monthly_params['h2'][month]
+            w = monthly_params['w'][month]
+            m1 = monthly_params['m1'][month]
+            m2 = monthly_params['m2'][month]
+            
+            # Check level bounds against HVA data
+            if hasattr(self, 'hva_data'):
+                min_level = self.dead_storage_level
+                max_level = self.hva_data['max_waterlevel']
+                
+                if h1 < min_level or h1 > max_level:
+                    raise ValueError(f"Month {month+1}: h1 ({h1}) outside valid range [{min_level}, {max_level}]")
+                if h2 < min_level or h2 > max_level:
+                    raise ValueError(f"Month {month+1}: h2 ({h2}) outside valid range [{min_level}, {max_level}]")
+            
+            # Check level relationships
+            if h1 >= h2:
+                raise ValueError(f"Month {month+1}: h1 ({h1}) must be less than h2 ({h2})")
+            
+            # Check slope ranges (0 to π/2 radians)
+            if not (0 <= m1 < 1.571):
+                raise ValueError(f"Month {month+1}: m1 ({m1}) must be between 0 and π/2")
+            if not (0 <= m2 < 1.571):
+                raise ValueError(f"Month {month+1}: m2 ({m2}) must be between 0 and π/2")
+            
+            # Check base release rate
+            if w < 0:
+                raise ValueError(f"Month {month+1}: w ({w}) cannot be negative")
+
+        # Store parameters
+        self.release_params = monthly_params
+
+    def calculate_release(self, waterlevel, time_step):
         """
         Calculate the reservoir release based on current water level.
         
@@ -757,11 +770,12 @@ class StorageNode(Node):
         Returns:
             float: Calculated release rate [m³/s]
         """
-        h1 = self.release_params['h1']
-        h2 = self.release_params['h2']
-        w = self.release_params['w']
-        m1 = self.release_params['m1']
-        m2 = self.release_params['m2']
+        current_month = time_step % 12
+        h1 = self.release_params['h1'][current_month]
+        h2 = self.release_params['h2'][current_month]
+        w = self.release_params['w'][current_month]
+        m1 = self.release_params['m1'][current_month]
+        m2 = self.release_params['m2'][current_month]
         
         release = sum(edge.capacity for edge in self.outflow_edges.values())
         if waterlevel < self.hva_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
@@ -1001,7 +1015,7 @@ class StorageNode(Node):
             
             # Calculate current water level and desired release
             current_level = self.get_level_from_volume(available_water)
-            target_release_rate = self.calculate_release(current_level)
+            target_release_rate = self.calculate_release(current_level, time_step)
             
             # Convert release rate to volume
             requested_outflow_volume = target_release_rate * dt
