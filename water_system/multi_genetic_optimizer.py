@@ -176,41 +176,71 @@ class MultiGeneticOptimizer:
 
     def _crossover(self, ind1, ind2):
         """
-        Custom crossover that treats each reservoir and hydrowork as a complete package.
-        Each reservoir (with its 5 parameters) or hydrowork (with its distribution parameters)
-        is swapped as a complete unit between parents.
+        Custom crossover that treats monthly parameters as packages.
+        For each month, all parameters of a reservoir or hydrowork for that specific month
+        are swapped as a complete unit between parents.
         """
         ind1, ind2 = np.array(ind1), np.array(ind2)
         
-        # Handle reservoirs as packages
-        genes_per_reservoir = 5 * 12  # h1, h2, w, m1, m2
+        # Handle reservoirs month by month
+        genes_per_month = 5  # h1, h2, w, m1, m2
         num_reservoirs = len(self.reservoir_ids)
         
-        # Create masks for crossover
-        reservoir_mask = np.random.rand(num_reservoirs) < 0.5
+        # For each month
+        for month in range(12):
+            # For each reservoir, decide whether to swap this month's parameters
+            for res_idx in range(num_reservoirs):
+                if random.random() < 0.5:
+                    # Calculate indices for this month's parameters
+                    start_idx = (res_idx * 12 * genes_per_month) + (month * genes_per_month)
+                    end_idx = start_idx + genes_per_month
+                    
+                    # Swap parameters for this month
+                    ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
+                        ind2[start_idx:end_idx].copy(), ind1[start_idx:end_idx].copy()
+                    
+                    # Check and fix h1 < h2 constraint after swap
+                    h1_idx = start_idx + 0
+                    h2_idx = start_idx + 1
+                    
+                    # Fix ind1 if needed
+                    if ind1[h1_idx] >= ind1[h2_idx]:
+                        mid_point = (ind1[h1_idx] + ind1[h2_idx]) / 2
+                        ind1[h1_idx] = mid_point - 0.1
+                        ind1[h2_idx] = mid_point + 0.1
+                    
+                    # Fix ind2 if needed
+                    if ind2[h1_idx] >= ind2[h2_idx]:
+                        mid_point = (ind2[h1_idx] + ind2[h2_idx]) / 2
+                        ind2[h1_idx] = mid_point - 0.1
+                        ind2[h2_idx] = mid_point + 0.1
         
-        for res_idx in range(num_reservoirs):
-            if reservoir_mask[res_idx]:
-                start_idx = res_idx * genes_per_reservoir
-                end_idx = start_idx + genes_per_reservoir
-                ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
-                    ind2[start_idx:end_idx], ind1[start_idx:end_idx]
-        
-        # Handle hydroworks as packages
-        hw_start = num_reservoirs * genes_per_reservoir
+        # Handle hydroworks month by month
+        hw_start = num_reservoirs * 12 * genes_per_month
         current_idx = hw_start
         
-        for hw_id in self.hydroworks_ids:
-            n_targets = len(self.hydroworks_targets[hw_id])
-            hw_end = current_idx + n_targets
-            
-            if random.random() < 0.5:
-                ind1[current_idx:hw_end], ind2[current_idx:hw_end] = \
-                    ind2[current_idx:hw_end], ind1[current_idx:hw_end]
-            
-            current_idx = hw_end
+        # For each month
+        for month in range(12):
+            # For each hydrowork
+            hw_current_idx = current_idx
+            for hw_id in self.hydroworks_ids:
+                n_targets = len(self.hydroworks_targets[hw_id])
+                
+                if random.random() < 0.5:
+                    # Calculate indices for this month's distribution parameters
+                    start_idx = hw_current_idx + (month * n_targets)
+                    end_idx = start_idx + n_targets
+                    
+                    # Swap distribution parameters for this month
+                    tmp1 = ind1[start_idx:end_idx].copy()
+                    tmp2 = ind2[start_idx:end_idx].copy()
+                    
+                    # Normalize the distributions before swapping
+                    ind1[start_idx:end_idx] = self._normalize_distribution(tmp2)
+                    ind2[start_idx:end_idx] = self._normalize_distribution(tmp1)
+                
+                hw_current_idx += 12 * n_targets  # Move to next hydrowork's base index
         
-        # Convert back to list and return as DEAP individuals
         return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
     def _evaluate_individual(self, individual):
