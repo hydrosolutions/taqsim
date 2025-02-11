@@ -300,7 +300,7 @@ def save_optimized_parameters(optimization_results, filename):
     print(f"Optimization results saved to {filename}")
 
 def run_system_with_optimized_parameters(system_creator, optimization_results, 
-                                       start_year, start_month, num_time_steps):
+                                       start_year, start_month, num_time_steps, name='ZRB_system'):
     """
     Create and run a water system using optimized parameters.
     
@@ -323,7 +323,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     # Run simulation
     system.simulate(num_time_steps)
 
-    vis=WaterSystemVisualizer(system, 'ZRB_system')
+    vis=WaterSystemVisualizer(system, name)
     
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
@@ -340,11 +340,11 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_release_function(storage_node)
     storage_node = system.graph.nodes['RES-Kattakurgan']['node']
     vis.plot_release_function(storage_node)
-    """
+    
     html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')
-    """
+    
     return system
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
@@ -477,28 +477,42 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
-    ngen = 10
-    pop_size = 50
+    ngen = 50
+    pop_size = 1000
     cxpb = 0.43
     mutpb = 0.53
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
-    """
+    
+    loaded_results = load_parameters_from_file(f"opt_6_B_best_fit.json")
+
+    # Create and run system with loaded parameters
+    
+    system = run_system_with_optimized_parameters(
+        create_seasonal_ZRB_system,
+        loaded_results,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps, 
+        name= 'ZRB_6B'
+    )
+
+
     # Stop profiling
-    profiler.disable()
+    #profiler.disable()
 
     # Save profiling stats
-    profile_output = 'cprofile_stats.prof'
-    profiler.dump_stats(profile_output)
+    #profile_output = 'cprofile_stats.prof'
+    #profiler.dump_stats(profile_output)
 
     # Display profiling stats
-    stream = io.StringIO()
-    stats = pstats.Stats(profiler, stream=stream)
-    stats.sort_stats('cumulative')  # Sort by cumulative time
-    stats.print_stats(40)  # Print top 20 functions
-    print(stream.getvalue())
+    #stream = io.StringIO()
+    #stats = pstats.Stats(profiler, stream=stream)
+    #stats.sort_stats('cumulative')  # Sort by cumulative time
+    #stats.print_stats(40)  # Print top 20 functions
+    #print(stream.getvalue())
     """
     loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
 
@@ -511,5 +525,5 @@ if __name__ == "__main__":
         start_month=start_month,
         num_time_steps=num_time_steps
     )
-    
+    """
     
