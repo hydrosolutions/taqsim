@@ -73,10 +73,10 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm1': 1.5,
         'm2': 1.5,
     }
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=5e8,
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
                                  evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
-    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=8e7, 
+    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
                               evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
@@ -104,10 +104,10 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
 
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=40))
-    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=50))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=40))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=90))
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=45))
+    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=60))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=45))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=105))
     system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=35))
 
 
@@ -125,8 +125,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     # HW_AkKaraDarya
     system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
     system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=90))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=90))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=105))
+    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=105))
     system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=80))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
@@ -153,8 +153,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
     system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
     system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=400))
-    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
-    system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
+    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=65))
+    system.add_edge(Edge(Powerplant, sink_downstream, capacity=65))
 
     # HW-Ravadhoza distribution
     HW_Ravadhoza.set_distribution_parameters({
@@ -334,7 +334,9 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_minimum_flow_compliance()
     vis.plot_flow_compliance_heatmap()
     vis.print_flow_compliance_summary()
-
+    vis.plot_spills()
+    vis.plot_reservoir_dynamics()
+    vis.plot_storage_dynamics()
     # Get the storage node from the system's graph
     storage_node = system.graph.nodes['RES-Akdarya']['node']
     vis.plot_release_function(storage_node)

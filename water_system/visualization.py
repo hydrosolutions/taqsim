@@ -247,51 +247,6 @@ class WaterSystemVisualizer:
         
         return abs_filepath, pct_filepath
 
-    def plot_demand_deficit_heatmap_old(self):
-        """
-        Create enhanced heatmaps showing demand deficits across all demand nodes over time.
-        """
-        deficit_cols = [col for col in self.df.columns if col.endswith('_Deficit')]
-        if not deficit_cols:
-            print("No demand nodes found in the system.")
-            return
-            
-        deficit_data = self.df[deficit_cols].copy()
-        deficit_data.columns = [col.replace('_Deficit', '') for col in deficit_cols]
-        
-        percentage_data = deficit_data.copy()
-        for node in deficit_data.columns:
-            demand_col = f"{node}_Demand"
-            total_demand = self.df[demand_col]
-            percentage_data[node] = (deficit_data[node] / total_demand) * 100
-        
-        # Plot absolute deficits
-        plt.figure(figsize=(12, 6))
-        sns.heatmap(deficit_data.T, cmap='YlOrRd', 
-                    xticklabels=self.df['TimeStep'],
-                    yticklabels=deficit_data.columns,
-                    annot=False,
-                    cbar_kws={'label': 'Deficit [m³/s]'})
-        plt.xlabel('Time Step')
-        plt.ylabel('Demand Node')
-        plt.title('Absolute Water Deficits Over Time')
-        abs_filepath = self._save_plot("deficit_heatmap_absolute")
-        
-        # Plot percentage deficits
-        plt.figure(figsize=(12, 6))
-        sns.heatmap(percentage_data.T, cmap='YlOrRd', 
-                    xticklabels=self.df['TimeStep'],
-                    yticklabels=percentage_data.columns,
-                    annot=False,
-                    vmin=0, vmax=100,
-                    cbar_kws={'label': 'Deficit [%]'})
-        plt.xlabel('Time Step')
-        plt.ylabel('Demand Node')
-        plt.title('Percentage of Unmet Demand Over Time')
-        pct_filepath = self._save_plot("deficit_heatmap_percentage")
-        
-        return abs_filepath, pct_filepath
-     
     def plot_edge_flows(self):
         """
         Create time series plots showing inflows and outflows for all edges in the system.
@@ -555,7 +510,7 @@ class WaterSystemVisualizer:
         for _, _, edge_data in self.system.graph.edges(data=True):
             edge = edge_data['edge']
             # Scale width between 1 and 10 based on capacity
-            width =1 + (edge.capacity / max_capacity) * 15
+            width =1 + (edge.capacity / max_capacity) * 10
             edge_widths.append(width)
 
         # Draw edges
@@ -1012,8 +967,8 @@ class WaterSystemVisualizer:
                 flow = edge['flows'][timestep] if timestep < len(edge['flows']) else 0
                 flow_pct = flow / edge['capacity'] if edge['capacity'] > 0 else 0
                 
-                color = '#BFDBFE' if flow_pct < 0.5 else '#2563EB' if flow_pct < 0.8 else '#1E3A8A' if flow_pct == 1 else '#8B0000'
-                width = 1 + (flow / max_flow * 100) if flow > 0 else 1
+                color = '#BFDBFE' if flow_pct < 0.5 else '#2563EB' if flow_pct < 0.8 else '#1E3A8A' if flow_pct < 0.99 else '#8B0000'
+                width = 1 + (flow / max_flow * 80) if flow > 0 else 1
                 
                 edge_trace = go.Scatter(
                     x=[source['easting'], target['easting']],
@@ -3256,6 +3211,146 @@ class WaterSystemVisualizer:
             
         plt.tight_layout()
         return self._save_plot("hydroworks_distributions")
+
+    def plot_spills(self):
+        """
+        Create a time series plot showing spills from all hydroworks and reservoir nodes.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        plt.rcParams.update({'font.size': 16})
+        
+        # Find hydroworks and reservoir nodes in the system
+        hydroworks_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                            if isinstance(data['node'], HydroWorks)]
+        reservoir_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], StorageNode)]
+        
+        if not hydroworks_nodes and not reservoir_nodes:
+            print("No hydroworks or reservoir nodes found in the system.")
+            return None
+        
+        # Create figure with two subplots - one for hydroworks spills, one for reservoir spills
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 14))
+        
+        # Color scheme using color cycle
+        colors = plt.cm.tab10(np.linspace(0, 1, max(len(hydroworks_nodes), len(reservoir_nodes))))
+        
+        time_steps = range(self.system.time_steps)
+        
+        # Plot spills for each hydroworks node
+        total_hydroworks_spills = np.zeros(len(time_steps))
+        legend_elements_hydroworks = []
+        
+        for idx, (node_id, node) in enumerate(hydroworks_nodes):
+            if hasattr(node, 'spill_register') and len(node.spill_register) > 0:
+                # Convert spill volumes to flow rates
+                spill_rates = [spill / self.system.dt for spill in node.spill_register[:len(time_steps)]]
+                total_hydroworks_spills += spill_rates
+                
+                # Plot individual spills
+                line = ax1.plot(time_steps, spill_rates, color=colors[idx], 
+                        label=node_id, linewidth=2, marker='o', markersize=4)
+                legend_elements_hydroworks.append(line[0])
+                
+                # Calculate statistics for this node
+                total_spill_volume = sum(node.spill_register[:len(time_steps)])
+                mean_spill_rate = np.mean(spill_rates)
+                max_spill_rate = np.max(spill_rates)
+                spill_frequency = sum(1 for s in spill_rates if s > 0) / len(time_steps) * 100
+                
+                print(f"\nSpill Statistics for {node_id}:")
+                print(f"Total Spill Volume: {total_spill_volume:,.0f} m³")
+                print(f"Mean Spill Rate: {mean_spill_rate:.2f} m³/s")
+                print(f"Maximum Spill Rate: {max_spill_rate:.2f} m³/s")
+                print(f"Spill Frequency: {spill_frequency:.1f}%")
+        
+        # Calculate and display total hydroworks system statistics
+        total_hydroworks_volume = np.sum(total_hydroworks_spills) * self.system.dt
+        mean_hydroworks_rate = np.mean(total_hydroworks_spills)
+        max_hydroworks_rate = np.max(total_hydroworks_spills)
+        
+        stats_text_hydroworks = (
+            f"Hydroworks System-wide Statistics:\n"
+            f"Total Spill Volume: {total_hydroworks_volume:,.0f} m³\n"
+            f"Mean Total Spill Rate: {mean_hydroworks_rate:.2f} m³/s\n"
+            f"Maximum Total Spill Rate: {max_hydroworks_rate:.2f} m³/s"
+        )
+        
+        # Add stats text box to hydroworks subplot
+        ax1.text(0.02, 0.98, stats_text_hydroworks,
+                transform=ax1.transAxes,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round',
+                        facecolor='white',
+                        alpha=0.8),
+                fontsize=12)
+        
+        # Customize hydroworks subplot
+        ax1.set_xlabel('Time Step')
+        ax1.set_ylabel('Spill Rate [m³/s]')
+        ax1.set_title('Hydroworks Spill Rates Over Time')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(handles=legend_elements_hydroworks, loc='upper right')
+        
+        # Plot spills for each reservoir node
+        total_reservoir_spills = np.zeros(len(time_steps))
+        legend_elements_reservoir = []
+        
+        for idx, (node_id, node) in enumerate(reservoir_nodes):
+            if hasattr(node, 'spillway_register') and len(node.spillway_register) > 0:
+                # Convert spill volumes to flow rates
+                spill_rates = [spill / self.system.dt for spill in node.spillway_register[:len(time_steps)]]
+                total_reservoir_spills += spill_rates
+                
+                # Plot individual spills
+                line = ax2.plot(time_steps, spill_rates, color=colors[idx], 
+                            label=node_id, linewidth=2, marker='o', markersize=4)
+                legend_elements_reservoir.append(line[0])
+                
+                # Calculate statistics for this node
+                total_spill_volume = sum(node.spillway_register[:len(time_steps)])
+                mean_spill_rate = np.mean(spill_rates)
+                max_spill_rate = np.max(spill_rates)
+                spill_frequency = sum(1 for s in spill_rates if s > 0) / len(time_steps) * 100
+                
+                print(f"\nSpillway Statistics for {node_id}:")
+                print(f"Total Spillway Volume: {total_spill_volume:,.0f} m³")
+                print(f"Mean Spillway Rate: {mean_spill_rate:.2f} m³/s")
+                print(f"Maximum Spillway Rate: {max_spill_rate:.2f} m³/s")
+                print(f"Spillway Activation Frequency: {spill_frequency:.1f}%")
+        
+        # Calculate and display total reservoir system statistics
+        total_reservoir_volume = np.sum(total_reservoir_spills) * self.system.dt
+        mean_reservoir_rate = np.mean(total_reservoir_spills)
+        max_reservoir_rate = np.max(total_reservoir_spills)
+        
+        stats_text_reservoir = (
+            f"Reservoir System-wide Statistics:\n"
+            f"Total Spillway Volume: {total_reservoir_volume:,.0f} m³\n"
+            f"Mean Total Spillway Rate: {mean_reservoir_rate:.2f} m³/s\n"
+            f"Maximum Total Spillway Rate: {max_reservoir_rate:.2f} m³/s"
+        )
+        
+        # Add stats text box to reservoir subplot
+        ax2.text(0.02, 0.98, stats_text_reservoir,
+                transform=ax2.transAxes,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round',
+                        facecolor='white',
+                        alpha=0.8),
+                fontsize=12)
+        
+        # Customize reservoir subplot
+        ax2.set_xlabel('Time Step')
+        ax2.set_ylabel('Spillway Rate [m³/s]')
+        ax2.set_title('Reservoir Spillway Rates Over Time')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(handles=legend_elements_reservoir, loc='upper right')
+        
+        plt.tight_layout()
+        return self._save_plot("spills")
 
     def print_flow_compliance_summary(self):
         """
