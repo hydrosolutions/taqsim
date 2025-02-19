@@ -475,7 +475,7 @@ class WaterSystemVisualizer:
         # Define node styling with descriptive names for legend
         node_styles = {
             SupplyNode: {'color': 'skyblue', 'shape': 's', 'name': 'Supply Node'},
-            StorageNode: {'color': 'lightgreen', 'shape': 's', 'name': 'Storage Node'},
+            StorageNode: {'color': 'lightgreen', 'shape': 'v', 'name': 'Storage Node'},
             DemandNode: {'color': 'salmon', 'shape': 'o', 'name': 'Demand Node'},
             SinkNode: {'color': 'lightgray', 'shape': 's', 'name': 'Sink Node'},
             HydroWorks: {'color': 'orange', 'shape': 'o', 'name': 'Hydroworks'}
@@ -510,14 +510,14 @@ class WaterSystemVisualizer:
         for _, _, edge_data in self.system.graph.edges(data=True):
             edge = edge_data['edge']
             # Scale width between 1 and 10 based on capacity
-            width =1 + (edge.capacity / max_capacity) * 10
+            width =3 #+ (edge.capacity / max_capacity) * 10
             edge_widths.append(width)
 
         # Draw edges
         nx.draw_networkx_edges(self.system.graph, pos, 
                              edge_color='gray',
                              arrows=True, 
-                             arrowsize=65, 
+                             arrowsize=55, 
                              width=edge_widths,
                              ax=ax)
 
@@ -532,7 +532,7 @@ class WaterSystemVisualizer:
             elif isinstance(node_instance, SinkNode):
                 labels[node] = f"{node}"
             elif isinstance(node_instance, StorageNode):
-                labels[node] = f"{node}\nCap: {node_instance.capacity:,.0f} m³"
+                labels[node] = f"{node}"#\nCap: {node_instance.capacity:,.0f} m³"
             elif isinstance(node_instance, HydroWorks):
                 labels[node] = f"{node}"
         
@@ -544,8 +544,8 @@ class WaterSystemVisualizer:
             edge = d['edge']
             edge_labels[(u, v)] = (f'{edge.capacity} m³/s')
       
-        nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
-                       font_size=14, ax=ax, rotate=False)
+        '''nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
+                       font_size=14, ax=ax, rotate=False)'''
   
 
         # Create the legend on the top right of the plot
@@ -557,6 +557,8 @@ class WaterSystemVisualizer:
               fontsize=22)
         
         plt.axis('off')
+        plt.ylim(4360000, 4480000)
+        plt.xlim(153000, 384000)
         plt.tight_layout()
         
         return self._save_plot("network_layout")

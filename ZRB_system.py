@@ -74,10 +74,10 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm2': 1.5,
     }
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
-                                 evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
+                                 evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
     RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
-                              evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
+                              evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
     # Sink Nodes
@@ -325,13 +325,13 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
 
     vis=WaterSystemVisualizer(system, name)
     
-    vis.plot_demand_deficit_heatmap()
+    '''vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_system_demands_vs_inflow()
-    vis.plot_system_cons_demands_vs_inflow()
+    vis.plot_system_cons_demands_vs_inflow()'''
     vis.plot_network_layout_2()
     vis.plot_network_layout()
-    vis.plot_minimum_flow_compliance()
+    '''vis.plot_minimum_flow_compliance()
     vis.plot_flow_compliance_heatmap()
     vis.print_flow_compliance_summary()
     vis.plot_spills()
@@ -345,7 +345,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     
     html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')'''
     
     return system
 
@@ -488,7 +488,7 @@ if __name__ == "__main__":
     #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
     
-    loaded_results = load_parameters_from_file(f"opt_6_B_best_fit.json")
+    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen90_pop2912_cxpb0.65_mutpb0.32.json")
 
     # Create and run system with loaded parameters
     
@@ -498,7 +498,7 @@ if __name__ == "__main__":
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps, 
-        name= 'ZRB_6B'
+        name= 'ZRB_sim_1'
     )
 
 
