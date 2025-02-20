@@ -325,13 +325,13 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
 
     vis=WaterSystemVisualizer(system, name)
     
-    '''vis.plot_demand_deficit_heatmap()
+    vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_system_demands_vs_inflow()
-    vis.plot_system_cons_demands_vs_inflow()'''
+    vis.plot_system_cons_demands_vs_inflow()
     vis.plot_network_layout_2()
     vis.plot_network_layout()
-    '''vis.plot_minimum_flow_compliance()
+    vis.plot_minimum_flow_compliance()
     vis.plot_flow_compliance_heatmap()
     vis.print_flow_compliance_summary()
     vis.plot_spills()
@@ -345,7 +345,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     
     html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')'''
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')
     
     return system
 
