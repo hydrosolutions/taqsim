@@ -9,14 +9,7 @@ import plotly
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
 
 def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
-    """
-    Creates a test water system with a seasonal supply, a large reservoir,
-    a seasonal demand, and a sink node. The system runs for 10 years with monthly time steps.
-
-    Returns:
-        WaterSystem: The configured water system for testing.
-    """
-    # Set up the system with monthly time steps
+        # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
     system = WaterSystem(dt=dt)
 
@@ -72,11 +65,11 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm1': 1.5,
         'm2': 1.5,
     }
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=5e8,
-                                 evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
+                                 evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
-    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=8e7, 
-                              evaporation_file='./data/extended_predicted_reservoir_et_2010_2022.csv', start_year=start_year, start_month=start_month, 
+    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
+                              evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
     # Sink Nodes
@@ -99,14 +92,14 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         system.add_node(node)
 
     # Add Edges to the system
-    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1350))
+    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1230))
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
 
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=40))
-    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=50))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=40))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=90))
+    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=45))
+    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=60))
+    system.add_edge(Edge(Bulungur, Jomboy, capacity=45))
+    system.add_edge(Edge(Jomboy, Payariq, capacity=105))
     system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=35))
 
 
@@ -124,9 +117,9 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     # HW_AkKaraDarya
     system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
     system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=90))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=90))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=80))
+    system.add_edge(Edge(Payariq, Ishtixon, capacity=105))
+    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=105))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=125))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
     # Damkodzha
@@ -152,8 +145,8 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
     system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
     system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=400))
-    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=35))
-    system.add_edge(Edge(Powerplant, sink_downstream, capacity=35))
+    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=65))
+    system.add_edge(Edge(Powerplant, sink_downstream, capacity=65))
 
     return system
 
@@ -285,8 +278,8 @@ if __name__ == "__main__":
     num_time_steps = 12*6
     
     def objective(trial):
-        population = trial.suggest_int('pop_size', 1000, 2000 )
-        generations = trial.suggest_int('generations', 50, 200)
+        population = trial.suggest_int('pop_size', 2000, 3500 )
+        generations = trial.suggest_int('generations', 50, 150)
         cxpb = trial.suggest_float('cxpb', 0, 1)
         mutpb = trial.suggest_float('mutpb', 0, 1)
 

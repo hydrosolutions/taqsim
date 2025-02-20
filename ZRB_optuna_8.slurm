@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#SBATCH --job-name=Opt_6       # Name of the job
-#SBATCH --output=ZRB_optuna.out      # Output file
+#SBATCH --job-name=Opt_8       # Name of the job
+#SBATCH --output=ZRB_optuna_8.out      # Output file
 #SBATCH --time=200:00:00            # Maximum runtime (hh:mm:ss)
 #SBATCH --ntasks=1                 # Number of tasks (usually 1 for Python)
 #SBATCH --cpus-per-task=1          # Number of CPU cores per task
@@ -10,4 +10,4 @@
 
 # Run the Python script
 source /cluster/home/giannag/myenv/bin/activate
-python ZRB_optuna_6.py
+python ZRB_optuna_8.py
