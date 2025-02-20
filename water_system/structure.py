@@ -1159,17 +1159,7 @@ class HydroWorks(Node):
         self.distribution_params.update(new_params)
 
     def update(self, time_step, dt):
-        """
-        Update the HydroWorks node's state for the given time step using the
-        distribution parameters for that specific timestep.
 
-        Args:
-            time_step (int): The current time step of the simulation
-            dt (float): The duration of the time step in seconds
-
-        Raises:
-            ValueError: If distribution parameters are not properly set
-        """
         try:
             # Calculate total inflow
             total_inflow = np.sum([edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values()])
@@ -1184,22 +1174,59 @@ class HydroWorks(Node):
             # Track total spill for this time step
             total_spill = 0
             
-            # Distribute flow according to parameters, recording spills when capacity is exceeded
+            # First pass: Calculate target flows and identify overflows
+            target_flows = {}
+            overflow_volume = 0
+            
             for edge_id, edge in self.outflow_edges.items():
                 # Calculate target flow based on distribution parameter
                 target_flow = float(total_inflow * self.distribution_params[edge_id][current_month])
                 
-                # If target exceeds capacity, record the excess as spill
+                # Check if target exceeds capacity
                 if target_flow > edge.capacity:
-                    actual_flow = edge.capacity
-                    spill = (target_flow - edge.capacity) * dt
-                    total_spill += spill
+                    overflow = target_flow - edge.capacity
+                    overflow_volume += overflow
+                    target_flows[edge_id] = edge.capacity
                 else:
-                    actual_flow = target_flow
-                
-                # Update edge with the actual flow
-                edge.update(time_step, actual_flow)
+                    target_flows[edge_id] = target_flow
             
+            # Second pass: Redistribute overflow if any exists
+            if overflow_volume > 0:
+                # Calculate remaining capacity for each edge
+                remaining_capacity = {}
+                total_remaining_capacity = 0
+                
+                for edge_id, edge in self.outflow_edges.items():
+                    remaining = edge.capacity - target_flows[edge_id]
+                    if remaining > 0:
+                        remaining_capacity[edge_id] = remaining
+                        total_remaining_capacity += remaining
+                
+                # Redistribute overflow proportionally to available capacity
+                if total_remaining_capacity > 0:
+                    redistributed_overflow = 0
+                    for edge_id, remaining in remaining_capacity.items():
+                        # Calculate proportion of overflow to add to this edge
+                        proportion = remaining / total_remaining_capacity
+                        additional_flow = overflow_volume * proportion
+                        
+                        # Ensure we don't exceed capacity
+                        new_flow = min(target_flows[edge_id] + additional_flow, self.outflow_edges[edge_id].capacity)
+                        redistributed_overflow += (new_flow - target_flows[edge_id])
+                        target_flows[edge_id] = new_flow
+                    
+                    # Calculate any remaining spill after redistribution
+                    total_spill = (overflow_volume - redistributed_overflow) * dt
+                else:
+                    # If no remaining capacity, all overflow is spilled
+                    total_spill = overflow_volume * dt
+            
+            # Apply the final flows to edges
+            for edge_id, flow in target_flows.items():
+                self.outflow_edges[edge_id].update(time_step, flow)
+            
+            if abs(total_spill) < 1e-5:  # Consider values less than 5e-10 m³ as zero
+                total_spill = 0
             # Record total spill for this time step
             self.spill_register.append(total_spill)
                 

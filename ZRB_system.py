@@ -100,7 +100,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         system.add_node(node)
 
     # Add Edges to the system
-    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1350))
+    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1230))
     system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
 
     # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
@@ -127,7 +127,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
     system.add_edge(Edge(Payariq, Ishtixon, capacity=105))
     system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=105))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=80))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=125))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
     # Damkodzha
@@ -484,22 +484,22 @@ if __name__ == "__main__":
     cxpb = 0.43
     mutpb = 0.53
     
-    #run_sample_tests(start_year, start_month, num_time_steps)
+    run_sample_tests(start_year, start_month, num_time_steps)
     #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
     
-    loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen90_pop2912_cxpb0.65_mutpb0.32.json")
+    #loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen90_pop2912_cxpb0.65_mutpb0.32.json")
 
     # Create and run system with loaded parameters
     
-    system = run_system_with_optimized_parameters(
+    '''system = run_system_with_optimized_parameters(
         create_seasonal_ZRB_system,
         loaded_results,
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps, 
         name= 'ZRB_sim_1'
-    )
+    )'''
 
 
     # Stop profiling
