@@ -510,8 +510,8 @@ class DemandNode(Node):
                 # Check if data is valid
                 if not (demand.empty or 
                     demand['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                    len(demand['Q']) < num_time_steps):
-                    return [rate/(self.field_efficiency*self.conveyance_efficiency) for rate in demand['Q'].tolist()]
+                    len(demand[self.id]) < num_time_steps):
+                    return [rate/(self.field_efficiency*self.conveyance_efficiency) for rate in demand[self.id].tolist()]
                 
                 # Print warning for invalid data
                 print(f"Warning: Insufficient data in csv file for node '{id}'")
@@ -536,10 +536,11 @@ class DemandNode(Node):
             DataFrame: Filtered DataFrame containing the requested data period
         """
         try:
-            # Read the CSV file into a pandas DataFrame
-            demand = pd.read_csv(csv_file, parse_dates=['Date'])
+            # Read the CSV file into a pandas DataFrame and only column 'Q' is used
+            demand = pd.read_csv(csv_file, parse_dates=['Date'], usecols=['Date', self.id])
+            print(demand)
             
-            if 'Date' not in demand.columns or 'Q' not in demand.columns:
+            if 'Date' not in demand.columns or self.id not in demand.columns:
                 raise ValueError("CSV file must contain 'Date' and 'Q' columns")
         
             # Filter the DataFrame to find the start point

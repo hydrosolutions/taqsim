@@ -40,7 +40,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             row['name'],
             easting=row['utm_easting'],
             northing=row['utm_northing'],
-            csv_file=f"./data/ETblue/{row['csv_path']}",
+            csv_file=f"./data/demand_17to22.csv",
             start_year=start_year,
             start_month=start_month,
             num_time_steps=num_time_steps,
@@ -127,7 +127,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
     system.add_edge(Edge(Payariq, Ishtixon, capacity=105))
     system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=105))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=55))
+    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=125))
     system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
 
     # Damkodzha
@@ -313,7 +313,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
 
     vis=WaterSystemVisualizer(system, name)
     
-    '''vis.plot_demand_deficit_heatmap()
+    '''
     vis.print_water_balance_summary()
     vis.plot_system_cons_demands_vs_inflow()
     vis.plot_network_layout_2()
@@ -327,6 +327,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_objective_function_breakdown()'''
     vis.plot_network_overview()
     vis.plot_system_demands_vs_inflow()
+    vis.plot_demand_deficit_heatmap()
     # Get the storage node from the system's graph
     '''storage_node = system.graph.nodes['RES-Akdarya']['node']
     vis.plot_release_function(storage_node)
