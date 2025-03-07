@@ -680,11 +680,26 @@ class WaterSystemVisualizer:
         Includes volumes, relative contributions, storage changes and balance error statistics.
         """
         df = self.system.get_water_balance()
-
+        
+        # Add deficit column based on flow deficits from sink nodes
+        sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                    if isinstance(data['node'], SinkNode) and hasattr(data['node'], 'min_flows')]
+        
+        # Create a list to store total deficits per timestep
+        total_deficits = [0] * len(df) if len(df) > 0 else []
+        
+        # Sum up deficits from all sink nodes with min flow requirements
+        for node_id, node in sink_nodes:
+            if hasattr(node, 'flow_deficits') and len(node.flow_deficits) > 0:
+                for t in range(min(len(node.flow_deficits), len(total_deficits))):
+                    total_deficits[t] += node.flow_deficits[t]*self.system.dt
+        
+        # Add the deficit column to the dataframe
+        if len(total_deficits) > 0:
+            df['deficit'] = total_deficits
         
         wb = pd.DataFrame(df)
         wb.to_csv(f'{self.name}_water_balance.csv', index=False)
-        
         
         print(f"\nWater Balance Summary for {self.name}")
         print("=" * 50)
@@ -715,13 +730,15 @@ class WaterSystemVisualizer:
             'Edge Losses': 'edge losses',
             'Res Spills': 'reservoir spills',
             'Res ET Losses': 'reservoir ET losses',
-            'HW Spills': 'hydroworks spills'
+            'HW Spills': 'hydroworks spills',
+            'Flow Deficit': 'deficit'  # Add the new deficit component
         }
         
         for label, comp in components.items():
-            total = df[comp].sum()
-            percentage = (total / total_source * 100) if total_source > 0 else 0
-            print(f"{label:15s}: {total:15,.0f} m³ ({percentage:6.1f}%)")
+            if comp in df.columns:
+                total = df[comp].sum()
+                percentage = (total / total_source * 100) if total_source > 0 else 0
+                print(f"{label:15s}: {total:15,.0f} m³ ({percentage:6.1f}%)")
         
         # Storage changes
         print_section("Storage")
@@ -741,12 +758,18 @@ class WaterSystemVisualizer:
         print(f"Total demand:        {total_demand:15,.0f} m³")
         print(f"Satisfied demand:    {total_satisfied:15,.0f} m³")
         print(f"Unmet demand:        {unmet_demand:15,.0f} m³")
-
+        
+        # Include flow deficit in demand section if available
+        if 'deficit' in df.columns:
+            total_deficit = df['deficit'].sum()
+            print(f"Min flow deficit:        {total_deficit:15,.0f} m³")
         
         # Conservation check
         print_section("Conservation Check")
         total_in = total_source
-        total_out = sum(df[comp].sum() for comp in ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 'reservoir ET losses', 'hydroworks spills'])
+        sink_components = ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 
+                          'reservoir ET losses', 'hydroworks spills']
+        total_out = sum(df[comp].sum() for comp in sink_components if comp in df.columns)
         total_stored = total_storage_change
         
         print(f"Total in:          {total_in:15,.0f} m³")
@@ -781,13 +804,15 @@ class WaterSystemVisualizer:
             'Losses': 'edge losses',
             'Res Spills': 'reservoir spills',
             'Res ET': 'reservoir ET losses',
-            'HW Spills': 'hydroworks spills'
+            'HW Spills': 'hydroworks spills',
+            'Deficit': 'deficit'  # Add deficit to maximum values
         }
         
         for label, comp in components.items():
-            max_value = df[comp].max()
-            timestep = df.loc[df[comp].idxmax(), 'time_step']
-            print(f"{label:10s}: {max_value:15,.0f} m³ at timestep {timestep:3.0f}")
+            if comp in df.columns:
+                max_value = df[comp].max()
+                timestep = df.loc[df[comp].idxmax(), 'time_step']
+                print(f"{label:10s}: {max_value:15,.0f} m³ at timestep {timestep:3.0f}")
         
         print("\n" + "=" * 50)
 

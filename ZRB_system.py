@@ -45,7 +45,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
             start_month=start_month,
             num_time_steps=num_time_steps,
             field_efficiency=0.75,
-            conveyance_efficiency=0.645,
+            conveyance_efficiency=0.65,
             weight=1.0
         )
         demand_nodes.append(demand_node)
