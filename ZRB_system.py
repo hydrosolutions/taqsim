@@ -312,6 +312,8 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(system, name)
+    vis.plot_objective_function_breakdown()
+    vis.print_water_balance_summary()
     
     '''
     vis.print_water_balance_summary()
@@ -324,10 +326,10 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_spills()
     vis.plot_reservoir_dynamics()
     vis.plot_storage_dynamics()
-    vis.plot_objective_function_breakdown()'''
+    vis.plot_objective_function_breakdown()
     vis.plot_network_overview()
     vis.plot_system_demands_vs_inflow()
-    vis.plot_demand_deficit_heatmap()
+    vis.plot_demand_deficit_heatmap()'''
     # Get the storage node from the system's graph
     '''storage_node = system.graph.nodes['RES-Akdarya']['node']
     vis.plot_release_function(storage_node)
@@ -483,7 +485,7 @@ if __name__ == "__main__":
     #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
     
-    loaded_results = load_parameters_from_file(f"ZRB_sim_2_opt_param.json")
+    loaded_results = load_parameters_from_file(f"best_param_current_period.json")
 
     # Create and run system with loaded parameters
     
@@ -493,7 +495,7 @@ if __name__ == "__main__":
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps, 
-        name= 'ZRB_sim_2'
+        name= 'ZRB_current_period'
     )
 
 

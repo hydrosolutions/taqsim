@@ -160,7 +160,7 @@ class WaterSystemVisualizer:
             # Create DataFrame
             try:
                 df = pd.DataFrame(data, columns=all_columns)
-                df.to_csv('water_balance_tot.csv', index=False)
+                #df.to_csv(f'{self.name}_water_balance.csv', index=False)
                 return df
             except Exception as e:
                 print(f"Error creating DataFrame: {str(e)}")
@@ -680,6 +680,11 @@ class WaterSystemVisualizer:
         Includes volumes, relative contributions, storage changes and balance error statistics.
         """
         df = self.system.get_water_balance()
+
+        
+        wb = pd.DataFrame(df)
+        wb.to_csv(f'{self.name}_water_balance.csv', index=False)
+        
         
         print(f"\nWater Balance Summary for {self.name}")
         print("=" * 50)
@@ -2415,7 +2420,6 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         return self._save_plot(f"release_function_{storage_node.id}")
     
-
     def plot_demand_satisfaction(self):
         """
         Create time series plots showing target, satisfied, and unmet demand for all demand nodes.
@@ -3503,7 +3507,7 @@ class WaterSystemVisualizer:
             
         print("\n" + "=" * 50)
 
-    def plot_objective_function_breakdown(self):
+    def plot_objective_function_breakdown_old(self):
 
         # Initialize dictionaries to store penalty components
         demand_deficits = {}
@@ -3996,3 +4000,243 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("network_overview")
+    
+
+    def plot_objective_function_breakdown(self):
+
+        # Initialize dictionaries to store penalty components
+        demand_deficits = {}
+        sink_deficits = {}
+        hw_spills = {}
+        res_spills = {}
+        
+        # Collect demand deficit penalties
+        for node_id, node_data in self.system.graph.nodes(data=True):
+            node = node_data['node']
+            
+            # Calculate demand deficit penalties
+            if isinstance(node, DemandNode):
+                demand = np.array([node.get_demand_rate(t) for t in range(self.system.time_steps)])
+                satisfied = np.array(node.satisfied_demand_total)
+                deficit = (demand - satisfied) * self.system.dt
+                weighted_deficit = deficit * node.weight
+                demand_deficits[node_id] = weighted_deficit
+            
+            # Calculate sink node minimum flow penalties
+            elif isinstance(node, SinkNode):
+                if hasattr(node, 'flow_deficits') and len(node.flow_deficits) > 0:
+                    deficits = np.array(node.flow_deficits) * self.system.dt
+                    weighted_deficit = deficits * node.weight
+                    sink_deficits[node_id] = weighted_deficit
+            
+            # Calculate hydroworks spill penalties
+            elif isinstance(node, HydroWorks) and hasattr(node, 'spill_register'):
+                if len(node.spill_register) > 0:
+                    spills = np.array(node.spill_register)
+                    # Apply a penalty weight of 100.0 to match the optimizer's objective function
+                    weighted_spills = spills * 100.0
+                    hw_spills[node_id] = weighted_spills
+            
+            # Calculate reservoir spillway penalties
+            elif isinstance(node, StorageNode) and hasattr(node, 'spillway_register'):
+                if len(node.spillway_register) > 0:
+                    spills = np.array(node.spillway_register)
+                    # Apply a penalty weight of 100.0 to match the optimizer's objective function
+                    weighted_spills = spills * 100.0
+                    res_spills[node_id] = weighted_spills
+        
+        # Create DataFrames for easy plotting
+        demand_df = pd.DataFrame(demand_deficits)/1000000000
+        sink_df = pd.DataFrame(sink_deficits)/1000000000
+        hw_spill_df = pd.DataFrame(hw_spills)/1000000000
+        res_spill_df = pd.DataFrame(res_spills)/1000000000
+        
+        # Calculate totals for each category
+        if not demand_df.empty:
+            demand_total = demand_df.sum(axis=1)
+            total_demand_penalty = demand_total.sum()
+        else:
+            demand_total = pd.Series(np.zeros(self.system.time_steps))
+            total_demand_penalty = 0
+            
+        if not sink_df.empty:
+            sink_total = sink_df.sum(axis=1)
+            total_sink_penalty = sink_total.sum()
+        else:
+            sink_total = pd.Series(np.zeros(self.system.time_steps))
+            total_sink_penalty = 0
+            
+        if not hw_spill_df.empty:
+            hw_spill_total = hw_spill_df.sum(axis=1)
+            total_hw_spill_penalty = hw_spill_total.sum()
+        else:
+            hw_spill_total = pd.Series(np.zeros(self.system.time_steps))
+            total_hw_spill_penalty = 0
+            
+        if not res_spill_df.empty:
+            res_spill_total = res_spill_df.sum(axis=1)
+            total_res_spill_penalty = res_spill_total.sum()
+        else:
+            res_spill_total = pd.Series(np.zeros(self.system.time_steps))
+            total_res_spill_penalty = 0
+        
+        # Calculate total penalty and percentages
+        total_penalty = total_demand_penalty + total_sink_penalty + total_hw_spill_penalty + total_res_spill_penalty
+        demand_pct = (total_demand_penalty / total_penalty * 100) if total_penalty > 0 else 0
+        sink_pct = (total_sink_penalty / total_penalty * 100) if total_penalty > 0 else 0
+        hw_spill_pct = (total_hw_spill_penalty / total_penalty * 100) if total_penalty > 0 else 0
+        res_spill_pct = (total_res_spill_penalty / total_penalty * 100) if total_penalty > 0 else 0
+        
+        # Set up the figure and gridspec
+        fig = plt.figure(figsize=(14, 14))
+        gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[1.5, 1, 1])
+        
+        # Plot 1: Stacked bar chart of penalties by time step (large, at the top)
+        ax1 = fig.add_subplot(gs[0, :])
+        
+        # Create stacked bar chart
+        bar_width = 0.8
+        time_steps = range(self.system.time_steps)
+        
+        # Convert to numpy arrays for stacking
+        demand_values = np.array(demand_total)
+        sink_values = np.array(sink_total)
+        hw_spill_values = np.array(hw_spill_total)
+        res_spill_values = np.array(res_spill_total)
+        
+        # Create stacked bars
+        ax1.bar(time_steps, demand_values, bar_width, label=f'Demand Deficit', color='green')
+        ax1.bar(time_steps, sink_values, bar_width, bottom=demand_values, label=f'Min Flow Deficit', color='blue')
+        
+        # Calculate bottom positions for hydroworks spills
+        bottom_hw = demand_values + sink_values
+        ax1.bar(time_steps, hw_spill_values, bar_width, bottom=bottom_hw, label=f'Hydroworks Spills', color='red')
+        
+        # Calculate bottom positions for reservoir spills
+        bottom_res = bottom_hw + hw_spill_values
+        ax1.bar(time_steps, res_spill_values, bar_width, bottom=bottom_res, label=f'Reservoir Spills', color='purple')
+        
+        # Add total penalty as a line on top
+        total_by_timestep = demand_values + sink_values + hw_spill_values + res_spill_values
+        #ax1.plot(time_steps, total_by_timestep, 'k-', label='Total Penalty', linewidth=3, marker='o', markersize=8)
+        
+        ax1.set_title(f'Penalties by Component and Time Step - {self.name}', fontsize=20)
+        ax1.set_xlabel('Time Step', fontsize=16)
+        ax1.set_ylabel('Penalty Volume [km³]', fontsize=16)
+        ax1.tick_params(axis='both', which='major', labelsize=14)
+        ax1.grid(True, alpha=0.3, axis='y')
+        ax1.legend(fontsize=16, loc='upper right')
+        
+        # Plot 2: Breakdown of total penalties by type (pie chart)
+        ax2 = fig.add_subplot(gs[1, 0])
+        components = ['Demand Deficit', 'Hydroworks Spills', 'Min Flow Deficit',  'Reservoir Spills']
+        values = [total_demand_penalty, total_hw_spill_penalty, total_sink_penalty,  total_res_spill_penalty]
+        colors = ['green', 'red', 'blue', 'yellow']
+        
+        # Create pie chart
+        wedges, texts, autotexts = ax2.pie(
+            values, 
+            labels=components,
+            colors=colors,
+            autopct='%1.1f%%',
+            startangle=90,
+            wedgeprops={'edgecolor': 'w', 'linewidth': 1}, 
+        )
+        
+        for autotext in autotexts:
+            autotext.set_fontsize(14)
+            #autotext.set_weight('bold')
+            autotext.set_backgroundcolor('white')
+        
+        for text in texts:
+            text.set_fontsize(14)
+        
+        ax2.set_title('Breakdown of Total Penalty by Component', fontsize=18)
+        
+        # Plot 3: Detailed breakdown of demand deficit penalties by node
+        ax3 = fig.add_subplot(gs[1, 1])
+        
+        if not demand_df.empty and len(demand_df.columns) > 0:
+            # Calculate total penalty by node
+            demand_by_node = demand_df.sum().sort_values(ascending=False)
+            top_nodes = demand_by_node.head(10)  # Show top 10 nodes
+            
+            bars = ax3.barh(list(top_nodes.index), top_nodes.values, color='green')
+            ax3.set_title('Demand Deficit Penalties by Node', fontsize=18)
+            ax3.set_xlabel('Total Penalty [km³]', fontsize=16)
+            ax3.set_ylabel('Demand Node', fontsize=16)
+            ax3.tick_params(axis='both', which='major', labelsize=16)
+            ax3.grid(True, alpha=0.3, axis='x')
+            
+            # Add value labels to bars
+            for bar in bars:
+                width = bar.get_width()
+                ax3.text(
+                    width + (width * 0.02),
+                    bar.get_y() + bar.get_height()/2,
+                    f'{width:,.2f}',
+                    va='center',
+                    fontsize=14
+                )
+        else:
+            ax3.text(0.5, 0.5, 'No demand deficit data available', 
+                    ha='center', va='center', fontsize=14)
+            ax3.set_title('Demand Deficit Penalties by Node', fontsize=18)
+        
+        # Plot 4: Detailed breakdown of min flow deficit penalties by node
+        ax4 = fig.add_subplot(gs[2, 1])
+        
+        if not sink_df.empty and len(sink_df.columns) > 0:
+            # Calculate total penalty by node
+            sink_by_node = sink_df.sum().sort_values(ascending=False)
+            
+            bars = ax4.barh(list(sink_by_node.index), sink_by_node.values, color='blue')
+            ax4.set_title('Min Flow Deficit Penalties by Node', fontsize=18)
+            ax4.set_xlabel('Total Penalty [km³]', fontsize=16)
+            ax4.set_ylabel('Sink Node', fontsize=16)
+            ax4.tick_params(axis='both', which='major', labelsize=16)
+            ax4.grid(True, alpha=0.3, axis='x')
+            
+            # Add value labels to bars
+            for bar in bars:
+                width = bar.get_width()
+                ax4.text(
+                    width + (width * 0.02),
+                    bar.get_y() + bar.get_height()/2,
+                    f'{width:,.2f}',
+                    va='center',
+                    fontsize=14
+                )
+        else:
+            ax4.text(0.5, 0.5, 'No min flow deficit data available', 
+                    ha='center', va='center', fontsize=14)
+            ax4.set_title('Min Flow Deficit Penalties by Node', fontsize=18)
+        
+        # Add a summary text box with total objective function value
+        summary_text = (
+            f"Objective Function Summary:\n"
+            f"Total Penalty: {total_penalty:,.2f} km³\n\n"
+            f"Components:\n"
+            f"- Demand Deficit: {total_demand_penalty:,.2f} km³ ({demand_pct:.1f}%)\n"
+            f"- Min Flow Deficit: {total_sink_penalty:,.2f} km³ ({sink_pct:.1f}%)\n"
+            f"- Hydroworks Spills: {total_hw_spill_penalty:,.2f} km³ ({hw_spill_pct:.1f}%)\n"
+            f"- Reservoir Spills: {total_res_spill_penalty:,.2f} km³ ({res_spill_pct:.1f}%)\n\n"
+            f"Annual averages:\n"
+            f"- Total Penalty: {total_penalty / 6:,.2f} km³/a\n"
+            f"- Demand Deficit: {total_demand_penalty / 6:,.2f} km³/a\n"
+            f"- Min Flow Deficit: {total_sink_penalty / 6:,.2f} km³/a\n"
+            f"- Hydroworks Spills: {total_hw_spill_penalty / 6:,.2f} km³/a\n"
+            f"- Reservoir Spills: {total_res_spill_penalty / 6:,.2f} km³/a\n"
+        )
+        
+        fig.text(
+            0.07, 0.05, 
+            summary_text,
+            fontsize=16,
+            verticalalignment='bottom',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
+        )
+        
+        plt.tight_layout()
+        
+        return self._save_plot("objective_function_breakdown")
