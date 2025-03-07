@@ -314,6 +314,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis=WaterSystemVisualizer(system, name)
     vis.plot_objective_function_breakdown()
     vis.print_water_balance_summary()
+    vis.plot_demand_deficit_heatmap()
     
     '''
     vis.print_water_balance_summary()
@@ -485,7 +486,7 @@ if __name__ == "__main__":
     #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
     
-    loaded_results = load_parameters_from_file(f"best_param_current_period.json")
+    loaded_results = load_parameters_from_file(f"ZRB_sim_2_opt_param.json")
 
     # Create and run system with loaded parameters
     
