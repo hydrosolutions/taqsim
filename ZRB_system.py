@@ -19,7 +19,7 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
-    system = WaterSystem(dt=dt)
+    system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
 
     # Create nodes
     supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file="data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
@@ -312,32 +312,45 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(system, name)
-    vis.plot_objective_function_breakdown()
-    vis.print_water_balance_summary()
-    vis.plot_demand_deficit_heatmap()
-    
     '''
-    vis.print_water_balance_summary()
-    vis.plot_system_cons_demands_vs_inflow()
-    vis.plot_network_layout_2()
+    vis.plot_edge_flows()
+    vis.plot_edge_flow_summary()
     vis.plot_network_layout()
-    vis.plot_minimum_flow_compliance()
-    vis.plot_flow_compliance_heatmap()
-    vis.print_flow_compliance_summary()
-    vis.plot_spills()
-    vis.plot_reservoir_dynamics()
+    vis.plot_network_layout_2()
     vis.plot_storage_dynamics()
-    vis.plot_objective_function_breakdown()
-    vis.plot_network_overview()
-    vis.plot_system_demands_vs_inflow()
-    vis.plot_demand_deficit_heatmap()'''
-    # Get the storage node from the system's graph
-    '''storage_node = system.graph.nodes['RES-Akdarya']['node']
-    vis.plot_release_function(storage_node)
-    storage_node = system.graph.nodes['RES-Kattakurgan']['node']
-    vis.plot_release_function(storage_node)
+    vis.plot_reservoir_dynamics()
+    vis.plot_all_flows(system)
+    vis.plot_water_balance_debug(system.graph.nodes['RES-Akdarya']['node'])
+    vis.plot_storage_waterbalance(system.graph.nodes['RES-Akdarya']['node'])
+    #vis.plot_monthly_waterbalance(system.graph.nodes['RES-Akdarya']['node'])
+    vis.plot_release_function(system.graph.nodes['RES-Akdarya']['node'])
+    vis.plot_release_function(system.graph.nodes['RES-Kattakurgan']['node'])
+    vis.plot_release_function_report(system.graph.nodes['RES-Akdarya']['node'], 1)
+    vis.plot_release_function_report(system.graph.nodes['RES-Kattakurgan']['node'], 1)
+    vis.plot_demand_satisfaction()
+    vis.plot_reservoir_volumes()
+    vis.plot_sink_outflows()
+    vis.plot_hydroworks_flows(system.graph.nodes['HW-Ravatkhoza']['node'])
+    vis.plot_system_cons_demands_vs_inflow()
     
-    html_file = vis.create_interactive_network_visualization()
+    vis.plot_system_demands_vs_inflow_old()
+    
+    vis.plot_flow_compliance_heatmap()
+    vis.plot_spills()'''
+    
+
+    # visulizations for the Report
+    vis.plot_minimum_flow_compliance()
+    vis.plot_system_demands_vs_inflow()
+    vis.plot_demand_deficit_heatmap()
+    vis.plot_reservoir_volumes()
+    vis.plot_objective_function_breakdown()
+    vis.print_water_balance_summary()
+
+
+
+
+    '''html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
     webbrowser.open(f'file://{os.path.abspath(html_file)}')'''
     
@@ -486,8 +499,9 @@ if __name__ == "__main__":
     #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
     
-    loaded_results = load_parameters_from_file(f"ZRB_sim_2_opt_param.json")
-
+    #loaded_results = load_parameters_from_file(f"ZRB_sim_2_opt_param.json")
+    loaded_results = load_parameters_from_file(f"ZRB_optuna_8_best_param.json")
+    
     # Create and run system with loaded parameters
     
     system = run_system_with_optimized_parameters(

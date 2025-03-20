@@ -183,74 +183,6 @@ class WaterSystemVisualizer:
         plt.savefig(filepath, bbox_inches='tight', dpi=300)
         plt.close()
         return filepath
-          
-    def plot_demand_deficit_heatmap(self):
-        """
-        Create enhanced heatmaps showing total demand deficits (both consumptive and non-consumptive)
-        across all demand nodes over time.
-        """
-        # Collect total deficits for each demand node
-        demand_nodes = [(node_id, data['node']) for node_id, data 
-                        in self.system.graph.nodes(data=True) 
-                        if isinstance(data['node'], DemandNode)]
-        
-        if not demand_nodes:
-            print("No demand nodes found in the system.")
-            return
-        
-        # Create DataFrames for different deficit types
-        total_data = pd.DataFrame(index=range(self.system.time_steps))
-        percentage_data = pd.DataFrame(index=range(self.system.time_steps))
-        
-        # Calculate deficits for each node and time step
-        for node_id, node in demand_nodes:
-            node_total_deficits = []
-            node_percentages = []
-            
-            for t in range(self.system.time_steps):
-                total_deficit = (node.get_demand_rate(t) - node.satisfied_demand_total[t])
-                node_total_deficits.append(total_deficit)
-                
-                # Calculate percentage based on total required flow
-                total_required = node.get_demand_rate(t)
-                if total_required > 0:
-                    percentage = (total_deficit / total_required) * 100
-                else:
-                    percentage = 0
-                node_percentages.append(percentage)
-            
-            total_data[node_id] = node_total_deficits
-            percentage_data[node_id] = node_percentages
-        
-        # Plot absolute deficits
-        plt.figure(figsize=(16, 6))
-        sns.heatmap(total_data.T, cmap='YlOrRd', 
-                    xticklabels=total_data.index,
-                    yticklabels=total_data.columns,
-                    annot=False,
-                    cbar_kws={'label': 'Deficit [m³/s]'})
-        plt.xlabel('Time Step [month]', fontsize=16)
-        plt.ylabel('Demand Node', fontsize=16)
-        plt.title('Absolute Water Deficits', fontsize=18)
-        plt.xticks(fontsize=11)
-        plt.yticks(fontsize=14)
-        abs_filepath = self._save_plot("total_deficit_heatmap_absolute")
-        
-        # Plot percentage deficit
-        plt.figure(figsize=(16, 6))
-        sns.heatmap(percentage_data.T, cmap='YlOrRd',
-                    xticklabels=percentage_data.index,
-                    yticklabels=percentage_data.columns,
-                    annot=False,
-                    cbar_kws={'label': 'Deficit [%]'})
-        plt.xlabel('Time Step [month]', fontsize=16)
-        plt.ylabel('Demand Node', fontsize=16)
-        plt.title('Percentage of Total Unmet Demand', fontsize=18)
-        plt.xticks(fontsize=11)
-        plt.yticks(fontsize=14)
-        pct_filepath = self._save_plot("total_deficit_heatmap_percentage")
-        
-        return abs_filepath, pct_filepath
 
     def plot_edge_flows(self):
         """
@@ -672,7 +604,7 @@ class WaterSystemVisualizer:
         plt.axis('off')
         plt.tight_layout()
         
-        return self._save_plot("network_layout_hydroworks")
+        return self._save_plot("network_layout_2")
 
     def print_water_balance_summary(self):
         """
@@ -696,7 +628,7 @@ class WaterSystemVisualizer:
         
         # Add the deficit column to the dataframe
         if len(total_deficits) > 0:
-            df['deficit'] = total_deficits
+            df['minflow deficit'] = total_deficits
         
         wb = pd.DataFrame(df)
         wb.to_csv(f'{self.name}_water_balance.csv', index=False)
@@ -1747,7 +1679,7 @@ class WaterSystemVisualizer:
                     bbox_to_anchor=(1.3, 0.5))
         
         plt.tight_layout()
-        return self._save_plot("reservoir_inflow_outflow_waterlevel")
+        return self._save_plot("reservoir_dynamics")
 
     def plot_all_flows(self, water_system):
         """
@@ -2085,7 +2017,7 @@ class WaterSystemVisualizer:
                 verticalalignment='center')
         
         plt.tight_layout()
-        return self._save_plot(f"water_balance_bars_{storage_node.id}")
+        return self._save_plot(f"storage_wb_{storage_node.id}")
 
     def plot_monthly_waterbalance(self, storage_node):
         """
@@ -2208,7 +2140,7 @@ class WaterSystemVisualizer:
                 verticalalignment='center')
         
         plt.tight_layout()
-        return self._save_plot(f"monthly_water_balance_{storage_node.id}")
+        return self._save_plot(f"monthly_wb_{storage_node.id}")
 
     def plot_release_function(self, storage_node, months=None):
         """
@@ -2443,7 +2375,7 @@ class WaterSystemVisualizer:
         ax1.tick_params(axis='x', labelsize=20)
         ax1.grid(True, alpha=0.3)
         plt.tight_layout()
-        return self._save_plot(f"release_function_{storage_node.id}")
+        return self._save_plot(f"release_function_report_{storage_node.id}")
     
     def plot_demand_satisfaction(self):
         """
@@ -2528,69 +2460,6 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         return self._save_plot("demand_satisfaction")
 
-    def plot_reservoir_volumes(self):
-        """
-        Create time series plots showing volume and water elevation for all reservoir (storage) nodes.
-        
-        Returns:
-            str: Path to the saved plot file
-        """
-        # Find storage nodes in the system
-        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
-                        if isinstance(data['node'], StorageNode)]
-        
-        if not storage_nodes:
-            print("No storage nodes (reservoirs) found in the system.")
-            return None
-            
-        # Create figure with subplots - one per reservoir
-        n_nodes = len(storage_nodes)
-        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 4*n_nodes), sharex=True)
-        if n_nodes == 1:
-            axes = [axes]
-        
-        # Plot for each reservoir
-        for idx, (node_id, node) in enumerate(storage_nodes):
-            ax1 = axes[idx]
-            ax2 = ax1.twinx()  # Create secondary y-axis for elevation
-            
-            # Get volume and elevation data
-            # Note: storage and water_level arrays have one extra value for the next timestep
-            # We'll use all but the last value to match with time steps
-            volumes = node.storage[:-1]  # Exclude last storage value
-            water_levels = node.water_level[:-1]  # Exclude last water level
-            time_steps = range(len(volumes))  # Create matching time steps array
-            capacity = node.capacity
-            
-            # Plot volume time series
-            line1 = ax1.plot(time_steps, volumes, color='blue', 
-                            label='Storage Volume', linewidth=2)
-            
-            # Add capacity line
-            cap_line = ax1.axhline(y=capacity, color='red', linestyle='--', 
-                                label=f'Capacity ({capacity:,.0f} m³)')
-            
-            # Plot water elevation
-            line2 = ax2.plot(time_steps, water_levels, color='green', 
-                            label='Water Level', linewidth=2)
-            
-            # Customize subplot
-            ax1.set_title(f'{node_id}')
-            ax1.set_ylabel('Volume [m³]')
-            ax2.set_ylabel('Water Level [m.a.s.l]')
-            ax1.grid(True, alpha=0.3)
-            
-            # Combine legends from both axes
-            lines = line1 + line2 + [cap_line]
-            labels = [l.get_label() for l in lines]
-            ax1.legend(lines, labels, loc='upper left')
-        
-        # Add common x-label to bottom subplot
-        axes[-1].set_xlabel('Time Step')
-        
-        plt.tight_layout()
-        return self._save_plot("reservoir_volumes")
-    
     def plot_sink_outflows(self):
         #set fontsize for all labels to 16
         plt.rcParams.update({'font.size': 14})
@@ -2665,7 +2534,7 @@ class WaterSystemVisualizer:
         ax2.legend(loc='upper left')
         
         plt.tight_layout()
-        return self._save_plot("sink_outflows_and_inflows")
+        return self._save_plot("sink_outflows")
     
     def plot_hydroworks_flows(self, hydroworks_id):
         """
@@ -2894,7 +2763,7 @@ class WaterSystemVisualizer:
             print(f"Error plotting system demands vs inflow: {str(e)}")
             return None
     
-    def plot_system_demands_vs_inflow(self):
+    def plot_system_demands_vs_inflow_noevap(self):
         """
         Create a plot comparing total system inflow against total demands and minimum flow requirements.
         
@@ -3130,13 +2999,171 @@ class WaterSystemVisualizer:
             ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             
             plt.tight_layout()
+            return self._save_plot("system_demands_vs_inflow_old")
+            
+        except Exception as e:
+            print(f"Error plotting system demands vs inflow: {str(e)}")
+            return None
+
+    def plot_system_demands_vs_inflow(self):
+        """
+        Create a plot comparing total system inflow against total demands, minimum flow requirements,
+        and reservoir evaporation.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        try:
+            month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            time_steps = range(self.system.time_steps)
+            
+            # Calculate total inflow (from supply nodes)
+            total_inflows = []
+            supply_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], SupplyNode)]
+            # Get the start year and month from the first demand node
+            # (assuming all nodes have the same simulation period)
+            start_year = None
+            start_month = None
+            
+            # If we couldn't find start_year and start_month, try to get them from the system
+            if start_year is None and hasattr(self.system, 'start_year') and hasattr(self.system, 'start_month'):
+                start_year = self.system.start_year
+                start_month = self.system.start_month
+            
+            # Create date labels for x-axis
+            date_labels = []
+            if start_year is not None and start_month is not None:
+                for t in range(self.system.time_steps):
+                    # Calculate year and month
+                    month = start_month + t
+                    year = start_year + (month - 1) // 12
+                    month = ((month - 1) % 12) + 1  # Adjust month to be between 1-12
+                    
+                    # Format as year-month
+                    date_labels.append(f"{month_names[month-1]}-{year}")
+            else:
+                # Fall back to timestep numbers if no date information is available
+                date_labels = list(range(self.system.time_steps))
+            
+            for t in time_steps:
+                inflow = sum(node.get_supply_rate(t) for _, node in supply_nodes)
+                total_inflows.append(inflow)
+            
+            # Calculate total demands and minimum flows
+            total_demands = []
+            demand_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], DemandNode)]
+
+            # Get sink nodes with minimum flow requirements
+            sink_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], SinkNode)]
+            
+            # Get reservoir nodes for evaporation
+            reservoir_nodes = [(node_id, data['node']) for node_id, data 
+                            in self.system.graph.nodes(data=True) 
+                            if isinstance(data['node'], StorageNode)]
+            
+            for t in time_steps:
+                demand = sum(node.get_demand_rate(t) for _, node in demand_nodes)
+                total_demands.append(demand)
+            
+            # Create figure with one subplot
+            plt.rcParams.update({'font.size': 20})
+            fig, ax1 = plt.subplots(figsize=(16, 8))
+            
+            # Calculate total minimum flow requirements
+            total_min_flows = np.zeros(len(time_steps))
+            for _, node in sink_nodes:
+                if hasattr(node, 'get_min_flow'):
+                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                    total_min_flows += np.array(min_flows)
+            
+            # Calculate total evaporation losses
+            total_evap = np.zeros(len(time_steps))
+            for _, node in reservoir_nodes:
+                if hasattr(node, 'evaporation_losses'):
+                    evap_rates = [loss/self.system.dt for loss in node.evaporation_losses[:len(time_steps)]]
+                    total_evap += np.array(evap_rates)
+            
+            # Calculate total system requirements (demands + minimum flows + evaporation)
+            total_requirements = np.array(total_demands) + total_min_flows + total_evap
+            
+            # Plot 1: Time series
+            ax1.plot(time_steps, total_inflows, 'b-', label='Inflow', linewidth=2)
+            ax1.plot(time_steps, total_demands, 'purple',  label='Demand', linewidth=2, linestyle='--')
+            ax1.plot(time_steps, total_min_flows, 'darkorange', label='Min Flow Requirement', linewidth=2, linestyle='--')
+            ax1.plot(time_steps, total_evap, 'orchid', label='Reservoir Evaporation', linewidth=2, linestyle='--')
+            ax1.plot(time_steps, total_requirements, 'r', 
+                    label='Demand + Min Flow Requirement \n + Reservoir Evaporation', linewidth=2)
+            
+            # Fill the deficit area
+            ax1.fill_between(time_steps, total_inflows, total_requirements, 
+                            where=total_requirements > np.array(total_inflows),
+                            color='red', alpha=0.3, label='Water Deficit')
+            
+            # Fill the surplus area
+            ax1.fill_between(time_steps, total_inflows, total_requirements,
+                            where=np.array(total_inflows) > total_requirements,
+                            color='green', alpha=0.3, label='Water Surplus')
+            
+            # Calculate additional statistics 
+            total_inflow_volume = sum(total_inflows) * self.system.dt
+            total_demand_volume = sum(total_demands) * self.system.dt
+            total_min_flow_volume = sum(total_min_flows) * self.system.dt
+            total_evap_volume = sum(total_evap) * self.system.dt
+            total_req_volume = total_demand_volume + total_min_flow_volume + total_evap_volume
+            total_only_deficit = sum(max(0,(b - a)) * self.system.dt for a, b in zip(total_inflows, total_requirements))
+            total_only_surplus = sum(max(0,(a - b)) * self.system.dt for a, b in zip(total_inflows, total_requirements))
+
+            stats_text = (
+                f"Total Inflow: {total_inflow_volume/1e9:.1f} km³\n"
+                f"Total Demand: {total_demand_volume/1e9:.1f} km³\n"
+                f"Total Min Flow Requirement: {total_min_flow_volume/1e9:.1f} km³\n"
+                f"Total Reservoir Evaporation: {total_evap_volume/1e9:.1f} km³\n\n"
+                f"Deficit (red area): {total_only_deficit/1e9:.1f} km³\n"
+                f"Surplus (green area): {total_only_surplus/1e9:.1f} km³\n"
+                f"Deficit - Surplus: {(total_req_volume - total_inflow_volume)/1e9:.1f} km³"
+            )
+            
+            ax1.text(1.07, 0.4, stats_text,
+                    transform=ax1.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8), 
+                    fontsize=20)
+            
+            ax1.set_ylabel('Flow Rate [m³/s]', fontsize=22)
+            #ax1.set_title('System Inflow vs Total Demands and Requirements', fontsize=12)
+            ax1.grid(True)
+            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=20)
+            # Set custom x-ticks with year-month labels
+            tick_positions = list(time_steps)
+            
+            # If we have many time steps, use fewer ticks to avoid crowding
+            if len(tick_positions) > 12:
+                tick_spacing = max(1, len(tick_positions) // 12)
+                tick_positions = tick_positions[::tick_spacing]
+                tick_labels = [date_labels[i] for i in tick_positions]
+            else:
+                tick_labels = date_labels
+            
+            ax1.set_xticks(tick_positions)
+            ax1.set_xticklabels(tick_labels, rotation=45, ha='right')
+
+            
+            #plt.tight_layout()
             return self._save_plot("system_demands_vs_inflow")
             
         except Exception as e:
             print(f"Error plotting system demands vs inflow: {str(e)}")
             return None
-        
-    def plot_minimum_flow_compliance(self):
+
+    def plot_minimum_flow_compliance_old(self):
         """
         Create time series plots showing actual flows versus minimum flow requirements 
         for all sink nodes that have minimum flow requirements.
@@ -3157,7 +3184,7 @@ class WaterSystemVisualizer:
             
         # Create figure with subplots
         n_nodes = len(sink_nodes_with_requirements)
-        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 6*n_nodes), sharex=True)
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(12, 4*n_nodes), sharex=True)
         if n_nodes == 1:
             axes = [axes]
         
@@ -3291,58 +3318,6 @@ class WaterSystemVisualizer:
         pct_filepath = self._save_plot("min_flow_requirement_heatmap_percentage")
         
         return abs_filepath, pct_filepath
-
-    def plot_hydroworks_distributions(self, hydroworks_params):
-        """
-        Create a plot showing monthly distribution parameters for all hydroworks nodes.
-        
-        Args:
-            hydroworks_params (dict): Dictionary of hydroworks parameters from optimization results
-            
-        Returns:
-            str: Path to the saved plot file
-        """
-        if not hydroworks_params:
-            print("No hydroworks parameters provided")
-            return None
-            
-        # Count number of hydroworks nodes and their targets
-        n_hydroworks = len(hydroworks_params)
-        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        # Create figure with subplots for each hydroworks
-        fig, axes = plt.subplots(n_hydroworks, 1, figsize=(15, 6*n_hydroworks))
-        if n_hydroworks == 1:
-            axes = [axes]
-        
-        # Color scheme
-        colors = plt.cm.tab20(np.linspace(0, 1, max(len(params) for params in hydroworks_params.values())))
-        
-        # Plot distribution parameters for each hydroworks
-        for idx, (hw_id, params) in enumerate(hydroworks_params.items()):
-            ax = axes[idx]
-            
-            # Plot monthly values for each target
-            bottom = np.zeros(12)
-            for target_idx, (target, values) in enumerate(params.items()):
-                ax.bar(months, values, bottom=bottom, label=target, color=colors[target_idx])
-                bottom += values
-                
-                # Add value labels
-                for i, v in enumerate(values):
-                    if v >= 0.05:  # Only show labels for values >= 5%
-                        ax.text(i, bottom - v/2, f'{v:.2f}', 
-                            ha='center', va='center')
-            
-            # Customize subplot
-            ax.set_title(f'{hw_id} Monthly Distribution Parameters')
-            ax.set_ylabel('Distribution Fraction')
-            ax.grid(True, alpha=0.3)
-            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            
-        plt.tight_layout()
-        return self._save_plot("hydroworks_distributions")
 
     def plot_spills(self):
         """
@@ -3532,305 +3507,6 @@ class WaterSystemVisualizer:
             
         print("\n" + "=" * 50)
 
-    def plot_objective_function_breakdown_old(self):
-
-        # Initialize dictionaries to store penalty components
-        demand_deficits = {}
-        sink_deficits = {}
-        hw_spills = {}
-        res_spills = {}
-        
-        # Collect demand deficit penalties
-        for node_id, node_data in self.system.graph.nodes(data=True):
-            node = node_data['node']
-            
-            # Calculate demand deficit penalties
-            if isinstance(node, DemandNode):
-                demand = np.array([node.get_demand_rate(t) for t in range(self.system.time_steps)])
-                satisfied = np.array(node.satisfied_demand_total)
-                deficit = (demand - satisfied) * self.system.dt
-                weighted_deficit = deficit * node.weight
-                demand_deficits[node_id] = weighted_deficit
-            
-            # Calculate sink node minimum flow penalties
-            elif isinstance(node, SinkNode):
-                if hasattr(node, 'flow_deficits') and len(node.flow_deficits) > 0:
-                    deficits = np.array(node.flow_deficits) * self.system.dt
-                    weighted_deficit = deficits * node.weight
-                    sink_deficits[node_id] = weighted_deficit
-            
-            # Calculate hydroworks spill penalties
-            elif isinstance(node, HydroWorks) and hasattr(node, 'spill_register'):
-                if len(node.spill_register) > 0:
-                    spills = np.array(node.spill_register)
-                    # Apply a penalty weight of 100.0 to match the optimizer's objective function
-                    weighted_spills = spills * 100.0
-                    hw_spills[node_id] = weighted_spills
-            
-            # Calculate reservoir spillway penalties
-            elif isinstance(node, StorageNode) and hasattr(node, 'spillway_register'):
-                if len(node.spillway_register) > 0:
-                    spills = np.array(node.spillway_register)
-                    # Apply a penalty weight of 100.0 to match the optimizer's objective function
-                    weighted_spills = spills * 100.0
-                    res_spills[node_id] = weighted_spills
-        
-        # Create DataFrames for easy plotting
-        demand_df = pd.DataFrame(demand_deficits)
-        sink_df = pd.DataFrame(sink_deficits)
-        hw_spill_df = pd.DataFrame(hw_spills)
-        res_spill_df = pd.DataFrame(res_spills)
-        
-        # Calculate totals for each category
-        if not demand_df.empty:
-            demand_total = demand_df.sum(axis=1)
-            total_demand_penalty = demand_total.sum()
-        else:
-            demand_total = pd.Series(np.zeros(self.system.time_steps))
-            total_demand_penalty = 0
-            
-        if not sink_df.empty:
-            sink_total = sink_df.sum(axis=1)
-            total_sink_penalty = sink_total.sum()
-        else:
-            sink_total = pd.Series(np.zeros(self.system.time_steps))
-            total_sink_penalty = 0
-            
-        if not hw_spill_df.empty:
-            hw_spill_total = hw_spill_df.sum(axis=1)
-            total_hw_spill_penalty = hw_spill_total.sum()
-        else:
-            hw_spill_total = pd.Series(np.zeros(self.system.time_steps))
-            total_hw_spill_penalty = 0
-            
-        if not res_spill_df.empty:
-            res_spill_total = res_spill_df.sum(axis=1)
-            total_res_spill_penalty = res_spill_total.sum()
-        else:
-            res_spill_total = pd.Series(np.zeros(self.system.time_steps))
-            total_res_spill_penalty = 0
-        
-        # Calculate total penalty and percentages
-        total_penalty = total_demand_penalty + total_sink_penalty + total_hw_spill_penalty + total_res_spill_penalty
-        demand_pct = (total_demand_penalty / total_penalty * 100) if total_penalty > 0 else 0
-        sink_pct = (total_sink_penalty / total_penalty * 100) if total_penalty > 0 else 0
-        hw_spill_pct = (total_hw_spill_penalty / total_penalty * 100) if total_penalty > 0 else 0
-        res_spill_pct = (total_res_spill_penalty / total_penalty * 100) if total_penalty > 0 else 0
-        
-        # Set up the figure and gridspec
-        fig = plt.figure(figsize=(18, 14))
-        gs = gridspec.GridSpec(3, 3, figure=fig, height_ratios=[2, 1, 1])
-        
-        # Plot 1: Time series of all penalty components (top row spanning all columns)
-        ax1 = fig.add_subplot(gs[0, :])
-        time_steps = range(self.system.time_steps)
-        
-        # Plot each component
-        ax1.plot(time_steps, demand_total, 'r-', label=f'Demand Deficit ({demand_pct:.1f}%)', linewidth=2)
-        ax1.plot(time_steps, sink_total, 'b-', label=f'Min Flow Deficit ({sink_pct:.1f}%)', linewidth=2)
-        ax1.plot(time_steps, hw_spill_total, 'g-', label=f'Hydroworks Spills ({hw_spill_pct:.1f}%)', linewidth=2)
-        ax1.plot(time_steps, res_spill_total, 'y-', label=f'Reservoir Spills ({res_spill_pct:.1f}%)', linewidth=2)
-        
-        # Calculate total penalty by timestep
-        total_by_timestep = demand_total + sink_total + hw_spill_total + res_spill_total
-        ax1.plot(time_steps, total_by_timestep, 'k-', label='Total Penalty', linewidth=3)
-        
-        ax1.set_title('Objective Function Penalties by Time Step', fontsize=16)
-        ax1.set_xlabel('Time Step', fontsize=12)
-        ax1.set_ylabel('Penalty (Volume × Weight)', fontsize=12)
-        ax1.grid(True, alpha=0.3)
-        ax1.legend(fontsize=12)
-        
-        # Plot 2: Breakdown of total penalties by type (pie chart)
-        ax2 = fig.add_subplot(gs[1, 0])
-        components = ['Demand Deficit', 'Min Flow Deficit', 'Hydroworks Spills', 'Reservoir Spills']
-        values = [total_demand_penalty, total_sink_penalty, total_hw_spill_penalty, total_res_spill_penalty]
-        colors = ['red', 'blue', 'green', 'yellow']
-        
-        # Create pie chart
-        wedges, texts, autotexts = ax2.pie(
-            values, 
-            labels=components,
-            colors=colors,
-            autopct='%1.1f%%',
-            startangle=90,
-            wedgeprops={'edgecolor': 'w', 'linewidth': 1}
-        )
-        
-        for autotext in autotexts:
-            autotext.set_fontsize(10)
-            autotext.set_weight('bold')
-        
-        ax2.set_title('Breakdown of Total Penalty by Component', fontsize=14)
-        
-        # Plot 3: Stacked bar chart of penalties by time step
-        ax3 = fig.add_subplot(gs[1, 1:])
-        
-        # Create stacked bar chart
-        bar_width = 0.8
-        time_steps = range(self.system.time_steps)
-        
-        # Convert to numpy arrays for stacking
-        demand_values = np.array(demand_total)
-        sink_values = np.array(sink_total)
-        hw_spill_values = np.array(hw_spill_total)
-        res_spill_values = np.array(res_spill_total)
-        
-        # Create stacked bars
-        ax3.bar(time_steps, demand_values, bar_width, label='Demand Deficit', color='red')
-        ax3.bar(time_steps, sink_values, bar_width, bottom=demand_values, label='Min Flow Deficit', color='blue')
-        
-        # Calculate bottom positions for hydroworks spills
-        bottom_hw = demand_values + sink_values
-        ax3.bar(time_steps, hw_spill_values, bar_width, bottom=bottom_hw, label='Hydroworks Spills', color='green')
-        
-        # Calculate bottom positions for reservoir spills
-        bottom_res = bottom_hw + hw_spill_values
-        ax3.bar(time_steps, res_spill_values, bar_width, bottom=bottom_res, label='Reservoir Spills', color='yellow')
-        
-        ax3.set_title('Penalties by Component and Time Step', fontsize=14)
-        ax3.set_xlabel('Time Step', fontsize=12)
-        ax3.set_ylabel('Penalty Volume', fontsize=12)
-        ax3.grid(True, alpha=0.3, axis='y')
-        
-        # Plot 4: Detailed breakdown of demand deficit penalties by node
-        ax4 = fig.add_subplot(gs[2, 0])
-        
-        if not demand_df.empty and len(demand_df.columns) > 0:
-            # Calculate total penalty by node
-            demand_by_node = demand_df.sum().sort_values(ascending=False)
-            top_nodes = demand_by_node.head(10)  # Show top 10 nodes
-            
-            bars = ax4.barh(list(top_nodes.index), top_nodes.values, color='red')
-            ax4.set_title('Demand Deficit Penalties by Node', fontsize=14)
-            ax4.set_xlabel('Total Penalty', fontsize=12)
-            ax4.set_ylabel('Node', fontsize=12)
-            ax4.grid(True, alpha=0.3, axis='x')
-            
-            # Add value labels to bars
-            for bar in bars:
-                width = bar.get_width()
-                ax4.text(
-                    width + (width * 0.02),
-                    bar.get_y() + bar.get_height()/2,
-                    f'{width:,.0f}',
-                    va='center',
-                    fontsize=8
-                )
-        else:
-            ax4.text(0.5, 0.5, 'No demand deficit data available', 
-                    ha='center', va='center', fontsize=12)
-            ax4.set_title('Demand Deficit Penalties by Node', fontsize=14)
-        
-        # Plot 5: Detailed breakdown of sink deficit penalties by node
-        ax5 = fig.add_subplot(gs[2, 1])
-        
-        if not sink_df.empty and len(sink_df.columns) > 0:
-            # Calculate total penalty by node
-            sink_by_node = sink_df.sum().sort_values(ascending=False)
-            
-            bars = ax5.barh(list(sink_by_node.index), sink_by_node.values, color='blue')
-            ax5.set_title('Min Flow Deficit Penalties by Node', fontsize=14)
-            ax5.set_xlabel('Total Penalty', fontsize=12)
-            ax5.set_ylabel('Node', fontsize=12)
-            ax5.grid(True, alpha=0.3, axis='x')
-            
-            # Add value labels to bars
-            for bar in bars:
-                width = bar.get_width()
-                ax5.text(
-                    width + (width * 0.02),
-                    bar.get_y() + bar.get_height()/2,
-                    f'{width:,.0f}',
-                    va='center', 
-                    fontsize=8
-                )
-        else:
-            ax5.text(0.5, 0.5, 'No sink deficit data available', 
-                    ha='center', va='center', fontsize=12)
-            ax5.set_title('Min Flow Deficit Penalties by Node', fontsize=14)
-        
-        # Plot 6: Detailed breakdown of spill penalties (both hydroworks and reservoir)
-        ax6 = fig.add_subplot(gs[2, 2])
-        
-        all_spills = {}
-        
-        # Combine hydroworks and reservoir spills
-        if not hw_spill_df.empty:
-            for node in hw_spill_df.columns:
-                all_spills[node] = hw_spill_df[node].sum()
-                
-        if not res_spill_df.empty:
-            for node in res_spill_df.columns:
-                all_spills[node] = res_spill_df[node].sum()
-        
-        if all_spills:
-            # Convert to Series and sort
-            spill_series = pd.Series(all_spills).sort_values(ascending=False)
-            
-            # Determine colors based on node type
-            colors = []
-            for node in spill_series.index:
-                if node in hw_spills:
-                    colors.append('green')  # Hydroworks
-                else:
-                    colors.append('yellow')  # Reservoir
-            
-            bars = ax6.barh(list(spill_series.index), spill_series.values, color=colors)
-            ax6.set_title('Spill Penalties by Node', fontsize=14)
-            ax6.set_xlabel('Total Penalty', fontsize=12)
-            ax6.set_ylabel('Node', fontsize=12)
-            ax6.grid(True, alpha=0.3, axis='x')
-            
-            # Add value labels to bars
-            for bar in bars:
-                width = bar.get_width()
-                ax6.text(
-                    width + (width * 0.02),
-                    bar.get_y() + bar.get_height()/2,
-                    f'{width:,.0f}',
-                    va='center',
-                    fontsize=8
-                )
-            
-            # Add legend for colors
-            from matplotlib.patches import Patch
-            legend_elements = [
-                Patch(facecolor='green', edgecolor='w', label='Hydroworks'),
-                Patch(facecolor='yellow', edgecolor='w', label='Reservoir')
-            ]
-            ax6.legend(handles=legend_elements, loc='upper right')
-        else:
-            ax6.text(0.5, 0.5, 'No spill data available', 
-                    ha='center', va='center', fontsize=12)
-            ax6.set_title('Spill Penalties by Node', fontsize=14)
-        
-        # Add a summary text box with total objective function value
-        # Place it in the top right corner of the figure
-        summary_text = (
-            f"Objective Function Summary:\n"
-            f"Total Penalty: {total_penalty:,.0f}\n\n"
-            f"Components:\n"
-            f"- Demand Deficit: {total_demand_penalty:,.0f}\n"
-            f"- Min Flow Deficit: {total_sink_penalty:,.0f}\n"
-            f"- Hydroworks Spills: {total_hw_spill_penalty:,.0f}\n"
-            f"- Reservoir Spills: {total_res_spill_penalty:,.0f}"
-        )
-        
-        ax1.text(
-            0.82, 0.97,
-            summary_text,
-            fontsize=12,
-            verticalalignment='top',
-            horizontalalignment='left',
-            transform=ax1.transAxes,
-            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
-        )
-        
-        plt.tight_layout()
-        
-        return self._save_plot("objective_function_breakdown")
-    
     def plot_network_overview(self):
         
         # Create a larger figure for detailed visualization
@@ -3863,10 +3539,10 @@ class WaterSystemVisualizer:
         # Node styling
         node_sizes = {
             SupplyNode: 1500,
-            StorageNode: 2200,
-            DemandNode: 1000,
-            SinkNode: 1500,
-            HydroWorks: 1500
+            StorageNode: 2500,
+            DemandNode: 1600,
+            SinkNode: 2500,
+            HydroWorks: 2000
         }
         
         node_colors = {
@@ -3886,11 +3562,11 @@ class WaterSystemVisualizer:
         }
 
         node_names = {
-            SupplyNode: 'Source',        # Square
-            StorageNode: 'Reservoir',       # Hexagon
+            SupplyNode: 'Source Node',        # Square
+            StorageNode: 'Storage Node',       # Hexagon
             DemandNode: 'Demand Node',        # Circle
-            SinkNode: 'Sink/Outflow',          # Diamond
-            HydroWorks: 'Hydrowork'         # Pentagon
+            SinkNode: 'Sink Node',          # Diamond
+            HydroWorks: 'Hydrowork Node'         # Pentagon
         }
         
         # Group nodes by type
@@ -3936,7 +3612,7 @@ class WaterSystemVisualizer:
             )
         
         # Add capacity-based edge labels for edges with significant capacity
-        capacity_threshold = 210  # Show labels for edges with >10% of max capacity
+        capacity_threshold = 0  # Show labels for edges with >10% of max capacity
         edge_labels = {(u, v): f"{edge_data['edge'].capacity:.0f}"
                     for u, v, edge_data in self.system.graph.edges(data=True)
                     if edge_data['edge'].capacity > capacity_threshold}
@@ -3944,7 +3620,7 @@ class WaterSystemVisualizer:
         '''nx.draw_networkx_edge_labels(
             self.system.graph, pos,
             edge_labels=edge_labels,
-            font_size=14,
+            font_size=18,
             font_color='black',
             font_weight='bold',
             bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1),
@@ -3961,11 +3637,11 @@ class WaterSystemVisualizer:
             node_labels[node_id] = label
         
         # Draw node labels with white outline for better visibility
-        for node, label in node_labels.items():
+        '''for node, label in node_labels.items():
             x, y = pos[node]
             txt = ax.text(x, y, label, fontsize=15, ha='center', va='center', 
                         fontweight='bold', zorder=5)
-            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='white')])
+            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='white')])'''
         
         # Create a legend
         legend_elements = []
@@ -3982,12 +3658,11 @@ class WaterSystemVisualizer:
         # Single edge capacity legend element
         legend_elements.append(
             Line2D([0], [0], color=edge_cmap(0.5), linewidth=3,
-            label=f'Canal')
+            label=f'Edge')
         )
         
         # Add the legend
-        ax.legend(handles=legend_elements, loc='upper right', fontsize=20,
-                title='System Components', title_fontsize=22,
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=22,
                 framealpha=0.9, fancybox=True, shadow=True)
     
 
@@ -3998,8 +3673,8 @@ class WaterSystemVisualizer:
         min_northing, max_northing = min(northings), max(northings)
         
         # Add a 5% padding
-        easting_padding = (max_easting - min_easting) * 0.01
-        northing_padding = (max_northing - min_northing) * 0.05
+        easting_padding = (max_easting - min_easting) * 0.02
+        northing_padding = (max_northing - min_northing) * 0.08
         
         # Set axis limits with padding
         ax.set_xlim(min_easting - easting_padding, max_easting + easting_padding)
@@ -4020,12 +3695,321 @@ class WaterSystemVisualizer:
         ax.plot([scale_bar_x, scale_bar_x + scale_bar_length], 
                 [scale_bar_y, scale_bar_y], 'k-', lw=3)
         ax.text(scale_bar_x + scale_bar_length/2, scale_bar_y + northing_padding*0.5, 
-                f"{scale_bar_length/1000:.0f} km", ha='center', fontweight='bold', fontsize=16)
+                f"{scale_bar_length/1000:.0f} km", ha='center', fontweight='bold', fontsize=22)
         
         plt.tight_layout()
         
-        return self._save_plot("network_overview")
+        return self._save_plot("network_overview")   
+
+    def plot_minimum_flow_compliance(self):
+        """
+        Create time series plots showing actual flows versus minimum flow requirements 
+        for all sink nodes that have minimum flow requirements.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        # Find sink nodes in the system that have minimum flow requirements
+        sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                    if isinstance(data['node'], SinkNode) and hasattr(data['node'], 'min_flows')]
+        
+        sink_nodes_with_requirements = [(id, node) for id, node in sink_nodes 
+                                    if any(flow > 0 for flow in node.min_flows)]
+        
+        if not sink_nodes_with_requirements:
+            print("No sink nodes with minimum flow requirements found in the system.")
+            return None
+
+        plt.rcParams.update({'font.size': 22})    
+        # Create figure with subplots
+        n_nodes = len(sink_nodes_with_requirements)
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(16, 6*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
+        
+        # Color scheme
+        colors = {
+            'actual': '#2196F3',    # Blue for actual flow
+            'minimum': '#FF9800',    # Orange for minimum requirement
+            'deficit': '#f44336'     # Red for deficit
+        }
+        time_steps = range(self.system.time_steps)
+        
+        # Create date labels for x-axis
+        date_labels = []
+        if hasattr(self.system, 'start_year') and hasattr(self.system, 'start_month'):
+            start_year = self.system.start_year
+            start_month = self.system.start_month
+            
+            for t in range(self.system.time_steps):
+                # Calculate year and month
+                month = start_month + t
+                year = start_year + (month - 1) // 12
+                month = ((month - 1) % 12) + 1  # Adjust month to be between 1-12
+                
+                # Format as year-month
+                date_labels.append(f"{month_names[month-1]}-{year}")
+        else:
+            # Fall back to timestep numbers if no date information is available
+            date_labels = list(time_steps)
+        
+        # Plot for each sink node
+        for idx, (node_id, node) in enumerate(sink_nodes_with_requirements):
+            ax = axes[idx]
+            
+            # Get flow data
+            min_flows = [node.get_min_flow(t) for t in time_steps]
+            actual_flows = node.flow_history[:len(time_steps)]
+            deficits = node.flow_deficits[:len(time_steps)]
+            
+            # Plot flows
+            ax.plot(time_steps, actual_flows, color=colors['actual'], 
+                    label='Modelled Flow', linewidth=2)
+            ax.plot(time_steps, min_flows, color=colors['minimum'], 
+                    label='Min Requirement', linewidth=2)
+            
+            # Fill deficit areas
+            ax.fill_between(time_steps, actual_flows, min_flows, 
+                        where=np.array(actual_flows) < np.array(min_flows),
+                        color=colors['deficit'], alpha=0.3, 
+                        label='Flow Deficit')
+            
+            # Calculate statistics
+            mean_actual = np.mean(actual_flows)
+            mean_required = np.mean(min_flows)
+            mean_deficit = np.mean(deficits)
+            total_deficit_volume = sum(deficits) * self.system.dt
+            compliance_rate = (sum(1 for a, m in zip(actual_flows, min_flows) if a >= m) 
+                            / len(time_steps) * 100)
+            
+            stats_text = (
+                #f"Statistics:\n"
+                #f"Mean Actual Flow: {mean_actual:.2f} m³/s\n"
+                #f"Mean Required Flow: {mean_required:.2f} m³/s\n"
+                #f"Mean Deficit: {mean_deficit:.2f} m³/s\n"
+                f"Total Deficit Volume: {total_deficit_volume:,.0f} m³"
+                #f"Compliance Rate: {compliance_rate:.1f}%"
+            )
+            
+            # Add stats text box
+            ax.text(0.02, 0.97, stats_text,
+                    transform=ax.transAxes,
+                    verticalalignment='top',
+                    bbox=dict(boxstyle='round',
+                            facecolor='white',
+                            alpha=0.8))
+            
+            # Customize subplot
+            ax.set_title(f'{node_id} Minimum Flow Requirement')
+            ax.set_ylabel('Flow Rate [m³/s]', fontsize=22)
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc='upper right')
+            
+            # Set custom x-ticks with year-month labels
+            tick_positions = list(time_steps)
+            
+            # If we have many time steps, use fewer ticks to avoid crowding
+            if len(tick_positions) > 12:
+                tick_spacing = max(1, len(tick_positions) // 12)
+                tick_positions = tick_positions[::tick_spacing]
+                tick_labels = [date_labels[i] for i in tick_positions]
+            else:
+                tick_labels = date_labels
+            
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels(tick_labels, rotation=45, ha='right')
+
+        
+        plt.tight_layout()
+        return self._save_plot("minimum_flow_compliance")
     
+    def plot_demand_deficit_heatmap(self):
+        """
+        Create enhanced heatmaps showing total demand deficits (both consumptive and non-consumptive)
+        across all demand nodes over time.
+        """
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        # Collect total deficits for each demand node
+        demand_nodes = [(node_id, data['node']) for node_id, data 
+                        in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], DemandNode)]
+        
+        if not demand_nodes:
+            print("No demand nodes found in the system.")
+            return
+        
+        # Create DataFrames for different deficit types
+        total_data = pd.DataFrame()
+        percentage_data = pd.DataFrame()
+        
+        # Get the start year and month from the first demand node
+        # (assuming all nodes have the same simulation period)
+        start_year = None
+        start_month = None
+        
+        # If we couldn't find start_year and start_month, try to get them from the system
+        if start_year is None and hasattr(self.system, 'start_year') and hasattr(self.system, 'start_month'):
+            start_year = self.system.start_year
+            start_month = self.system.start_month
+        
+        # Create date labels for x-axis
+        date_labels = []
+        if start_year is not None and start_month is not None:
+            for t in range(self.system.time_steps):
+                # Calculate year and month
+                month = start_month + t
+                year = start_year + (month - 1) // 12
+                month = ((month - 1) % 12) + 1  # Adjust month to be between 1-12
+                
+                # Format as year-month
+                date_labels.append(f"{month_names[month-1]}-{year}")
+        else:
+            # Fall back to timestep numbers if no date information is available
+            date_labels = list(range(self.system.time_steps))
+        
+        # Calculate deficits for each node and time step
+        for node_id, node in demand_nodes:
+            node_total_deficits = []
+            node_percentages = []
+            
+            for t in range(self.system.time_steps):
+                total_deficit = (node.get_demand_rate(t) - node.satisfied_demand_total[t])
+                node_total_deficits.append(total_deficit)
+                
+                # Calculate percentage based on total required flow
+                total_required = node.get_demand_rate(t)
+                if total_required > 0:
+                    percentage = (total_deficit / total_required) * 100
+                else:
+                    percentage = 0
+                node_percentages.append(percentage)
+            
+            total_data[node_id] = node_total_deficits
+            percentage_data[node_id] = node_percentages
+        
+        # Plot absolute deficits
+        plt.rcParams.update({'font.size': 18})
+        plt.figure(figsize=(16, 6))
+        sns.heatmap(total_data.T, cmap='YlOrRd', 
+                xticklabels=date_labels,
+                yticklabels=total_data.columns,
+                annot=False,
+                cbar_kws={'label': 'Deficit [m³/s]'})
+        #plt.xlabel('Period', fontsize=16)
+        plt.ylabel('Demand Node', fontsize=18)
+        #plt.title('Absolute Water Deficits', fontsize=18)
+        plt.xticks(plt.xticks()[0][::3], plt.xticks()[1][::3], fontsize=17, rotation=90)
+        plt.yticks(fontsize=17)
+        abs_filepath = self._save_plot("deficit_heatmap_absolute")
+        
+        # Plot percentage deficit
+        plt.figure(figsize=(16, 6))
+        sns.heatmap(percentage_data.T, cmap='YlOrRd',
+                    xticklabels=date_labels,
+                    yticklabels=percentage_data.columns,
+                    annot=False,
+                    cbar_kws={'label': 'Deficit [%]'})
+        #plt.xlabel('Period', fontsize=16)
+        plt.ylabel('Demand Node', fontsize=16)
+        #plt.title('Percentage of Total Unmet Demand', fontsize=18)
+        plt.xticks(plt.xticks()[0][::3], plt.xticks()[1][::3], fontsize=14, rotation=90)
+        plt.yticks(fontsize=14)
+        pct_filepath = self._save_plot("deficit_heatmap_percentage")
+        
+        return abs_filepath, pct_filepath
+
+    def plot_reservoir_volumes(self):
+        """
+        Create time series plots showing volume and water elevation for all reservoir (storage) nodes.
+        
+        Returns:
+            str: Path to the saved plot file
+        """
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        # Find storage nodes in the system
+        storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], StorageNode)]
+        
+        if not storage_nodes:
+            print("No storage nodes (reservoirs) found in the system.")
+            return None
+        
+        # Get the start year and month from the first demand node
+        # (assuming all nodes have the same simulation period)
+        start_year = None
+        start_month = None
+        
+        # If we couldn't find start_year and start_month, try to get them from the system
+        if start_year is None and hasattr(self.system, 'start_year') and hasattr(self.system, 'start_month'):
+            start_year = self.system.start_year
+            start_month = self.system.start_month
+        
+        # Create date labels for x-axis
+        date_labels = []
+        if start_year is not None and start_month is not None:
+            for t in range(self.system.time_steps):
+                # Calculate year and month
+                month = start_month + t
+                year = start_year + (month - 1) // 12
+                month = ((month - 1) % 12) + 1  # Adjust month to be between 1-12
+                
+                # Format as year-month
+                date_labels.append(f"{month_names[month-1]}-{year}")
+            
+        # Create figure with subplots - one per reservoir
+        n_nodes = len(storage_nodes)
+        plt.rcParams.update({'font.size': 22})
+        fig, axes = plt.subplots(n_nodes, 1, figsize=(16, 6*n_nodes), sharex=True)
+        if n_nodes == 1:
+            axes = [axes]
+        
+        # Plot for each reservoir
+        for idx, (node_id, node) in enumerate(storage_nodes):
+            ax1 = axes[idx]
+            
+            # Get volume and elevation data
+            # Note: storage and water_level arrays have one extra value for the next timestep
+            # We'll use all but the last value to match with time steps
+            volumes = np.array(node.storage[1:])/1e6 if node.storage else np.array([])  # Exclude first volume
+            water_levels = node.water_level[1:]  # Exclude first level
+            time_steps = range(len(volumes))  # Create matching time steps array
+            capacity = node.capacity
+            
+            # Plot volume time series
+            line1 = ax1.plot(time_steps, volumes, color='blue', 
+                            label='Storage Volume', linewidth=2)
+            
+            # Add capacity line
+            cap_line = ax1.axhline(y=capacity/1e6, color='red', linestyle='--', 
+                                label=f'Maximum Storage Capacity')
+            
+            
+            # Customize subplot
+            ax1.set_title(f'{node_id}')
+            ax1.set_ylabel(r'Volume [10$^6$ m³]')
+            ax1.grid(True, alpha=0.3)
+            
+            # Combine legends from both axes
+            lines = line1 + [cap_line]
+            labels = [l.get_label() for l in lines]
+            ax1.legend(lines, labels, loc='upper right')
+
+            tick_positions = list(time_steps)
+            
+            # If we have many time steps, use fewer ticks to avoid crowding
+            if len(tick_positions) > 12:
+                tick_spacing = max(1, len(tick_positions) // 12)
+                tick_positions = tick_positions[::tick_spacing]
+                tick_labels = [date_labels[i] for i in tick_positions]
+            else:
+                tick_labels = date_labels
+            
+            ax1.set_xticks(tick_positions)
+            ax1.set_xticklabels(tick_labels, rotation=45, ha='right')
+        
+        plt.tight_layout()
+        return self._save_plot("reservoir_volumes")
 
     def plot_objective_function_breakdown(self):
 
@@ -4034,6 +4018,25 @@ class WaterSystemVisualizer:
         sink_deficits = {}
         hw_spills = {}
         res_spills = {}
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+        # Create date labels for x-axis
+        date_labels = []
+        if hasattr(self.system, 'start_year') and hasattr(self.system, 'start_month'):
+            start_year = self.system.start_year
+            start_month = self.system.start_month
+            
+            for t in range(self.system.time_steps):
+                # Calculate year and month
+                month = start_month + t
+                year = start_year + (month - 1) // 12
+                month = ((month - 1) % 12) + 1  # Adjust month to be between 1-12
+                
+                # Format as year-month
+                date_labels.append(f"{month_names[month-1]}-{year}")
+        else:
+            # Fall back to timestep numbers if no date information is available
+            date_labels = list(time_steps)
         
         # Collect demand deficit penalties
         for node_id, node_data in self.system.graph.nodes(data=True):
@@ -4113,14 +4116,15 @@ class WaterSystemVisualizer:
         res_spill_pct = (total_res_spill_penalty / total_penalty * 100) if total_penalty > 0 else 0
         
         # Set up the figure and gridspec
-        fig = plt.figure(figsize=(14, 14))
+        plt.rcParams.update({'font.size': 20})
+        fig = plt.figure(figsize=(16, 16))
         gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[1.5, 1, 1])
         
         # Plot 1: Stacked bar chart of penalties by time step (large, at the top)
         ax1 = fig.add_subplot(gs[0, :])
         
         # Create stacked bar chart
-        bar_width = 0.8
+        bar_width = 0.4
         time_steps = range(self.system.time_steps)
         
         # Convert to numpy arrays for stacking
@@ -4130,33 +4134,45 @@ class WaterSystemVisualizer:
         res_spill_values = np.array(res_spill_total)
         
         # Create stacked bars
-        ax1.bar(time_steps, demand_values, bar_width, label=f'Demand Deficit', color='green')
-        ax1.bar(time_steps, sink_values, bar_width, bottom=demand_values, label=f'Min Flow Deficit', color='blue')
-        
+        ax1.bar(np.array(time_steps) - bar_width/2, np.maximum(demand_values, 0), bar_width, label=f'Demand Deficit', color='green')
+        ax1.bar(np.array(time_steps) + bar_width/2, np.maximum(sink_values, 0), bar_width, label=f'Min Flow Deficit', color='blue')
+      
         # Calculate bottom positions for hydroworks spills
         bottom_hw = demand_values + sink_values
-        ax1.bar(time_steps, hw_spill_values, bar_width, bottom=bottom_hw, label=f'Hydroworks Spills', color='red')
+        #ax1.bar(time_steps, hw_spill_values, bar_width, bottom=bottom_hw, label=f'Hydroworks Spills', color='red')
         
         # Calculate bottom positions for reservoir spills
         bottom_res = bottom_hw + hw_spill_values
-        ax1.bar(time_steps, res_spill_values, bar_width, bottom=bottom_res, label=f'Reservoir Spills', color='purple')
+        #ax1.bar(time_steps, res_spill_values, bar_width, bottom=bottom_res, label=f'Reservoir Spills', color='purple')
         
         # Add total penalty as a line on top
         total_by_timestep = demand_values + sink_values + hw_spill_values + res_spill_values
         #ax1.plot(time_steps, total_by_timestep, 'k-', label='Total Penalty', linewidth=3, marker='o', markersize=8)
         
-        ax1.set_title(f'Penalties by Component and Time Step - {self.name}', fontsize=20)
-        ax1.set_xlabel('Time Step', fontsize=16)
-        ax1.set_ylabel('Penalty Volume [km³]', fontsize=16)
-        ax1.tick_params(axis='both', which='major', labelsize=14)
+        ax1.set_title(f'Composition of the Objective Function (OF) value: {self.name}', fontsize=24)
+        ax1.set_ylabel('Contribution to OF [km³]', fontsize=20)
+        ax1.tick_params(axis='both', which='major', labelsize=18)
         ax1.grid(True, alpha=0.3, axis='y')
-        ax1.legend(fontsize=16, loc='upper right')
+        ax1.legend(fontsize=20, loc='upper right')
+        # Set custom x-ticks with year-month labels
+        tick_positions = list(time_steps)
+            
+        # If we have many time steps, use fewer ticks to avoid crowding
+        if len(tick_positions) > 12:
+            tick_spacing = max(1, len(tick_positions) // 12)
+            tick_positions = tick_positions[::tick_spacing]
+            tick_labels = [date_labels[i] for i in tick_positions]
+        else:
+            tick_labels = date_labels
+        
+        ax1.set_xticks(tick_positions)
+        ax1.set_xticklabels(tick_labels, rotation=45, ha='right')
         
         # Plot 2: Breakdown of total penalties by type (pie chart)
         ax2 = fig.add_subplot(gs[1, 0])
-        components = ['Demand Deficit', 'Hydroworks Spills', 'Min Flow Deficit',  'Reservoir Spills']
-        values = [total_demand_penalty, total_hw_spill_penalty, total_sink_penalty,  total_res_spill_penalty]
-        colors = ['green', 'red', 'blue', 'yellow']
+        components = ['Demand Deficit',  'Minimum Flow\n Requirement Deficit'] #,  'Reservoir Spills'] 'Hydroworks Spills',
+        values = [total_demand_penalty,  total_sink_penalty]#,  total_res_spill_penalty] total_hw_spill_penalty,
+        colors = ['green',  'blue'] #, 'yellow'] 'red',
         
         # Create pie chart
         wedges, texts, autotexts = ax2.pie(
@@ -4169,14 +4185,14 @@ class WaterSystemVisualizer:
         )
         
         for autotext in autotexts:
-            autotext.set_fontsize(14)
+            autotext.set_fontsize(18)
             #autotext.set_weight('bold')
             autotext.set_backgroundcolor('white')
         
         for text in texts:
-            text.set_fontsize(14)
+            text.set_fontsize(18)
         
-        ax2.set_title('Breakdown of Total Penalty by Component', fontsize=18)
+        ax2.set_title('Contribution to OF', fontsize=18)
         
         # Plot 3: Detailed breakdown of demand deficit penalties by node
         ax3 = fig.add_subplot(gs[1, 1])
@@ -4187,22 +4203,11 @@ class WaterSystemVisualizer:
             top_nodes = demand_by_node.head(10)  # Show top 10 nodes
             
             bars = ax3.barh(list(top_nodes.index), top_nodes.values, color='green')
-            ax3.set_title('Demand Deficit Penalties by Node', fontsize=18)
-            ax3.set_xlabel('Total Penalty [km³]', fontsize=16)
-            ax3.set_ylabel('Demand Node', fontsize=16)
-            ax3.tick_params(axis='both', which='major', labelsize=16)
+            ax3.set_title('Demand Deficit', fontsize=20)
+            ax3.set_xlabel('Contribution to OF [km³]', fontsize=20)
+            ax3.tick_params(axis='both', which='major', labelsize=18)
             ax3.grid(True, alpha=0.3, axis='x')
             
-            # Add value labels to bars
-            for bar in bars:
-                width = bar.get_width()
-                ax3.text(
-                    width + (width * 0.02),
-                    bar.get_y() + bar.get_height()/2,
-                    f'{width:,.2f}',
-                    va='center',
-                    fontsize=14
-                )
         else:
             ax3.text(0.5, 0.5, 'No demand deficit data available', 
                     ha='center', va='center', fontsize=14)
@@ -4216,22 +4221,11 @@ class WaterSystemVisualizer:
             sink_by_node = sink_df.sum().sort_values(ascending=False)
             
             bars = ax4.barh(list(sink_by_node.index), sink_by_node.values, color='blue')
-            ax4.set_title('Min Flow Deficit Penalties by Node', fontsize=18)
-            ax4.set_xlabel('Total Penalty [km³]', fontsize=16)
-            ax4.set_ylabel('Sink Node', fontsize=16)
-            ax4.tick_params(axis='both', which='major', labelsize=16)
+            ax4.set_title('Minimum Flow Requirement Deficit', fontsize=20)
+            ax4.set_xlabel('Contribution to OF [km³]', fontsize=20)
+            ax4.tick_params(axis='both', which='major', labelsize=18)
             ax4.grid(True, alpha=0.3, axis='x')
             
-            # Add value labels to bars
-            for bar in bars:
-                width = bar.get_width()
-                ax4.text(
-                    width + (width * 0.02),
-                    bar.get_y() + bar.get_height()/2,
-                    f'{width:,.2f}',
-                    va='center',
-                    fontsize=14
-                )
         else:
             ax4.text(0.5, 0.5, 'No min flow deficit data available', 
                     ha='center', va='center', fontsize=14)
@@ -4239,15 +4233,10 @@ class WaterSystemVisualizer:
         
         # Add a summary text box with total objective function value
         summary_text = (
-            f"Objective Function Summary:\n"
-            f"Total Penalty: {total_penalty:,.2f} km³\n\n"
+            f"Objective Function (OF) Summary:\n"
+            f"Total OF value: {total_penalty:,.2f} km³\n"
+            f"Normalized annual OF value:{total_penalty / (len(time_steps)/12):,.2f} km³/a\n\n"
             f"Components:\n"
-            f"- Demand Deficit: {total_demand_penalty:,.2f} km³ ({demand_pct:.1f}%)\n"
-            f"- Min Flow Deficit: {total_sink_penalty:,.2f} km³ ({sink_pct:.1f}%)\n"
-            f"- Hydroworks Spills: {total_hw_spill_penalty:,.2f} km³ ({hw_spill_pct:.1f}%)\n"
-            f"- Reservoir Spills: {total_res_spill_penalty:,.2f} km³ ({res_spill_pct:.1f}%)\n\n"
-            f"Annual averages:\n"
-            f"- Total Penalty: {total_penalty / 6:,.2f} km³/a\n"
             f"- Demand Deficit: {total_demand_penalty / 6:,.2f} km³/a\n"
             f"- Min Flow Deficit: {total_sink_penalty / 6:,.2f} km³/a\n"
             f"- Hydroworks Spills: {total_hw_spill_penalty / 6:,.2f} km³/a\n"
@@ -4255,9 +4244,9 @@ class WaterSystemVisualizer:
         )
         
         fig.text(
-            0.07, 0.05, 
+            0.07, 0.07, 
             summary_text,
-            fontsize=16,
+            fontsize=20,
             verticalalignment='bottom',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
         )

@@ -21,7 +21,7 @@ class WaterSystem:
         time_steps (int): The number of time steps in the most recent simulation.
     """
 
-    def __init__(self, dt=2629800):  # Default to average month in seconds (365.25 days / 12 months * 24 hours * 3600 seconds)
+    def __init__(self, dt=2629800, start_year=2017, start_month=1):  # Default to average month in seconds (365.25 days / 12 months * 24 hours * 3600 seconds)
         """
         Initialize a new WaterSystem instance.
 
@@ -31,7 +31,9 @@ class WaterSystem:
         self.graph = nx.DiGraph()
         self.time_steps = 0
         self.dt = dt
-
+        self.start_year = start_year
+        self.start_month = start_month
+        
     def add_node(self, node):
         """
         Add a node to the water system.
