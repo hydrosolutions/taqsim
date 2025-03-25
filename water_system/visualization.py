@@ -20,6 +20,8 @@ from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 class WaterSystemVisualizer:
     """
@@ -897,544 +899,6 @@ class WaterSystemVisualizer:
             plt.close()
         
         return plot_paths
-    
-    def create_interactive_network_visualization(self):
-        """Creates an offline interactive network visualization using Plotly."""
-
-        def create_frame(timestep):
-            """
-            Create a frame for the given timestep in the water system simulation.
-            Parameters:
-            timestep (int): The current timestep for which the frame is being created.
-            Returns:
-            list: A list of Plotly Scatter traces representing the edges and nodes of the water system.
-            The function performs the following steps:
-            1. Initializes empty lists for node and edge traces.
-            2. Iterates over the edges to create edge traces:
-                - Determines the source and target nodes for each edge.
-                - Calculates the flow and flow percentage for the current timestep.
-                - Sets the color and width of the edge based on the flow percentage.
-                - Creates a Plotly Scatter trace for the edge with the calculated properties.
-            3. Iterates over different node types to create node traces:
-                - Filters nodes by their type and shape.
-                - Creates a Plotly Scatter trace for each node type with appropriate markers and properties.
-            4. Combines and returns the edge and node traces.
-            Note:
-            - The function assumes that `edges`, `nodes`, and `max_flow` are defined in the scope where this function is called.
-            - The `textposition` parameter in the edge trace is set to 'middle center'. Other possible values include:
-                - 'top left', 'top center', 'top right'
-                - 'middle left', 'middle right'
-                - 'bottom left', 'bottom center', 'bottom right'
-            """
-            node_traces = []
-            edge_traces = []
-            
-            # Create edge traces
-            for edge in edges:
-                source = next(n for n in nodes if n['id'] == edge['source'])
-                target = next(n for n in nodes if n['id'] == edge['target'])
-                flow = edge['flows'][timestep] if timestep < len(edge['flows']) else 0
-                flow_pct = flow / edge['capacity'] if edge['capacity'] > 0 else 0
-                
-                color = '#BFDBFE' if flow_pct < 0.5 else '#2563EB' if flow_pct < 0.8 else '#1E3A8A' if flow_pct < 0.99 else '#8B0000'
-                width = 1 + (flow / max_flow * 80) if flow > 0 else 1
-                
-                edge_trace = go.Scatter(
-                    x=[source['easting'], target['easting']],
-                    y=[source['northing'], target['northing']],
-                    mode='lines',
-                    line=dict(width=width, color=color),
-                    hoverinfo='none',
-                    showlegend=False
-                )
-                
-                # Add a separate trace for the text to display it on hover only
-                text_trace = go.Scatter(
-                    x=[(source['easting'] + target['easting']) / 2],
-                    y=[(source['northing'] + target['northing']) / 2],
-                    mode='markers',
-                    marker=dict(opacity=0),
-                    text=[f'{flow:.1f} m³/s'],
-                    hoverinfo='text',
-                    showlegend=False
-                )
-                edge_traces.append(edge_trace)
-                edge_traces.append(text_trace)
-                edge_traces.append(edge_trace)
-
-            # Create node traces by type
-            for node_type in ['Supply', 'Storage', 'Demand', 'Sink', 'Hydroworks']:
-                nodes_of_type = [n for n in nodes if n['shape'] == ('circle' if node_type in ['Demand', 'Hydroworks'] else 'square')]
-                
-                if nodes_of_type:
-                    node_trace = go.Scatter(
-                        x=[n['easting'] for n in nodes_of_type],
-                        y=[n['northing'] for n in nodes_of_type],
-                        mode='markers',
-                        marker=dict(
-                            symbol='circle' if node_type in ['Demand', 'Hydroworks'] else 'square',
-                            size=20,
-                            color=[n['color'] for n in nodes_of_type],
-                            line=dict(width=1, color='black')
-                        ),
-                        text=[n['id'] for n in nodes_of_type],
-                        hoverinfo='text',
-                        name=node_type, 
-                        showlegend=False
-                    )
-                    node_traces.append(node_trace)
-                    
-            return edge_traces + node_traces
-
-        # Collect node and edge data
-        nodes = []
-        edges = []
-        max_flow = 0
-        
-        for node_id, data in self.system.graph.nodes(data=True):
-            node = data['node']
-            node_type = type(node).__name__
-            
-            color = {
-                'SupplyNode': 'rgb(135, 206, 235)',
-                'StorageNode': 'rgb(144, 238, 144)',
-                'DemandNode': 'rgb(250, 128, 114)',
-                'SinkNode': 'rgb(211, 211, 211)',
-                'HydroWorks': 'rgb(255, 165, 0)'
-            }.get(node_type, 'gray')
-            
-            nodes.append({
-                'id': node_id,
-                'easting': float(node.easting),
-                'northing': float(node.northing),
-                'color': color,
-                'shape': 'circle' if node_type in ['DemandNode', 'HydroWorks'] else 'square'
-            })
-
-        for u, v, data in self.system.graph.edges(data=True):
-            edge = data['edge']
-            flows = [float(f) for f in edge.outflow] if edge.outflow else []
-            if flows:
-                max_flow = max(max_flow, max(flows))
-                
-            edges.append({
-                'source': u,
-                'target': v,
-                'capacity': float(edge.capacity),
-                'flows': flows
-            })
-
-        # Create animation frames
-        frames = [go.Frame(
-            data=create_frame(t),
-            name=f'frame{t}'
-        ) for t in range(self.system.time_steps)]
-
-        # Create initial figure
-        fig = go.Figure(
-            data=create_frame(0),
-            frames=frames,
-            layout=go.Layout(
-                title=dict(
-                    text='Water System Network',
-                    x=0.5,
-                    y=0.95
-                ),
-                width=1200,
-                height=800,
-                showlegend=True,
-                legend=dict(
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=1.05,
-                    bgcolor='rgba(255, 255, 255, 0.8)'
-                ),
-                updatemenus=[dict(
-                    type='buttons',
-                    showactive=False,
-                    buttons=[
-                        dict(label='Play',
-                            method='animate',
-                            args=[None, dict(frame=dict(duration=1000, redraw=True),
-                                            fromcurrent=True,
-                                            mode='immediate')]),
-                        dict(label='Pause',
-                            method='animate',
-                            args=[[None], dict(frame=dict(duration=0, redraw=False),
-                                            mode='immediate')])
-                    ],
-                    x=0.1,
-                    y=1.1
-                )],
-                sliders=[dict(
-                    currentvalue=dict(
-                        prefix='Timestep: ',
-                        visible=True,
-                        xanchor='right'
-                    ),
-                    steps=[dict(
-                        method='animate',
-                        args=[[f'frame{k}'], dict(mode='immediate', frame=dict(duration=0))],
-                        label=str(k)
-                    ) for k in range(self.system.time_steps)]
-                )],
-                xaxis=dict(
-                    showgrid=False,
-                    zeroline=False,
-                    showticklabels=False
-                ),
-                yaxis=dict(
-                    showgrid=False,
-                    zeroline=False,
-                    showticklabels=False
-                ),
-                margin=dict(t=100, r=200)
-            )
-        )
-
-        # Save as standalone HTML
-        save_path = os.path.join(self.image_dir, f"{self.name}_network_vis.html")
-        pio.write_html(fig, save_path, auto_open=False, include_plotlyjs=True)
-        
-        return save_path
-
-    def create_interactive_network_visualization_old(self):
-        """
-        Create an interactive visualization of the water system network as a React component.
-        Network shows flows changing over time with an interactive time slider.
-        
-        Returns:
-            str: Path to the saved HTML file containing the interactive visualization
-        """
-        # Collect node data
-        nodes = []
-        for node_id, data in self.system.graph.nodes(data=True):
-            node = data['node']
-            node_type = type(node)
-            
-            # Determine node style based on type
-            color = {
-                SupplyNode: 'rgb(135, 206, 235)',  # skyblue
-                StorageNode: 'rgb(144, 238, 144)',  # lightgreen
-                DemandNode: 'rgb(250, 128, 114)',   # salmon
-                SinkNode: 'rgb(211, 211, 211)',     # lightgray
-                HydroWorks: 'rgb(255, 165, 0)'      # orange
-            }.get(node_type, 'gray')
-            
-            shape = 'circle' if node_type in [DemandNode, HydroWorks] else 'square'
-            
-            nodes.append({
-                'id': node_id,
-                'easting': float(node.easting),
-                'northing': float(node.northing),
-                'color': color,
-                'shape': shape
-            })
-        
-        # Collect edge data
-        edges = []
-        max_flow = 0
-        
-        for u, v, data in self.system.graph.edges(data=True):
-            edge = data['edge']
-            flows = [float(f) for f in edge.outflow] if edge.outflow else []
-            if flows:
-                max_flow = max(max_flow, max(flows))
-            
-            edges.append({
-                'source': u,
-                'target': v,
-                'capacity': float(edge.capacity),
-                'flows': flows
-            })
-        
-        # Create network data object
-        network_data = {
-            'nodes': nodes,
-            'edges': edges,
-            'maxFlow': max_flow,
-            'timeSteps': self.system.time_steps
-        }
-        
-        # Convert network data to JSON string
-        network_data_json = json.dumps(network_data)
-        
-        # Load the HTML template from a separate file
-        html_template = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Interactive Water System Network</title>
-        <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-        <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
-        <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-        <script src="https://cdn.tailwindcss.com"></script>
-    </head>
-    <body>
-        <div id="root"></div>
-        <script type="text/babel">
-            // Network data
-            const networkData = NETWORK_DATA_PLACEHOLDER;
-            
-            const NetworkGraph = ({data, width = 1000, height = 800}) => {
-                const [currentTimestep, setCurrentTimestep] = React.useState(0);
-                const [isPlaying, setIsPlaying] = React.useState(false);
-                const [playSpeed, setPlaySpeed] = React.useState(1000);
-
-                const { nodes, edges, maxFlow, timeSteps } = data;
-
-                if (!nodes || !edges || nodes.length === 0) {
-                    return (
-                        <div className="flex items-center justify-center w-full h-full min-h-[400px] bg-gray-50 rounded-lg border">
-                            <p className="text-gray-500">No network data available</p>
-                        </div>
-                    );
-                }
-
-                // Calculate scales
-                const eastings = nodes.map(n => n.easting);
-                const northings = nodes.map(n => n.northing);
-                const minEasting = Math.min(...eastings);
-                const maxEasting = Math.max(...eastings);
-                const minNorthing = Math.min(...northings);
-                const maxNorthing = Math.max(...northings);
-
-                const padding = 0.1;
-                const eastingRange = maxEasting - minEasting;
-                const northingRange = maxNorthing - minNorthing;
-                const paddedMinEasting = minEasting - eastingRange * padding;
-                const paddedMaxEasting = maxEasting + eastingRange * padding;
-                const paddedMinNorthing = minNorthing - northingRange * padding;
-                const paddedMaxNorthing = maxNorthing + northingRange * padding;
-
-                const scaleX = x => ((x - paddedMinEasting) / (paddedMaxEasting - paddedMinEasting)) * width;
-                const scaleY = y => height - ((y - paddedMinNorthing) / (paddedMaxNorthing - paddedMinNorthing)) * height;
-
-                const getEdgeProperties = edge => {
-                    const flow = edge.flows[currentTimestep] || 0;
-                    const minWidth = 1;
-                    const maxWidth = 50;
-                    const width = flow > 0 ? ((flow / maxFlow) * (maxWidth - minWidth)) + minWidth : minWidth;
-
-                    const flowPercent = edge.capacity > 0 ? flow / edge.capacity : 0;
-                    let color;
-                    if (flowPercent < 0.33) color = '#BFDBFE';
-                    else if (flowPercent < 0.66) color = '#2563EB';
-                    else color = '#1E3A8A';
-
-                    return { width, color, flow };
-                };
-
-                React.useEffect(() => {
-                    let interval;
-                    if (isPlaying) {
-                        interval = setInterval(() => {
-                            setCurrentTimestep(prev => {
-                                if (prev >= timeSteps - 1) {
-                                    setIsPlaying(false);
-                                    return 0;
-                                }
-                                return prev + 1;
-                            });
-                        }, playSpeed);
-                    }
-                    return () => clearInterval(interval);
-                }, [isPlaying, playSpeed, timeSteps]);
-
-                return (
-                    <div className="flex flex-col gap-4 p-4 w-full bg-white rounded-lg shadow">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-xl font-bold">Water System Network - Timestep {currentTimestep}</h2>
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={() => setCurrentTimestep(0)}
-                                    className="p-2 rounded hover:bg-gray-100"
-                                >
-                                    Reset
-                                </button>
-                                <button 
-                                    onClick={() => setIsPlaying(!isPlaying)}
-                                    className="p-2 rounded hover:bg-gray-100"
-                                >
-                                    {isPlaying ? 'Pause' : 'Play'}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                            <input
-                                type="range"
-                                min="0"
-                                max={timeSteps - 1}
-                                value={currentTimestep}
-                                onChange={e => {
-                                    setCurrentTimestep(Number(e.target.value));
-                                    setIsPlaying(false);
-                                }}
-                                className="w-full"
-                            />
-                        </div>
-
-                        <div className="flex gap-4">
-                            <svg width={width} height={height} className="border rounded">
-                                {/* Draw edges */}
-                                {edges.map((edge, i) => {
-                                    const source = nodes.find(n => n.id === edge.source);
-                                    const target = nodes.find(n => n.id === edge.target);
-                                    const { width: strokeWidth, color, flow } = getEdgeProperties(edge);
-                                    
-                                    const x1 = scaleX(source.easting);
-                                    const y1 = scaleY(source.northing);
-                                    const x2 = scaleX(target.easting);
-                                    const y2 = scaleY(target.northing);
-
-                                    // Calculate curved path
-                                    const dx = x2 - x1;
-                                    const dy = y2 - y1;
-                                    const angle = Math.atan2(dy, dx);
-                                    const length = Math.sqrt(dx * dx + dy * dy);
-                                    
-                                    const midX = (x1 + x2) / 2;
-                                    const midY = (y1 + y2) / 2;
-                                    const curveOffset = length * 0.2;
-                                    const ctrlX = midX - curveOffset * Math.sin(angle);
-                                    const ctrlY = midY + curveOffset * Math.cos(angle);
-
-                                    return (
-                                        <g key={i}>
-                                            <path
-                                                d={`M ${x1} ${y1} L ${x2} ${y2}`}
-                                                stroke={color}
-                                                strokeWidth={strokeWidth}
-                                                fill="none"
-                                                markerEnd="url(#arrowhead)"
-                                            />
-                                            <text
-                                                x={midX}
-                                                y={midY}
-                                                dy={-10}
-                                                textAnchor="middle"
-                                                fill="black"
-                                                fontSize="12"
-                                            >
-                                                {flow.toFixed(1)} m³/s
-                                            </text>
-                                        </g>
-                                    );
-                                })}
-
-                                {/* Draw nodes */}
-                                {nodes.map((node, i) => {
-                                    const x = scaleX(node.easting);
-                                    const y = scaleY(node.northing);
-                                    const size = 20;
-
-                                    return (
-                                        <g key={i}>
-                                            {node.shape === 'circle' ? (
-                                                <circle
-                                                    cx={x}
-                                                    cy={y}
-                                                    r={size / 2}
-                                                    fill={node.color}
-                                                    stroke="black"
-                                                    strokeWidth="1"
-                                                />
-                                            ) : (
-                                                <rect
-                                                    x={x - size / 2}
-                                                    y={y - size / 2}
-                                                    width={size}
-                                                    height={size}
-                                                    fill={node.color}
-                                                    stroke="black"
-                                                    strokeWidth="1"
-                                                />
-                                            )}
-                                            <text
-                                                x={x}
-                                                y={y + size}
-                                                textAnchor="middle"
-                                                fill="black"
-                                                fontSize="12"
-                                            >
-                                                {node.id}
-                                            </text>
-                                        </g>
-                                    );
-                                })}
-                            </svg>
-
-                            <div className="border rounded p-4 bg-gray-50">
-                                <h3 className="font-bold mb-2">Legend</h3>
-                                <div className="space-y-2">
-                                    <div>
-                                        <h4 className="text-sm font-semibold">Node Types</h4>
-                                        <div className="space-y-1">
-                                            {[
-                                                { type: 'Supply Node', color: 'rgb(135, 206, 235)', shape: 'square' },
-                                                { type: 'Storage Node', color: 'rgb(144, 238, 144)', shape: 'square' },
-                                                { type: 'Demand Node', color: 'rgb(250, 128, 114)', shape: 'circle' },
-                                                { type: 'Sink Node', color: 'rgb(211, 211, 211)', shape: 'square' },
-                                                { type: 'Hydroworks', color: 'rgb(255, 165, 0)', shape: 'circle' }
-                                            ].map((item, i) => (
-                                                <div key={i} className="flex items-center gap-2">
-                                                    <div 
-                                                        className="w-4 h-4 rounded"
-                                                        style={{ backgroundColor: item.color }}
-                                                    />
-                                                    <span className="text-sm">{item.type}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-semibold">Flow Capacity</h4>
-                                        <div className="space-y-1">
-                                            {[
-                                                { type: '< 33% capacity', color: '#BFDBFE' },
-                                                { type: '33-66% capacity', color: '#2563EB' },
-                                                { type: '> 66% capacity', color: '#1E3A8A' }
-                                            ].map((item, i) => (
-                                                <div key={i} className="flex items-center gap-2">
-                                                    <div 
-                                                        className="w-8 h-1 rounded"
-                                                        style={{ backgroundColor: item.color }}
-                                                    />
-                                                    <span className="text-sm">{item.type}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            };
-
-            // Render the app
-            ReactDOM.render(
-                <NetworkGraph data={networkData} />,
-                document.getElementById('root')
-            );
-        </script>
-    </body>
-    </html>
-    """
-        
-        # Replace the placeholder with actual data
-        html_content = html_template.replace('NETWORK_DATA_PLACEHOLDER', network_data_json)
-        
-        # Save the HTML file
-        filename = f"{self.name}_interactive_network.html" if self.name else "water_system_network.html"
-        filepath = os.path.join(self.image_dir, filename)
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        return filepath
     
     def plot_storage_dynamics(self):
         """
@@ -3510,7 +2974,7 @@ class WaterSystemVisualizer:
     def plot_network_overview(self):
         
         # Create a larger figure for detailed visualization
-        fig, ax = plt.subplots(figsize=(20, 8))
+        fig, ax = plt.subplots(figsize=(10, 8))
         
         # Setting node positions based on easting and northing
         pos = {}
@@ -3662,8 +3126,8 @@ class WaterSystemVisualizer:
         )
         
         # Add the legend
-        ax.legend(handles=legend_elements, loc='upper right', fontsize=22,
-                framealpha=0.9, fancybox=True, shadow=True)
+        '''ax.legend(handles=legend_elements, loc='upper right', fontsize=22,
+                framealpha=0.9, fancybox=True, shadow=True)'''
     
 
         # Find geographic bounding box
@@ -3687,7 +3151,7 @@ class WaterSystemVisualizer:
         plt.axis('off')
         
         # Optional: Add a scale bar (if geographic coordinates)
-        scale_bar_length = 25000  # 10% of the x-span
+        '''scale_bar_length = 25000  # 10% of the x-span
         
         # Add scale bar at the bottom of the plot
         scale_bar_x = min_easting + easting_padding
@@ -3695,7 +3159,7 @@ class WaterSystemVisualizer:
         ax.plot([scale_bar_x, scale_bar_x + scale_bar_length], 
                 [scale_bar_y, scale_bar_y], 'k-', lw=3)
         ax.text(scale_bar_x + scale_bar_length/2, scale_bar_y + northing_padding*0.5, 
-                f"{scale_bar_length/1000:.0f} km", ha='center', fontweight='bold', fontsize=22)
+                f"{scale_bar_length/1000:.0f} km", ha='center', fontweight='bold', fontsize=22)'''
         
         plt.tight_layout()
         
@@ -4254,3 +3718,219 @@ class WaterSystemVisualizer:
         plt.tight_layout()
         
         return self._save_plot("objective_function_breakdown")
+    
+    def create_interactive_network_visualization(self):
+        """Creates an offline interactive network visualization using Plotly."""
+
+        def create_frame(timestep):
+            node_traces = []
+            edge_traces = []
+            
+            # Create edge traces
+            for edge in edges:
+                source = next(n for n in nodes if n['id'] == edge['source'])
+                target = next(n for n in nodes if n['id'] == edge['target'])
+                flow = edge['flows'][timestep] if timestep < len(edge['flows']) else 0
+                flow_pct = flow / edge['capacity'] if edge['capacity'] > 0 else 0
+                
+                color ='#BFDBFE' #if flow_pct < 0.5 else '#2563EB' if flow_pct < 0.8 else '#1E3A8A' if flow_pct < 0.99 else '#8B0000'
+                width = 5 + (flow / max_flow * 80) if flow > 0 else 1
+                
+                edge_trace = go.Scatter(
+                    x=[source['easting'], target['easting']],
+                    y=[source['northing'], target['northing']],
+                    mode='lines',
+                    line=dict(width=width, color=color),
+                    hoverinfo='none',
+                    showlegend=False
+                )
+                
+                text_trace = go.Scatter(
+                    x=[(source['easting'] + target['easting']) / 2],
+                    y=[(source['northing'] + target['northing']) / 2],
+                    mode='markers',
+                    marker=dict(opacity=0),
+                    text=[f'{flow:.1f} m³/s'],
+                    hoverinfo='text',
+                    showlegend=False
+                )
+                edge_traces.append(edge_trace)
+                edge_traces.append(text_trace)
+                edge_traces.append(edge_trace)
+
+            # Create node traces by shape
+            for shape in ['square', 'hexagon', 'circle', 'diamond', 'pentagon']:
+                nodes_of_shape = [n for n in nodes if n['shape'] == shape]
+                if nodes_of_shape:
+                    node_trace = go.Scatter(
+                        x=[n['easting'] for n in nodes_of_shape],
+                        y=[n['northing'] for n in nodes_of_shape],
+                        mode='markers',
+                        marker=dict(
+                            symbol=shape,
+                            size=20,
+                            color=[n['color'] for n in nodes_of_shape],
+                            line=dict(width=1, color='black')
+                        ),
+                        text=[n['id'] for n in nodes_of_shape],
+                        hoverinfo='text',
+                        name=shape,
+                        showlegend=False
+                    )
+                    node_traces.append(node_trace)
+            
+            # Add legend traces (only in the first frame)
+            if timestep == 0:
+                legend_items = [
+                    ('Supply Node', 'square', '#2196F3'),
+                    ('Storage Node', 'hexagon', '#4CAF50'),
+                    ('Demand Node', 'circle', '#F44336'),
+                    ('Sink Node', 'diamond', '#9E9E9E'),
+                    ('Hydrowork Node', 'pentagon', '#FF9800')
+                ]
+
+                for name, symbol, color in legend_items:
+                    legend_trace = go.Scatter(
+                        x=[None], y=[None],
+                        mode='markers',
+                        marker=dict(
+                            symbol=symbol,
+                            size=20,
+                            color=color,
+                            line=dict(width=1, color='black')
+                        ),
+                        name=name,
+                        showlegend=True
+                    )
+                    node_traces.append(legend_trace)
+
+            return edge_traces + node_traces
+
+        # Collect node and edge data
+        nodes = []
+        edges = []
+        max_flow = 0
+        
+        for node_id, data in self.system.graph.nodes(data=True):
+            node = data['node']
+            node_type = type(node)
+
+            color = {
+                SupplyNode: '#2196F3',     # Blue
+                StorageNode: '#4CAF50',    # Green
+                DemandNode: '#F44336',     # Red
+                SinkNode: '#9E9E9E',       # Grey
+                HydroWorks: '#FF9800'      # Orange
+            }.get(node_type, 'gray')
+
+            shape = {
+                SupplyNode: 'square',
+                StorageNode: 'hexagon',
+                DemandNode: 'circle',
+                SinkNode: 'diamond',
+                HydroWorks: 'pentagon'
+            }.get(node_type, 'circle')
+
+            nodes.append({
+                'id': node_id,
+                'easting': float(node.easting),
+                'northing': float(node.northing),
+                'color': color,
+                'shape': shape
+            })
+
+        for u, v, data in self.system.graph.edges(data=True):
+            edge = data['edge']
+            flows = [float(f) for f in edge.outflow] if edge.outflow else []
+            if flows:
+                max_flow = max(max_flow, max(flows))
+                
+            edges.append({
+                'source': u,
+                'target': v,
+                'capacity': float(edge.capacity),
+                'flows': flows
+            })
+
+        # Create animation frames
+        frames = [go.Frame(
+            data=create_frame(t),
+            name=f'frame{t}'
+        ) for t in range(self.system.time_steps)]
+
+        start_date = datetime(self.system.start_year, self.system.start_month, 1)
+        steps = [
+            dict(
+                method='animate',
+                args=[[f'frame{k}'], dict(mode='immediate', frame=dict(duration=0))],
+                label=(start_date + relativedelta(months=k)).strftime('%b %Y')  # e.g. "Jan 2025"
+            )
+            for k in range(self.system.time_steps)
+        ]
+        # Create initial figure
+        fig = go.Figure(
+            data=create_frame(0),
+            frames=frames,
+            layout=go.Layout(
+                title=dict(
+                    text='ZRB Model',
+                    x=0.5,
+                    y=0.95
+                ),
+                width=1200,
+                height=800,
+                showlegend=True,
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=1.05,
+                    bgcolor='rgba(255, 255, 255, 0.8)'
+                ),
+                updatemenus=[dict(
+                    type='buttons',
+                    showactive=False,
+                    buttons=[
+                        dict(label='Play',
+                            method='animate',
+                            args=[None, dict(frame=dict(duration=1000, redraw=True),
+                                            fromcurrent=True,
+                                            mode='immediate')]),
+                        dict(label='Pause',
+                            method='animate',
+                            args=[[None], dict(frame=dict(duration=0, redraw=False),
+                                                mode='immediate')])
+                    ],
+                    x=0.1,
+                    y=1.1
+                )],
+                
+                
+
+                sliders=[dict(
+                    currentvalue=dict(
+                        prefix='Timestep: ',
+                        visible=True,
+                        xanchor='right'
+                    ),
+                    steps=steps,
+                )],
+                xaxis=dict(
+                    showgrid=False,
+                    zeroline=False,
+                    showticklabels=False
+                ),
+                yaxis=dict(
+                    showgrid=False,
+                    zeroline=False,
+                    showticklabels=False
+                ),
+                margin=dict(t=100, r=200)
+            )
+        )
+
+        # Save as standalone HTML
+        save_path = os.path.join(self.image_dir, f"{self.name}_network_vis.html")
+        pio.write_html(fig, save_path, auto_open=False, include_plotlyjs=True)
+        
+        return save_path

@@ -207,6 +207,69 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
 
     return system
 
+def create_simple_system(start_year,start_month,num_time_steps):
+    # Set up the system with monthly time steps
+    dt = 30.44 * 24 * 3600  # Average month in seconds
+    system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
+
+    # Create nodes
+    supply = SupplyNode("Source", easting=0,northing=2, csv_file="data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
+    # HydroWorks Nodes
+    HW_Ravadhoza = HydroWorks("HW-1", easting=1,northing=2)
+    HW_AkKaraDarya = HydroWorks("HW-2", easting=3,northing=2)
+
+    # Demand Thermal powerplant Navoi (25 m³/s)
+    Demand1 = DemandNode("Demand-1", demand_rates=25, non_consumptive_rate=17, easting=2,northing=1, weight=1000)
+    Demand2 = DemandNode("Demand-2", demand_rates=25, non_consumptive_rate=17, easting=2,northing=3, weight=1000)
+    Demand3 = DemandNode("Demand-3", demand_rates=25, non_consumptive_rate=17, easting=4,northing=1, weight=1000)
+    Demand4 = DemandNode("Demand-4", demand_rates=25, non_consumptive_rate=17, easting=4,northing=3, weight=1000)
+
+    # Reservoir
+    release_params_kattakurgan = {
+        'h1': 504.0,
+        'h2': 511.0,
+        'w': 5.0,
+        'm1': 1.5,
+        'm2': 1.5,
+    }
+    RES_Kattakurgan =StorageNode("Reservoir",hva_file='./data/Kattakurgan_H_V_A.csv',easting=1,northing= 3, initial_storage=3e8,
+                                 evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
+                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
+
+    
+    # Sink Nodes
+    sink_tuyatortor = SinkNode("Sink", min_flow_csv_file='./data/Jizzakh_min_flow_monthly_2000_2022.csv', start_year=start_year, 
+                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=5,northing=2)
+
+
+    # Add nodes to the system
+    supply_node = [supply]  # List of supply nodes
+    reservoir = [RES_Kattakurgan]  # List of reservoir nodes
+    hydroworks = [HW_Ravadhoza, HW_AkKaraDarya]  # List of agricultural demand nodes
+    demand_node = [Demand1, Demand2, Demand3, Demand4]  # List of demand nodes
+    sink_node = [sink_tuyatortor]  # List of sink nodes
+
+    # Iterate through each category and add nodes to the system
+    for node in supply_node + demand_node + reservoir + hydroworks + sink_node:
+        system.add_node(node)
+
+    # Add Edges to the system
+    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1230))
+    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
+    system.add_edge(Edge(HW_Ravadhoza, Demand1, capacity=230))
+    system.add_edge(Edge(HW_Ravadhoza, Demand2, capacity=230))
+    system.add_edge(Edge(HW_Ravadhoza, RES_Kattakurgan, capacity=230))
+    system.add_edge(Edge(Demand1, HW_AkKaraDarya, capacity=230))
+    system.add_edge(Edge(Demand2, Demand4, capacity=230))
+    system.add_edge(Edge(RES_Kattakurgan, Demand2, capacity=230))
+    system.add_edge(Edge(HW_AkKaraDarya, Demand3, capacity=230))
+    system.add_edge(Edge(HW_AkKaraDarya, Demand4, capacity=230))
+    system.add_edge(Edge(Demand3, sink_tuyatortor, capacity=230))
+    system.add_edge(Edge(Demand4, sink_tuyatortor, capacity=230))
+    system.add_edge(Edge(HW_AkKaraDarya, sink_tuyatortor, capacity=230))
+
+    return system
+
 def load_optimized_parameters(system, optimization_results):
     """
     Load optimized parameters into an existing water system.
@@ -338,7 +401,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_flow_compliance_heatmap()
     vis.plot_spills()'''
     
-
+    ''''
     # visulizations for the Report
     vis.plot_minimum_flow_compliance()
     vis.plot_system_demands_vs_inflow()
@@ -346,19 +409,20 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_reservoir_volumes()
     vis.plot_objective_function_breakdown()
     vis.print_water_balance_summary()
+    vis.plot_network_overview()
+    '''
 
 
 
-
-    '''html_file = vis.create_interactive_network_visualization()
+    html_file = vis.create_interactive_network_visualization()
     print(f"Interactive visualization saved to: {html_file}")
-    webbrowser.open(f'file://{os.path.abspath(html_file)}')'''
+    webbrowser.open(f'file://{os.path.abspath(html_file)}')
     
     return system
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
     
-    ZRB_system = create_seasonal_ZRB_system(start_year, start_month, num_time_steps)
+    ZRB_system = create_simple_system(start_year, start_month, num_time_steps)
 
     
     optimizer = MultiGeneticOptimizer(
@@ -405,7 +469,7 @@ def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100
 
       
     # Save optimization results
-    save_optimized_parameters(results, f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
+    save_optimized_parameters(results, f"optimized_parameters_simple_system.json")
 
     return results
 
@@ -434,7 +498,7 @@ def run_ipynb_optimization(start_year=2017, start_month=1, num_time_steps=12, ng
     print(f"Mutation probability: {results['mutation_probability']}")
     print(f"Final objective value: {results['objective_value']:,.0f} m³")
 
-    save_optimized_parameters(results, f"./GA_experiments/optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
+    save_optimized_parameters(results, f"./optimized_parameters_simple_system.json")
     #optimizer.plot_convergence()
     return results
 
@@ -490,8 +554,8 @@ if __name__ == "__main__":
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
-    ngen = 90
-    pop_size = 2912
+    ngen = 9
+    pop_size = 20
     cxpb = 0.65
     mutpb = 0.32
     
@@ -510,7 +574,7 @@ if __name__ == "__main__":
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps, 
-        name= 'ZRB_current_period'
+        name= 'Baseline Period'
     )
 
 
