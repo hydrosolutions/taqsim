@@ -401,7 +401,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_flow_compliance_heatmap()
     vis.plot_spills()'''
     
-    ''''
+    
     # visulizations for the Report
     vis.plot_minimum_flow_compliance()
     vis.plot_system_demands_vs_inflow()
@@ -410,7 +410,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
     vis.plot_objective_function_breakdown()
     vis.print_water_balance_summary()
     vis.plot_network_overview()
-    '''
+    
 
 
 

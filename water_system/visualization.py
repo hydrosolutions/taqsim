@@ -621,16 +621,23 @@ class WaterSystemVisualizer:
         
         # Create a list to store total deficits per timestep
         total_deficits = [0] * len(df) if len(df) > 0 else []
+        min_flow_requirements = [0] * len(df) if len(df) > 0 else []
         
         # Sum up deficits from all sink nodes with min flow requirements
         for node_id, node in sink_nodes:
             if hasattr(node, 'flow_deficits') and len(node.flow_deficits) > 0:
                 for t in range(min(len(node.flow_deficits), len(total_deficits))):
                     total_deficits[t] += node.flow_deficits[t]*self.system.dt
+            if hasattr(node, 'min_flows') and len(node.min_flows) > 0:
+                for t in range(min(len(node.min_flows), len(min_flow_requirements))):
+                    min_flow_requirements[t] += node.min_flows[t]*self.system.dt
         
         # Add the deficit column to the dataframe
         if len(total_deficits) > 0:
             df['minflow deficit'] = total_deficits
+
+        if len(min_flow_requirements) > 0:
+            df['minflow requirement'] = min_flow_requirements
         
         wb = pd.DataFrame(df)
         wb.to_csv(f'{self.name}_water_balance.csv', index=False)
