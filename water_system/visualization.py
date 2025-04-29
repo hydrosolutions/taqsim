@@ -40,7 +40,7 @@ class WaterSystemVisualizer:
         self.df = self.get_water_balance_table()
         
         # Create images directory if it doesn't exist
-        self.image_dir = os.path.join('.', 'figures')
+        self.image_dir = os.path.join('.', 'model_output/figures')
         os.makedirs(self.image_dir, exist_ok=True)
         
         # Generate timestamp for unique filenames
@@ -640,7 +640,7 @@ class WaterSystemVisualizer:
             df['minflow requirement'] = min_flow_requirements
         
         wb = pd.DataFrame(df)
-        wb.to_csv(f'{self.name}_water_balance.csv', index=False)
+        wb.to_csv(f'./model_output/water_balances/{self.name}_water_balance.csv', index=False)
         
         print(f"\nWater Balance Summary for {self.name}")
         print("=" * 50)

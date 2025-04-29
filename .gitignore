@@ -151,13 +151,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Images
-.png
+# Images and Folders
 *.png
-figures/*
+model_output/*
 
 *.csv
-!data/*
-!data/*/*
-!data/*/*/*
 .DS_Store
