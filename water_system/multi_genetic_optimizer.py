@@ -33,9 +33,9 @@ class MultiGeneticOptimizer:
                 self.reservoir_ids.append(node_id)
                 reservoir = node_data['node']
                 
-                # Get water level bounds from HVA data
+                # Get water level bounds from hv data
                 min_level = reservoir.dead_storage_level
-                max_level = reservoir.hva_data['max_waterlevel']
+                max_level = reservoir.hv_data['max_waterlevel']
                 
                 # Calculate total outflow capacity using numpy
                 total_capacity = np.sum([edge.capacity for edge in reservoir.outflow_edges.values()])
@@ -436,5 +436,5 @@ class MultiGeneticOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'GA_experiments/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        plt.savefig(f'./convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         plt.close()

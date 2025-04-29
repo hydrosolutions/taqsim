@@ -538,7 +538,6 @@ class DemandNode(Node):
         try:
             # Read the CSV file into a pandas DataFrame and only column 'Q' is used
             demand = pd.read_csv(csv_file, parse_dates=['Date'], usecols=['Date', self.id])
-            print(demand)
             
             if 'Date' not in demand.columns or self.id not in demand.columns:
                 raise ValueError("CSV file must contain 'Date' and 'Q' columns")
@@ -639,12 +638,12 @@ class StorageNode(Node):
         id (str): Unique identifier for the node
         capacity (float): Maximum storage capacity [m³]
         storage (list): Record of storage levels for each time step [m³]
-        hva_data (dict): Dictionary containing the height-volume-area relationships
+        hv_data (dict): Dictionary containing the height-volume-area relationships
         evaporation (list): List of monthly evaporation rates [mm/month]
         evaporation_losses (list): Record of volume lost to evaporation each timestep [m³]
     """
 
-    def __init__(self, id, hva_file, initial_storage=0, easting=None, northing=None, 
+    def __init__(self, id, hv_file, initial_storage=0, easting=None, northing=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
                  release_params=None, dead_storage=0):
         """
@@ -652,7 +651,7 @@ class StorageNode(Node):
 
         Args:
             id (str): Unique identifier for the node
-            hva_file (str): Path to CSV file containing height-volume-area relationships
+            hv_file (str): Path to CSV file containing height-volume-area relationships
             initial_storage (float, optional): Initial storage volume. Defaults to 0.
             easting (float, optional): Easting coordinate
             northing (float, optional): Northing coordinate
@@ -672,13 +671,13 @@ class StorageNode(Node):
         super().__init__(id, easting, northing)
         
         # Initialize StorageNode specific attributes
-        self.hva_data = None
+        self.hv_data = None
         self._level_to_volume = None
         self._volume_to_level = None
         self._level_to_area = None
         self.evaporation_losses = []
         # Load height-volume-area data
-        self._load_hva_data(hva_file)
+        self._load_hv_data(hv_file)
 
         self.dead_storage_level = self.get_level_from_volume(dead_storage)
         # Initialize evaporation rates
@@ -733,10 +732,10 @@ class StorageNode(Node):
             m1 = monthly_params['m1'][month]
             m2 = monthly_params['m2'][month]
             
-            # Check level bounds against HVA data
-            if hasattr(self, 'hva_data'):
+            # Check level bounds against hv data
+            if hasattr(self, 'hv_data'):
                 min_level = self.dead_storage_level
-                max_level = self.hva_data['max_waterlevel']
+                max_level = self.hv_data['max_waterlevel']
                 
                 if h1 < min_level or h1 > max_level:
                     raise ValueError(f"Month {month+1}: h1 ({h1}) outside valid range [{min_level}, {max_level}]")
@@ -779,7 +778,7 @@ class StorageNode(Node):
         m2 = self.release_params['m2'][current_month]
         
         release = sum(edge.capacity for edge in self.outflow_edges.values())
-        if waterlevel < self.hva_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
+        if waterlevel < self.hv_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
             release = w + (waterlevel-h2)* np.tan(m2)
         if waterlevel <= h2 and (w<=sum(edge.capacity for edge in self.outflow_edges.values())):
             release = w
@@ -864,33 +863,32 @@ class StorageNode(Node):
         except Exception as e:
             raise ValueError(f"Failed to import evaporation data: {str(e)}")
 
-    def _load_hva_data(self, csv_path):
+    def _load_hv_data(self, csv_path):
         """Load and validate height-volume-area relationship data."""
         try:
             # Read and validate CSV
             df = pd.read_csv(csv_path, sep=';')
             
             # Check required columns
-            required_cols = ['Height_m', 'Volume_m3', 'Area_m2']
+            required_cols = ['h', 'v']
             if not all(col in df.columns for col in required_cols):
                 missing = [col for col in required_cols if col not in df.columns]
                 raise ValueError(f"Missing required columns: {missing}")
             
             # Sort by height and remove duplicates
-            df = df.sort_values('Height_m').drop_duplicates(subset=['Height_m'])
+            df = df.sort_values('h').drop_duplicates(subset=['h'])
             
             # Convert elevations to water levels (depth above ground)
-            min_waterlevel = df['Height_m'].min()
-            max_waterlevel = df['Height_m'].max()
+            min_waterlevel = df['h'].min()
+            max_waterlevel = df['h'].max()
 
             # Set capacity from maximum volume in survey data
-            self.capacity = float(df['Volume_m3'].max())
+            self.capacity = float(df['v'].max())
             
             # Store survey data in dictionary
-            self.hva_data = {
-                'waterlevels': df['Height_m'].values,         # Original elevations m asl. 
-                'volumes': df['Volume_m3'].values,
-                'areas': df['Area_m2'].values,
+            self.hv_data = {
+                'waterlevels': df['h'].values,         # Original elevations m asl. 
+                'volumes': df['v'].values,
                 'min_waterlevel': min_waterlevel,              # Ground level m asl. 
                 'max_waterlevel': max_waterlevel,              # Maximum water level m asl.
                 'max_depth': max_waterlevel - min_waterlevel   # Maximum water depth
@@ -900,36 +898,27 @@ class StorageNode(Node):
             self._initialize_interpolators()
             
         except Exception as e:
-            raise ValueError(f"Error loading HVA data from CSV file: {str(e)}")
+            raise ValueError(f"Error loading hv data from CSV file: {str(e)}")
 
     def _initialize_interpolators(self):
         """Initialize interpolation functions for height-volume-area relationships."""
         try:
             # Create height to volume interpolator
             self._level_to_volume = interp1d(
-                self.hva_data['waterlevels'],
-                self.hva_data['volumes'],
+                self.hv_data['waterlevels'],
+                self.hv_data['volumes'],
                 kind='linear',
                 bounds_error=False,  # Allow extrapolation
-                fill_value=(self.hva_data['volumes'][0], self.hva_data['volumes'][-1])
+                fill_value=(self.hv_data['volumes'][0], self.hv_data['volumes'][-1])
             )
             
             # Create volume to height interpolator
             self._volume_to_level = interp1d(
-                self.hva_data['volumes'],
-                self.hva_data['waterlevels'],
+                self.hv_data['volumes'],
+                self.hv_data['waterlevels'],
                 kind='linear',
                 bounds_error=False,
-                fill_value=(self.hva_data['waterlevels'][0], self.hva_data['waterlevels'][-1])
-            )
-            
-            # Create height to area interpolator
-            self._level_to_area = interp1d(
-                self.hva_data['waterlevels'],
-                self.hva_data['areas'],
-                kind='linear',
-                bounds_error=False,
-                fill_value=(self.hva_data['areas'][0], self.hva_data['areas'][-1])
+                fill_value=(self.hv_data['waterlevels'][0], self.hv_data['waterlevels'][-1])
             )
             
         except Exception as e:
@@ -945,7 +934,7 @@ class StorageNode(Node):
         Returns:
             float: Corresponding storage volume [m³]
         """
-        if not self.hva_data:
+        if not self.hv_data:
             print(f'{self.id} volume can not be determined from water level: Height-Volume relation is missing!')
             return
 
@@ -963,7 +952,7 @@ class StorageNode(Node):
         Returns:
             float: Corresponding water level above ground [m]
         """
-        if not self.hva_data:
+        if not self.hv_data:
             print(f'{self.id} water level can not be determined from volume: Height-Volume relation is missing!')
             return
 
@@ -1005,7 +994,7 @@ class StorageNode(Node):
             
             # Calculate evaporation loss
             previous_water_level = self.get_level_from_volume(previous_storage)
-            new_water_level = max((previous_water_level - (self.evaporation_rates[time_step] / 1000)),self.hva_data['min_waterlevel'] )  # Convert mm to m
+            new_water_level = max((previous_water_level - (self.evaporation_rates[time_step] / 1000)),self.hv_data['min_waterlevel'] )  # Convert mm to m
 
             evap_loss = previous_storage-self.get_volume_from_level(new_water_level)
             self.evaporation_losses.append(evap_loss)
@@ -1048,7 +1037,7 @@ class StorageNode(Node):
             self.spillway_register.append(excess_volume)
             
             self.storage.append(new_storage)
-            if self.hva_data:
+            if self.hv_data:
                 self.water_level.append(self.get_level_from_volume(new_storage))
         except Exception as e:
             # Log the error and attempt to maintain last known state

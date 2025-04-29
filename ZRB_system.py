@@ -9,20 +9,14 @@ import cProfile
 import pstats
 import io
 
-def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
-    """
-    Creates a test water system with a seasonal supply, a large reservoir,
-    a seasonal demand, and a sink node. The system runs for 10 years with monthly time steps.
+def create_ZRB_system(start_year, start_month, num_time_steps):
 
-    Returns:
-        WaterSystem: The configured water system for testing.
-    """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
     system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
 
     # Create nodes
-    supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file="data/Inflow_Rovatkhodzha_monthly_2010_2023_ts.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
+    supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file="data/baseline/inflow/inflow_ravatkhoza_2010-2023_monthly.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
     # HydroWorks Nodes
     HW_Ravadhoza = HydroWorks("HW-Ravatkhoza", easting=363094.43,northing=4377810.64)
     HW_AkKaraDarya = HydroWorks("HW-AkKaraDarya", easting=333156.64,northing=4395650.43)
@@ -32,21 +26,21 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
     HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
     HW_EskiAnkhor=HydroWorks("HW-EskiAnkhor", easting=315015,northing=4390976)
     
-    # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,utm_easting,utm_northing,longitude,latitude,csv_path)
-    Demand_info = pd.read_csv('./data/DemandNode_Info.csv', sep=',')
+    # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,easting,northing,field_efficiency,conveyance_efficiency,weight)
+    Demand_info = pd.read_csv('./data/baseline/config/demand_nodes_config.csv', sep=',')
     demand_nodes = []
     for index, row in Demand_info.iterrows():
         demand_node = DemandNode(
             row['name'],
-            easting=row['utm_easting'],
-            northing=row['utm_northing'],
-            csv_file=f"./data/demand_17to22.csv",
+            easting=row['easting'],
+            northing=row['northing'],
+            csv_file=f"./data/baseline/demand/demand_all_districts_2017-2022_monthly.csv",
             start_year=start_year,
             start_month=start_month,
             num_time_steps=num_time_steps,
-            field_efficiency=0.75,
-            conveyance_efficiency=0.65,
-            weight=1.0
+            field_efficiency=row['field_efficiency'],
+            conveyance_efficiency=row['conveyance_efficiency'],
+            weight=row['weight'],
         )
         demand_nodes.append(demand_node)
     
@@ -73,19 +67,19 @@ def create_seasonal_ZRB_system(start_year, start_month, num_time_steps):
         'm1': 1.51,
         'm2': 1.54,
     }
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hva_file='./data/Kattakurgan_H_V_A.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
-                                 evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
+    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hv_file='./data/baseline/reservoir/reservoir_kattakurgan_hv.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
+                                 evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
-    RES_AkDarya = StorageNode("RES-Akdarya", hva_file='./data/Akdarya_H_V_A.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
-                              evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
+    RES_AkDarya = StorageNode("RES-Akdarya", hv_file='./data/baseline/reservoir/reservoir_akdarya_hv.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
+                              evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
                               num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
     
     # Sink Nodes
-    sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/Jizzakh_min_flow_monthly_2000_2022.csv', start_year=start_year, 
+    sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/baseline/min_flow/min_flow_jizzakh_2000-2022_monthly.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/Kashkadarya_min_flow_monthly_2000_2022.csv', start_year=start_year, 
+    sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/baseline/min_flow/min_flow_kashkadarya_2000-2022_monthly.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/Navoi_min_flow_monthly_plus_norm_1968_2022.csv', start_year=start_year, 
+    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/baseline/min_flow/min_flow_navoi_1968-2022_monthly.csv', start_year=start_year, 
                                start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
 
     # Add nodes to the system
@@ -232,7 +226,7 @@ def create_simple_system(start_year,start_month,num_time_steps):
         'm1': 1.5,
         'm2': 1.5,
     }
-    RES_Kattakurgan =StorageNode("Reservoir",hva_file='./data/Kattakurgan_H_V_A.csv',easting=1,northing= 3, initial_storage=3e8,
+    RES_Kattakurgan =StorageNode("Reservoir",hv_file='./data/Kattakurgan_H_V_A.csv',easting=1,northing= 3, initial_storage=3e8,
                                  evaporation_file='./data/et_reservoir_2017_2022_prediction.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
 
@@ -422,7 +416,7 @@ def run_system_with_optimized_parameters(system_creator, optimization_results,
 
 def run_optimization(start_year=2017, start_month=1, num_time_steps=12, ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
     
-    ZRB_system = create_simple_system(start_year, start_month, num_time_steps)
+    ZRB_system = create_ZRB_system(start_year, start_month, num_time_steps)
 
     
     optimizer = MultiGeneticOptimizer(
@@ -560,9 +554,9 @@ if __name__ == "__main__":
     mutpb = 0.32
     
     #run_sample_tests(start_year, start_month, num_time_steps)
-    #results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
+    results = run_optimization(start_year, start_month, num_time_steps, ngen, pop_size, cxpb, mutpb)
     #save_optimized_parameters(results, f"param_test.json")
-    
+    """
     #loaded_results = load_parameters_from_file(f"ZRB_sim_2_opt_param.json")
     loaded_results = load_parameters_from_file(f"ZRB_optuna_8_best_param.json")
     
@@ -591,7 +585,7 @@ if __name__ == "__main__":
     #stats.sort_stats('cumulative')  # Sort by cumulative time
     #stats.print_stats(40)  # Print top 20 functions
     #print(stream.getvalue())
-    """
+    
     loaded_results = load_parameters_from_file(f"optimized_parameters_ZRB_ngen{ngen}_pop{pop_size}_cxpb{cxpb}_mutpb{mutpb}.json")
 
     # Create and run system with loaded parameters
