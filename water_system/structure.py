@@ -630,18 +630,6 @@ class DemandNode(Node):
         return 0
 
 class StorageNode(Node):  
-    """
-    Represents a water storage facility in the system.
-    Now enhanced with height-volume-area relationships from survey data.
-
-    Attributes:
-        id (str): Unique identifier for the node
-        capacity (float): Maximum storage capacity [m³]
-        storage (list): Record of storage levels for each time step [m³]
-        hv_data (dict): Dictionary containing the height-volume-area relationships
-        evaporation (list): List of monthly evaporation rates [mm/month]
-        evaporation_losses (list): Record of volume lost to evaporation each timestep [m³]
-    """
 
     def __init__(self, id, hv_file, initial_storage=0, easting=None, northing=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
@@ -660,12 +648,12 @@ class StorageNode(Node):
             start_month (int, optional): Starting month (1-12) for evaporation data
             num_time_steps (int, optional): Number of time steps to import from evaporation data
             release_params (dict): Dictionary of monthly release parameters {
-                'h1': list[12] or float,  # Low reservoir levels [m] for each month
-                'h2': list[12] or float,  # High reservoir levels [m] for each month
-                'w': list[12] or float,   # Constant releases [m³/s] for each month
-                'm1': list[12] or float,  # Slopes for low level [rad] for each month
-                'm2': list[12] or float   # Slopes for high level [rad] for each month
+                'Vr': list[12] or float,  # Target monthly release volume [m³]
+                'V1': list[12] or float,  # Top of buffer zone volume [m³]
+                'V2': list[12] or float,  # Top of conservation zone volume [m³]
+                'buffer_coef': list[12] or float,  # Buffer zone coefficient for low storage
             }
+            dead_storage (float): Dead storage volume (V0) [m³]
         """
         # Call parent class (Node) initialization
         super().__init__(id, easting, northing)
@@ -709,7 +697,7 @@ class StorageNode(Node):
                          - a list of 12 floats (one per month)
         """
         # Validate parameters
-        required_params = ['h1', 'h2', 'w', 'm1', 'm2']
+        required_params = ['VR', 'V1', 'V2', 'buffer_coef']
         if not all(key in params for key in required_params):
             missing = [key for key in required_params if key not in params]
             raise ValueError(f"Missing release parameters: {missing}")
@@ -726,40 +714,32 @@ class StorageNode(Node):
 
         # Validate monthly parameters
         for month in range(12):
-            h1 = monthly_params['h1'][month]
-            h2 = monthly_params['h2'][month]
-            w = monthly_params['w'][month]
-            m1 = monthly_params['m1'][month]
-            m2 = monthly_params['m2'][month]
+            Vr = monthly_params['VR'][month]
+            V1 = monthly_params['V1'][month]
+            V2 = monthly_params['V2'][month]
+            buffer_coef = monthly_params['buffer_coef'][month]
             
-            # Check level bounds against hv data
-            if hasattr(self, 'hv_data'):
-                min_level = self.dead_storage_level
-                max_level = self.hv_data['max_waterlevel']
+            # Check volume relationships
+            if Vr < 0:
+                raise ValueError(f"Month {month+1}: Vr ({Vr}) cannot be negative")
                 
-                if h1 < min_level or h1 > max_level:
-                    raise ValueError(f"Month {month+1}: h1 ({h1}) outside valid range [{min_level}, {max_level}]")
-                if h2 < min_level or h2 > max_level:
-                    raise ValueError(f"Month {month+1}: h2 ({h2}) outside valid range [{min_level}, {max_level}]")
-            
-            # Check level relationships
-            if h1 >= h2:
-                raise ValueError(f"Month {month+1}: h1 ({h1}) must be less than h2 ({h2})")
-            
-            # Check slope ranges (0 to π/2 radians)
-            if not (0 <= m1 < 1.571):
-                raise ValueError(f"Month {month+1}: m1 ({m1}) must be between 0 and π/2")
-            if not (0 <= m2 < 1.571):
-                raise ValueError(f"Month {month+1}: m2 ({m2}) must be between 0 and π/2")
-            
-            # Check base release rate
-            if w < 0:
-                raise ValueError(f"Month {month+1}: w ({w}) cannot be negative")
+            if V1 <= self.dead_storage:
+                raise ValueError(f"Month {month+1}: V1 ({V1}) must be greater than dead storage ({self.dead_storage})")
+                
+            if V2 <= V1:
+                raise ValueError(f"Month {month+1}: V2 ({V2}) must be greater than V1 ({V1})")
+                
+            if V2 > self.capacity:
+                raise ValueError(f"Month {month+1}: V2 ({V2}) cannot exceed reservoir capacity ({self.capacity})")
+                
+            if buffer_coef <= 0:
+                raise ValueError(f"Month {month+1}: buffer_coef ({buffer_coef}) must be positive")
+
 
         # Store parameters
         self.release_params = monthly_params
 
-    def calculate_release(self, waterlevel, time_step):
+    def calculate_release(self, volume, time_step, dt):
         """
         Calculate the reservoir release based on current water level.
         
@@ -771,21 +751,37 @@ class StorageNode(Node):
             float: Calculated release rate [m³/s]
         """
         current_month = time_step % 12
-        h1 = self.release_params['h1'][current_month]
-        h2 = self.release_params['h2'][current_month]
-        w = self.release_params['w'][current_month]
-        m1 = self.release_params['m1'][current_month]
-        m2 = self.release_params['m2'][current_month]
+        Vr = self.release_params['Vr'][current_month]  # Target release volume
+        V1 = self.release_params['V1'][current_month]  # Top of buffer zone
+        V2 = self.release_params['V2'][current_month]  # Top of conservation zone
+        buffer_coef = self.release_params['buffer_coef'][current_month]  # Buffer coefficient
         
-        release = sum(edge.capacity for edge in self.outflow_edges.values())
-        if waterlevel < self.hv_data['max_waterlevel'] and (w + (waterlevel-h2)* np.tan(m2)) < sum(edge.capacity for edge in self.outflow_edges.values()):
-            release = w + (waterlevel-h2)* np.tan(m2)
-        if waterlevel <= h2 and (w<=sum(edge.capacity for edge in self.outflow_edges.values())):
-            release = w
-        if (waterlevel-h1)* np.tan(m1) < w and (waterlevel-h1)* np.tan(m1) < sum(edge.capacity for edge in self.outflow_edges.values()):
-            release = (waterlevel-h1)* np.tan(m1)
-        if waterlevel < h1:
-            release = 0
+        # Case 1: Below dead storage
+        if volume <= self.dead_storage:
+            return 0
+            
+        # Case 2: In buffer zone
+        elif volume < V1:
+            # Calculate release based on buffer coefficient
+            buffer_release = min(buffer_coef * (volume - self.dead_storage), Vr)
+            # Convert from volume to rate
+            return buffer_release
+            
+        # Case 3: In conservation zone
+        elif volume < V2:
+            # Calculate the buffer zone contribution at V1
+            buffer_contrib = buffer_coef * (V1 - self.dead_storage)
+            # Add excess over V1
+            conservation_release = min(Vr, volume - V1 + buffer_contrib)
+            # Convert from volume to rate
+            return conservation_release
+            
+        # Case 4: Above conservation zone
+        else:
+            # Release at least target volume, plus any excess above V2, limited by capacity
+            flood_release = min(max(Vr, volume - V2), sum(edge.capacity for edge in self.outflow_edges.values()) * dt)
+            # Convert from volume to rate
+            return flood_release
         
         return release
     
@@ -1004,11 +1000,7 @@ class StorageNode(Node):
             available_water = max(0, available_water)  # Ensure non-negative storage
             
             # Calculate current water level and desired release
-            current_level = self.get_level_from_volume(available_water)
-            target_release_rate = self.calculate_release(current_level, time_step)
-            
-            # Convert release rate to volume
-            requested_outflow_volume = target_release_rate * dt
+            requested_outflow_volume = self.calculate_release(available_water, time_step, dt)
 
             # Limit actual outflow to available water
             actual_outflow_volume = min(available_water, requested_outflow_volume)
