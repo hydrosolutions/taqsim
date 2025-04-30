@@ -667,6 +667,8 @@ class StorageNode(Node):
         # Load height-volume-area data
         self._load_hv_data(hv_file)
 
+ 
+        self.dead_storage = dead_storage  # Dead storage volume [m³]
         self.dead_storage_level = self.get_level_from_volume(dead_storage)
         # Initialize evaporation rates
         self.evaporation_rates = self._initialize_evaporation_rates(
@@ -697,7 +699,7 @@ class StorageNode(Node):
                          - a list of 12 floats (one per month)
         """
         # Validate parameters
-        required_params = ['VR', 'V1', 'V2', 'buffer_coef']
+        required_params = ['Vr', 'V1', 'V2', 'buffer_coef']
         if not all(key in params for key in required_params):
             missing = [key for key in required_params if key not in params]
             raise ValueError(f"Missing release parameters: {missing}")
@@ -714,7 +716,7 @@ class StorageNode(Node):
 
         # Validate monthly parameters
         for month in range(12):
-            Vr = monthly_params['VR'][month]
+            Vr = monthly_params['Vr'][month]
             V1 = monthly_params['V1'][month]
             V2 = monthly_params['V2'][month]
             buffer_coef = monthly_params['buffer_coef'][month]

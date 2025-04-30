@@ -54,19 +54,18 @@ def create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario
 
     # Reservoir
     release_params_kattakurgan = {
-        'h1': 504.0,
-        'h2': 511.0,
-        'w': 5.0,
-        'm1': 1.5,
-        'm2': 1.5,
+        'Vr': 200000000,
+        'V1': 300000000,
+        'V2': 500000000,
+        'buffer_coef': 0.5
     }
     release_params_akdarya = {
-        'h1': 489.0,
-        'h2': 495.0,
-        'w': 30.0,
-        'm1': 1.51,
-        'm2': 1.54,
+        'Vr': 2000000,
+        'V1': 3000000,
+        'V2': 60000000,
+        'buffer_coef': 0.5
     }
+
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hv_file='./data/baseline/reservoir/reservoir_kattakurgan_hv.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
                                  evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
                                  num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
@@ -149,6 +148,54 @@ def create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario
     system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=400))
     system.add_edge(Edge(HW_Karmana, Powerplant, capacity=65))
     system.add_edge(Edge(Powerplant, sink_downstream, capacity=65))
+
+    # HW-Ravadhoza distribution
+    HW_Ravadhoza.set_distribution_parameters({
+         'HW-AkKaraDarya': [0.7]*12,        
+         'Toyloq': 0.05,           
+         'Urgut': 0.1,
+         'Bulungur': 0.05,          
+         'Jomboy': 0.05,            
+         'Sink-Jizzakh': 0.05               
+    })
+ 
+    # HW-EskiAnkhor distribution
+    HW_EskiAnkhor.set_distribution_parameters({
+         'Pastdargom': 0.610,        # 125/205
+         'Nurobod': 0.390            # 80/205
+    })
+ 
+     # HW-AkKaraDarya distribution
+    HW_AkKaraDarya.set_distribution_parameters({
+         'Oqdaryo': 0.353,           # 300/850
+         'HW-Damkhoza': 0.647       # 550/850
+    })
+ 
+     # HW-Damkhoza distribution
+    HW_Damkodzha.set_distribution_parameters({
+         'RES-Kattakurgan': 0.171,   # 100/585
+         'HW-Narpay': 0.137,         # 80/585
+         'HW-Confluence': 0.598,      # 350/585
+         'Kattaqorgon': 0.094        # 55/585
+    })
+ 
+     # HW-Narpay distribution
+    HW_Narpay.set_distribution_parameters({
+         'HW-Confluence': 0.510,      # 125/245
+         'Narpay': 0.49,            # 80/245
+    })
+ 
+     # HW-Confluence distribution
+    HW_Confluence.set_distribution_parameters({
+         'HW-Karmana': 1.0           # All flow goes to Karmana
+    })
+ 
+     # HW-Karmana distribution
+    HW_Karmana.set_distribution_parameters({
+         'Navbahor': 0.078,          # 45/580
+         'Sink-Navoi': 0.862,    # 500/580
+         'Navoiy-Powerplant': 0.060         # 35/580
+    })
 
     return system
 
@@ -470,13 +517,34 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
 
     return results
 
+def run_tests(start_year=2017, start_month=1, num_time_steps=12):
+ 
+     ZRB_system = create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario='', period='', agr_scenario='', efficiency='')
+ 
+     print("ZRB system simulation:")
+     #ZRB_system._check_network()
+     ZRB_system.simulate(num_time_steps)
+     print("Simulation complete")
+ 
+     print('ZRB system visualization:')
+     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
+     vis_ZRB.plot_minimum_flow_compliance()
+     print("Visualizations complete")
+
 # Run the sample tests
 if __name__ == "__main__":
+
+    #################
+    ### Run Tests ###
+    #################
+
+    run_tests(start_year=2017, start_month=1, num_time_steps=12)
+
 
     ###########################
     ### Run Baseline Period ###
     ###########################
-    
+    '''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
@@ -495,7 +563,7 @@ if __name__ == "__main__":
         agr_scenario = '', 
         efficiency = ''
     )
-    
+    '''
     
     ###########################
     ### Run Future Scenario ###
