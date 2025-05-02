@@ -54,13 +54,13 @@ def create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario
 
     # Reservoir
     release_params_kattakurgan = {
-        'Vr': 200000000,
+        'Vr': 400000000,
         'V1': 300000000,
         'V2': 500000000,
         'buffer_coef': 0.5
     }
     release_params_akdarya = {
-        'Vr': 2000000,
+        'Vr': 50000000,
         'V1': 3000000,
         'V2': 60000000,
         'buffer_coef': 0.5
@@ -522,13 +522,20 @@ def run_tests(start_year=2017, start_month=1, num_time_steps=12):
      ZRB_system = create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario='', period='', agr_scenario='', efficiency='')
  
      print("ZRB system simulation:")
-     #ZRB_system._check_network()
+     ZRB_system._check_network()
      ZRB_system.simulate(num_time_steps)
      print("Simulation complete")
  
      print('ZRB system visualization:')
      vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
      vis_ZRB.plot_minimum_flow_compliance()
+     vis_ZRB.plot_storage_dynamics()
+     vis_ZRB.plot_reservoir_dynamics()
+     vis_ZRB.plot_flow_compliance_heatmap()
+     vis_ZRB.plot_spills()
+     vis_ZRB.plot_reservoir_volumes()
+     vis_ZRB.plot_system_demands_vs_inflow()
+     vis_ZRB.plot_objective_function_breakdown()
      print("Visualizations complete")
 
 # Run the sample tests

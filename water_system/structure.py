@@ -727,15 +727,18 @@ class StorageNode(Node):
                 
             if V1 <= self.dead_storage:
                 raise ValueError(f"Month {month+1}: V1 ({V1}) must be greater than dead storage ({self.dead_storage})")
-                
+
+            if V1 >= V2:
+                raise ValueError(f"Month {month+1}: V1 ({V1}) must be less than V2 ({V2})")
+
             if V2 <= V1:
                 raise ValueError(f"Month {month+1}: V2 ({V2}) must be greater than V1 ({V1})")
                 
             if V2 > self.capacity:
                 raise ValueError(f"Month {month+1}: V2 ({V2}) cannot exceed reservoir capacity ({self.capacity})")
                 
-            if buffer_coef <= 0:
-                raise ValueError(f"Month {month+1}: buffer_coef ({buffer_coef}) must be positive")
+            if buffer_coef < 0 and buffer_coef > 1:
+                raise ValueError(f"Month {month+1}: buffer_coef ({buffer_coef}) must be between 0 and 1")
 
 
         # Store parameters
