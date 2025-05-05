@@ -3,7 +3,7 @@ import numpy as np
 import webbrowser
 import os
 import json
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, MultiGeneticOptimizer
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer
 import ctypes
 import cProfile
 import pstats
@@ -403,7 +403,7 @@ def save_optimized_parameters(optimization_results, filename):
     Save optimized parameters to a file for later use.
     
     Args:
-        optimization_results (dict): Results from the MultiGeneticOptimizer
+        optimization_results (dict): Results from the optimizer
         filename (str): Path to save the parameters
     """
     
@@ -417,20 +417,70 @@ def save_optimized_parameters(optimization_results, filename):
             return float(obj)
         elif isinstance(obj, np.ndarray):  # Handle numpy arrays
             return [float(x) for x in obj]
+        elif isinstance(obj, tuple):  # Handle tuples (for multi-objective values)
+            return [float(x) for x in obj]
         return obj
     
-    # Prepare data for saving
+    # Check if we have multi-objective results
+    is_multi_objective = isinstance(optimization_results.get('objective_values', None), tuple)
+    
+    # Prepare basic data for saving
     save_data = {
-        'objective_value': float(optimization_results['objective_value']),
+        'is_multi_objective': is_multi_objective,
+        'population_size': optimization_results.get('population_size', 0),
+        'generations': optimization_results.get('generations', 0),
+        'crossover_probability': optimization_results.get('crossover_probability', 0),
+        'mutation_probability': optimization_results.get('mutation_probability', 0),
+    }
+    
+    # Add the recommended solution (weighted best)
+    save_data['recommended_solution'] = {
         'reservoir_parameters': convert_to_float(optimization_results['optimal_reservoir_parameters']),
         'hydroworks_parameters': convert_to_float(optimization_results['optimal_hydroworks_parameters'])
     }
+    
+    # Add objective values based on format
+    if is_multi_objective:
+        save_data['recommended_solution']['objective_values'] = convert_to_float(optimization_results['objective_values'])
+        # Add the individual objective values separately
+        save_data['recommended_solution']['demand_deficit'] = float(optimization_results['objective_values'][0])
+        save_data['recommended_solution']['minflow_deficit'] = float(optimization_results['objective_values'][1])
+        
+        # If pareto front exists, save all solutions
+        if 'pareto_front' in optimization_results and optimization_results['pareto_front']:
+            pareto_solutions = []
+            
+            # Process each solution in the Pareto front
+            for i, ind in enumerate(optimization_results['pareto_front']):
+                # Decode this individual's parameters
+                reservoir_params, hydroworks_params = MultiObjectiveOptimizer._decode_individual.__get__(None, MultiObjectiveOptimizer)(optimization_results['optimizer'], ind)
+                
+                # Create a solution entry
+                solution = {
+                    'id': i,
+                    'objective_values': convert_to_float(ind.fitness.values),
+                    'demand_deficit': float(ind.fitness.values[0]),
+                    'minflow_deficit': float(ind.fitness.values[1]),
+                    'reservoir_parameters': convert_to_float(reservoir_params),
+                    'hydroworks_parameters': convert_to_float(hydroworks_params)
+                }
+                
+                pareto_solutions.append(solution)
+            
+            # Add all Pareto solutions to the save data
+            save_data['pareto_solutions'] = pareto_solutions
+            save_data['num_pareto_solutions'] = len(pareto_solutions)
+    else:
+        # Single objective case
+        save_data['recommended_solution']['objective_value'] = float(optimization_results.get('objective_value', 0))
     
     # Save to file
     with open(filename, 'w') as f:
         json.dump(save_data, f, indent=2)
     
     print(f"Optimization results saved to {filename}")
+    if is_multi_objective and 'pareto_solutions' in save_data:
+        print(f"Saved {save_data['num_pareto_solutions']} Pareto-optimal solutions")
 
 def run_system_with_optimized_parameters(system_creator, optimization_results, start_year, start_month, 
                                          num_time_steps, name='ZRB_system', scenario='', period='', agr_scenario='', efficiency=''):
@@ -463,7 +513,7 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
     ZRB_system = system_creator(start_year, start_month, num_time_steps, scenario, period, agr_scenario, efficiency)
 
     
-    optimizer = MultiGeneticOptimizer(
+    optimizer = SingleObjectiveOptimizer(
         base_system=ZRB_system,
         start_year=start_year,
         start_month=start_month,
@@ -528,8 +578,103 @@ def run_tests(start_year=2017, start_month=1, num_time_steps=12):
      vis_ZRB.plot_objective_function_breakdown()
      print("Visualizations complete")
 
+def run_multi_objective_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, scenario='', period='', agr_scenario='', efficiency='',
+                     ngen=100, pop_size=100, cxpb=0.5, mutpb=0.2):
+    
+    # Create the base water system
+    water_system = system_creator(start_year, start_month, num_time_steps, scenario, period, agr_scenario, efficiency)
+    
+    # Initialize the multi-objective optimizer
+    optimizer = MultiObjectiveOptimizer(
+        base_system=water_system,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps,
+        ngen=ngen,
+        population_size=pop_size,
+        cxpb=cxpb,
+        mutpb=mutpb
+    )
+
+    # Run the optimization
+    results = optimizer.optimize()
+
+    # Plot convergence and Pareto front
+    optimizer.plot_convergence()
+
+    # Print optimization results
+    print("\nMulti-Objective Optimization Results:")
+    print("-" * 60)
+    print(f"Success: {results['success']}")
+    print(f"Message: {results['message']}")
+    print(f"Population size: {results['population_size']}")
+    print(f"Generations: {results['generations']}")
+    print(f"Crossover probability: {results['crossover_probability']}")
+    print(f"Mutation probability: {results['mutation_probability']}")
+    print(f"Final objective values: {results['objective_values']}")
+    print(f"  - Demand deficit: {results['objective_values'][0]:,.0f} m³")
+    print(f"  - Min flow deficit: {results['objective_values'][1]:,.0f} m³")
+    
+    # Print the number of solutions in the Pareto front
+    print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
+    
+    # Print optimal reservoir parameters
+    print("\nOptimal Reservoir Parameters:")
+    for res_id, params in results['optimal_reservoir_parameters'].items():
+        print(f"\n{res_id}:")
+        for param, values in params.items():
+            print(f"{param}: [", end="")
+            print(", ".join(f"{v:.3f}" for v in values), end="")
+            print("]")
+        
+    # Print optimal hydroworks parameters
+    print("\nOptimal Hydroworks Parameters:")
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    for hw_id, params in results['optimal_hydroworks_parameters'].items():
+        print(f"\n{hw_id}:")
+        for target, values in params.items():
+            print(f"{target}: [", end="")
+            print(", ".join(f"{v:.3f}" for v in values), end="")
+            print("]")
+
+    return results
+
 # Run the sample tests
 if __name__ == "__main__":
+
+    ##########################################
+    ### Multiobjective GA: Baseline System ###
+    ##########################################
+    '''
+    start_year = 2017
+    start_month = 1
+    num_time_steps = 12*6
+
+    # GA settings
+    ngen = 10  # Number of generations
+    pop_size = 50  # Population size
+    cxpb = 0.65  # Crossover probability
+    mutpb = 0.32  # Mutation probability
+
+    # Run multi-objective optimization
+    results = run_multi_objective_optimization(
+        create_ZRB_system_baseline,
+        start_year, 
+        start_month, 
+        num_time_steps,
+        scenario = '', 
+        period = '', 
+        agr_scenario= '', 
+        efficiency = '', 
+        ngen=ngen, 
+        pop_size=pop_size, 
+        cxpb=cxpb, 
+        mutpb=mutpb
+    )        
+
+    # Save the results
+    save_optimized_parameters(results, f"./model_output/optimisation/multiobjective_baseline_params.json")
+    '''
 
     #################
     ### Run Tests ###
@@ -541,7 +686,7 @@ if __name__ == "__main__":
     ###########################
     ### Run Baseline Period ###
     ###########################
-    #'''
+    '''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
@@ -561,7 +706,7 @@ if __name__ == "__main__":
         efficiency = ''
     )
     
-    #'''
+    '''
     ###########################
     ### Run Future Scenario ###
     ###########################
@@ -588,14 +733,14 @@ if __name__ == "__main__":
     ############################################
     ### Run Optimization for Baseline Period ###
     ############################################
-    '''
+    #'''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
 
     # GA settings
-    ngen = 10
-    pop_size = 20
+    ngen = 90
+    pop_size = 30
     cxpb = 0.65
     mutpb = 0.32
 
@@ -615,7 +760,7 @@ if __name__ == "__main__":
     )        
 
     save_optimized_parameters(results, f"./model_output/optimisation/baseline_param_test.json")
-    '''
+    #'''
     ############################################
     ### Run Optimization for Future Scenario ###
     ############################################

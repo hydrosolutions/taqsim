@@ -5,10 +5,10 @@ import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
 import copy
 
-class MultiGeneticOptimizer:
+class MultiObjectiveOptimizer:
     """
-    Enhanced genetic algorithm optimizer for water systems with multiple reservoirs
-    and hydroworks nodes.
+    Multi-objective genetic algorithm optimizer for water systems with multiple
+    reservoirs and hydroworks nodes.
     """
     def __init__(self, base_system, start_year, start_month, num_time_steps, ngen=50, population_size=50, cxpb=0.9, mutpb=0.5):
         self.base_system = base_system 
@@ -52,8 +52,14 @@ class MultiGeneticOptimizer:
                 # Get target nodes for each hydroworks
                 self.hydroworks_targets[node_id] = list(node_data['node'].outflow_edges.keys())
         
-        # Set up DEAP genetic algorithm components
-        creator.create("FitnessMulti", base.Fitness, weights=(-1.0,))  # Minimize objective
+        # Set up DEAP multi-objective genetic algorithm components
+        # Remove any existing FitnessMulti and Individual if they exist
+        if 'FitnessMulti' in creator.__dict__:
+            del creator.FitnessMulti
+        if 'Individual' in creator.__dict__:
+            del creator.Individual
+            
+        creator.create("FitnessMulti", base.Fitness, weights=(-1.0, -1.0))  # Minimize both objectives
         creator.create("Individual", list, fitness=creator.FitnessMulti)
         
         self.toolbox = base.Toolbox()
@@ -61,8 +67,12 @@ class MultiGeneticOptimizer:
         # Register genetic operators
         self._setup_genetic_operators()
         
-        # Store convergence history
-        self.history = {'min': [], 'avg': [], 'std': []}
+        # Store convergence history for both objectives
+        self.history = {'min_obj1': [], 'avg_obj1': [], 'std_obj1': [],
+                       'min_obj2': [], 'avg_obj2': [], 'std_obj2': []}
+        
+        # Store Pareto front
+        self.pareto_front = []
         
     def _normalize_distribution(self, values):
         """
@@ -101,7 +111,7 @@ class MultiGeneticOptimizer:
         self.toolbox.register("evaluate", self._evaluate_individual)
         self.toolbox.register("mate", self._crossover)
         self.toolbox.register("mutate", self._mutate_individual)
-        self.toolbox.register("select", tools.selTournament, tournsize=5)
+        self.toolbox.register("select", tools.selNSGA2)  # Use NSGA-II selection for multi-objective
 
     def _mutate_individual(self, individual, indpb=0.5):
         """Custom mutation operator with enforced parameter bounds for monthly parameters"""
@@ -218,7 +228,7 @@ class MultiGeneticOptimizer:
         return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
     def _evaluate_individual(self, individual):
-        """Evaluate fitness of an individual with bound checking"""
+        """Evaluate multi-objective fitness of an individual"""
         genes_per_reservoir = 3 
         
         try:
@@ -241,9 +251,11 @@ class MultiGeneticOptimizer:
             # Run simulation
             system.simulate(self.num_time_steps)
             
-            total_penalty = 0
+            # Initialize objective values
+            demand_deficit_penalty = 0
+            minflow_deficit_penalty = 0
             
-            # Calculate weighted demand deficits
+            # Calculate penalties for each component
             for node_id, node_data in system.graph.nodes(data=True):
                 node = node_data['node']
                 
@@ -252,23 +264,32 @@ class MultiGeneticOptimizer:
                     satisfied = np.array(node.satisfied_demand_total)
                     deficit = (demand - satisfied) * system.dt
                     weighted_deficit = deficit * node.weight
-                    total_penalty += np.sum(weighted_deficit)
+                    demand_deficit_penalty += np.sum(weighted_deficit)
                 
                 elif isinstance(node, SinkNode):
                     total_deficit_volume = node.get_total_deficit_volume(system.dt)
-                    total_penalty += total_deficit_volume * node.weight
-                    
-                elif hasattr(node, 'spillway_register'):
-                    total_penalty += 100.0 * np.sum(node.spillway_register)
+                    minflow_deficit_penalty += total_deficit_volume * node.weight
+            
+            # Add spill penalties (distributed between objectives)
+            spill_penalty = 0
+            for node_id, node_data in system.graph.nodes(data=True):
+                node = node_data['node']
+                
+                if hasattr(node, 'spillway_register'):
+                    spill_penalty += 100.0 * np.sum(node.spillway_register)
                 
                 elif hasattr(node, 'spill_register'):
-                    total_penalty += 100.0 * np.sum(node.spill_register)
+                    spill_penalty += 100.0 * np.sum(node.spill_register)
             
-            return (total_penalty,)
+            # Add half of spill penalty to each objective
+            demand_deficit_penalty += 0.5 * spill_penalty
+            minflow_deficit_penalty += 0.5 * spill_penalty
+            
+            return (demand_deficit_penalty, minflow_deficit_penalty)
         
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'),)
+            return (float('inf'), float('inf'))
 
     def _decode_individual(self, individual):
         """Decode individual genes into monthly reservoir and hydroworks parameters"""
@@ -354,29 +375,84 @@ class MultiGeneticOptimizer:
         return creator.Individual(genes)
 
     def optimize(self):
-        """Run genetic algorithm optimization with parameter validation"""
+        """Run multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
         
-        # Initialize statistics tracking
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("min", np.min)
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
+        # Evaluate initial population
+        fitnesses = list(map(self.toolbox.evaluate, pop))
+        for ind, fit in zip(pop, fitnesses):
+            ind.fitness.values = fit
+            
+        # Initialize statistics tracking for both objectives
+        stats_obj1 = tools.Statistics(lambda ind: ind.fitness.values[0])
+        stats_obj1.register("min", np.min)
+        stats_obj1.register("avg", np.mean)
+        stats_obj1.register("std", np.std)
         
-        # Run genetic algorithm
-        final_pop, logbook = algorithms.eaSimple(
-            pop, self.toolbox, cxpb=self.cxpb, mutpb=self.mutpb, ngen=self.ngen, 
-            stats=stats, verbose=True
-        )
+        stats_obj2 = tools.Statistics(lambda ind: ind.fitness.values[1])
+        stats_obj2.register("min", np.min)
+        stats_obj2.register("avg", np.mean)
+        stats_obj2.register("std", np.std)
         
-        # Store convergence history
-        self.history['min'] = logbook.select("min")
-        self.history['avg'] = logbook.select("avg")
-        self.history['std'] = logbook.select("std")
+        # Combine statistics into a multi-statistics object
+        mstats = tools.MultiStatistics(obj1=stats_obj1, obj2=stats_obj2)
         
-        # Get best individual
-        best_ind = tools.selBest(final_pop, 1)[0]
+        # Create the logbook for statistics
+        logbook = tools.Logbook()
+        logbook.header = ['gen', 'nevals'] + mstats.fields
+        
+        # Record the initial statistics
+        record = mstats.compile(pop)
+        logbook.record(gen=0, nevals=len(pop), **record)
+        print(logbook.stream)
+        
+        # Begin the evolution
+        for gen in range(1, self.ngen + 1):
+            # Select the next generation individuals (using NSGA-II selection)
+            offspring = self.toolbox.select(pop, len(pop))
+            
+            # Clone the selected individuals
+            offspring = list(map(self.toolbox.clone, offspring))
+            
+            # Apply crossover and mutation
+            for i in range(1, len(offspring), 2):
+                if random.random() < self.cxpb:
+                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
+                    del offspring[i-1].fitness.values, offspring[i].fitness.values
+                    
+            for i in range(len(offspring)):
+                if random.random() < self.mutpb:
+                    offspring[i], = self.toolbox.mutate(offspring[i])
+                    del offspring[i].fitness.values
+            
+            # Evaluate the individuals with an invalid fitness
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = map(self.toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+            
+            # Select the survivors from the combined population of parents and offspring
+            pop = self.toolbox.select(pop + offspring, self.population_size)
+            
+            # Record statistics
+            record = mstats.compile(pop)
+            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+            print(logbook.stream)
+            
+            # Store the history
+            self.history['min_obj1'].append(record['obj1']['min'])
+            self.history['avg_obj1'].append(record['obj1']['avg'])
+            self.history['std_obj1'].append(record['obj1']['std'])
+            self.history['min_obj2'].append(record['obj2']['min'])
+            self.history['avg_obj2'].append(record['obj2']['avg'])
+            self.history['std_obj2'].append(record['obj2']['std'])
+        
+        # Extract the Pareto front
+        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
+        
+        # Get the overall best individual based on a weighted sum of objectives
+        best_ind = min(pop, key=lambda ind: 0.5 * ind.fitness.values[0] + 0.5 * ind.fitness.values[1])
         reservoir_params, hydroworks_params = self._decode_individual(best_ind)
 
         return {
@@ -386,28 +462,86 @@ class MultiGeneticOptimizer:
             'generations': self.ngen,
             'crossover_probability': self.cxpb,
             'mutation_probability': self.mutpb,
-            'objective_value': best_ind.fitness.values[0],
+            'objective_values': best_ind.fitness.values,
             'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params
+            'optimal_hydroworks_parameters': hydroworks_params,
+            'pareto_front': self.pareto_front,
+            'optimizer': self
         }
 
     def plot_convergence(self):
-        """Plot convergence history"""
-        plt.figure(figsize=(10, 6))
-        gens = range(len(self.history['min']))
+        """Plot convergence history for both objectives"""
+        plt.figure(figsize=(15, 10))
         
-        plt.plot(gens, self.history['min'], 'b-', label='Best Fitness')
-        plt.plot(gens, self.history['avg'], 'r-', label='Average Fitness')
+        # Plot first objective convergence
+        plt.subplot(2, 1, 1)
+        gens = range(len(self.history['min_obj1']))
+        
+        plt.plot(gens, self.history['min_obj1'], 'b-', label='Best Fitness')
+        plt.plot(gens, self.history['avg_obj1'], 'r-', label='Average Fitness')
         plt.fill_between(gens, 
-                        np.array(self.history['avg']) - np.array(self.history['std']),
-                        np.array(self.history['avg']) + np.array(self.history['std']),
+                        np.array(self.history['avg_obj1']) - np.array(self.history['std_obj1']),
+                        np.array(self.history['avg_obj1']) + np.array(self.history['std_obj1']),
                         alpha=0.2, color='r')
         
         plt.xlabel('Generation')
-        plt.ylabel('Fitness (Total Deficit)')
-        plt.title('Genetic Algorithm Convergence')
+        plt.ylabel('Objective 1: Demand Deficit')
+        plt.title('Objective 1 Convergence')
         plt.legend()
         plt.grid(True)
+        
+        # Plot second objective convergence
+        plt.subplot(2, 1, 2)
+        
+        plt.plot(gens, self.history['min_obj2'], 'b-', label='Best Fitness')
+        plt.plot(gens, self.history['avg_obj2'], 'r-', label='Average Fitness')
+        plt.fill_between(gens, 
+                        np.array(self.history['avg_obj2']) - np.array(self.history['std_obj2']),
+                        np.array(self.history['avg_obj2']) + np.array(self.history['std_obj2']),
+                        alpha=0.2, color='r')
+        
+        plt.xlabel('Generation')
+        plt.ylabel('Objective 2: Min Flow Deficit')
+        plt.title('Objective 2 Convergence')
+        plt.legend()
+        plt.grid(True)
+        
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
-        plt.close()
+        plt.savefig(f'./model_output/optimisation/multiobjective_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        
+        # Also plot the Pareto front
+        self.plot_pareto_front()
+        
+    def plot_pareto_front(self):
+        """Plot the Pareto front of non-dominated solutions"""
+        if not self.pareto_front:
+            print("No Pareto front available. Run optimization first.")
+            return
+            
+        plt.figure(figsize=(10, 8))
+        
+        # Extract objective values from Pareto front
+        obj1_values = [ind.fitness.values[0] for ind in self.pareto_front]
+        obj2_values = [ind.fitness.values[1] for ind in self.pareto_front]
+        
+        # Plot Pareto front
+        plt.scatter(obj1_values, obj2_values, c='blue', s=50, alpha=0.8)
+        
+        # Connect points to show the front
+        sorted_indices = np.argsort(obj1_values)
+        sorted_obj1 = [obj1_values[i] for i in sorted_indices]
+        sorted_obj2 = [obj2_values[i] for i in sorted_indices]
+        plt.plot(sorted_obj1, sorted_obj2, 'b-', alpha=0.5)
+        
+        # Highlight the weighted best solution
+        best_ind = min(self.pareto_front, key=lambda ind: 0.5 * ind.fitness.values[0] + 0.5 * ind.fitness.values[1])
+        plt.scatter(best_ind.fitness.values[0], best_ind.fitness.values[1], 
+                   c='red', s=150, alpha=0.8, marker='*', label='Selected Solution')
+        
+        plt.xlabel('Objective 1: Demand Deficit')
+        plt.ylabel('Objective 2: Min Flow Deficit')
+        plt.title('Pareto Front of Non-dominated Solutions')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        plt.savefig(f'./model_output/optimisation/pareto_front_pop{self.population_size}_ngen{self.ngen}.png')

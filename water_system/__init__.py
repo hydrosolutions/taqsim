@@ -44,11 +44,12 @@ from .water_system import WaterSystem
 from .structure import Node, SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks
 from .edge import Edge
 from .visualization import WaterSystemVisualizer
-from .multi_genetic_optimizer import MultiGeneticOptimizer
+from .single_objective_ga import SingleObjectiveOptimizer
+from .multi_objective_ga import MultiObjectiveOptimizer
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'Node', 'SupplyNode', 'SinkNode', 'DemandNode', 
-           'StorageNode', 'HydroWorks', 'Edge', 'WaterSystemVisualizer', 'MultiGeneticOptimizer']
+           'StorageNode', 'HydroWorks', 'Edge', 'WaterSystemVisualizer', 'SingleObjectiveOptimizer', 'MultiObjectiveOptimizer']
 
 # Package version
 __version__ = '0.2.0'
