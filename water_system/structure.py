@@ -633,7 +633,7 @@ class StorageNode(Node):
 
     def __init__(self, id, hv_file, initial_storage=0, easting=None, northing=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 release_params=None, dead_storage=0):
+                 release_params=None, dead_storage=0, buffer_coef=0):
         """
         Initialize a StorageNode object.
 
@@ -666,6 +666,11 @@ class StorageNode(Node):
         self.evaporation_losses = []
         # Load height-volume-area data
         self._load_hv_data(hv_file)
+        
+        if buffer_coef < 0 and buffer_coef > 1:
+            raise ValueError(f"buffer_coef ({buffer_coef}) must be between 0 and 1")
+
+        self.buffer_coef = buffer_coef  # Buffer coefficient for low storage
 
  
         self.dead_storage = dead_storage  # Dead storage volume [m³]
@@ -699,7 +704,7 @@ class StorageNode(Node):
                          - a list of 12 floats (one per month)
         """
         # Validate parameters
-        required_params = ['Vr', 'V1', 'V2', 'buffer_coef']
+        required_params = ['Vr', 'V1', 'V2']
         if not all(key in params for key in required_params):
             missing = [key for key in required_params if key not in params]
             raise ValueError(f"Missing release parameters: {missing}")
@@ -719,7 +724,6 @@ class StorageNode(Node):
             Vr = monthly_params['Vr'][month]
             V1 = monthly_params['V1'][month]
             V2 = monthly_params['V2'][month]
-            buffer_coef = monthly_params['buffer_coef'][month]
             
             # Check volume relationships
             if Vr < 0:
@@ -736,9 +740,6 @@ class StorageNode(Node):
                 
             if V2 > self.capacity:
                 raise ValueError(f"Month {month+1}: V2 ({V2}) cannot exceed reservoir capacity ({self.capacity})")
-                
-            if buffer_coef < 0 and buffer_coef > 1:
-                raise ValueError(f"Month {month+1}: buffer_coef ({buffer_coef}) must be between 0 and 1")
 
 
         # Store parameters
@@ -759,7 +760,7 @@ class StorageNode(Node):
         Vr = self.release_params['Vr'][current_month]  # Target release volume
         V1 = self.release_params['V1'][current_month]  # Top of buffer zone
         V2 = self.release_params['V2'][current_month]  # Top of conservation zone
-        buffer_coef = self.release_params['buffer_coef'][current_month]  # Buffer coefficient
+        buffer_coef = self.buffer_coef
         
         # Case 1: Below dead storage
         if volume <= self.dead_storage:

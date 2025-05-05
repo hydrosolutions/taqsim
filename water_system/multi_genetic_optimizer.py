@@ -44,8 +44,7 @@ class MultiGeneticOptimizer:
                 self.reservoir_bounds[node_id] = {
                     'Vr': (0, total_capacity*self.dt),              # Target monthly release volume
                     'V1': (dead_storage, capacity),  # Top of buffer zone
-                    'V2': (dead_storage, capacity),  # Top of conservation zone
-                    'buffer_coef': (0, 1)                # Buffer coefficient
+                    'V2': (dead_storage, capacity)  # Top of conservation zone
                 }
 
             elif isinstance(node_data['node'], HydroWorks):
@@ -106,7 +105,7 @@ class MultiGeneticOptimizer:
 
     def _mutate_individual(self, individual, indpb=0.5):
         """Custom mutation operator with enforced parameter bounds for monthly parameters"""
-        genes_per_reservoir_month = 4
+        genes_per_reservoir_month = 3
         
         individual = np.array(individual)
         # Track which months need renormalization for each hydroworks
@@ -117,7 +116,7 @@ class MultiGeneticOptimizer:
             for month in range(12):
                 start_idx = (res_idx * 12 * genes_per_reservoir_month) + (month * genes_per_reservoir_month)
                 
-                for param_idx, param_name in enumerate(['Vr', 'V1', 'V2', 'buffer_coef']):
+                for param_idx, param_name in enumerate(['Vr', 'V1', 'V2']):
                     if random.random() < indpb:
                         bounds = self.reservoir_bounds[res_id][param_name]
                         value = np.random.uniform(bounds[0], bounds[1])
@@ -173,7 +172,7 @@ class MultiGeneticOptimizer:
         ind1, ind2 = np.array(ind1), np.array(ind2)
         
         # Handle reservoirs month by month
-        genes_per_month = 4 
+        genes_per_month = 3 
         num_reservoirs = len(self.reservoir_ids)
         
         # For each month
@@ -220,7 +219,7 @@ class MultiGeneticOptimizer:
 
     def _evaluate_individual(self, individual):
         """Evaluate fitness of an individual with bound checking"""
-        genes_per_reservoir = 4  # 5 parameters per reservoir
+        genes_per_reservoir = 3 
         
         try:
             # Decode parameters and continue with evaluation
@@ -273,7 +272,7 @@ class MultiGeneticOptimizer:
 
     def _decode_individual(self, individual):
         """Decode individual genes into monthly reservoir and hydroworks parameters"""
-        genes_per_reservoir_month = 4  # 5 parameters per month per reservoir
+        genes_per_reservoir_month = 3
         reservoir_params = {}
         hydroworks_params = {}
         
@@ -284,7 +283,7 @@ class MultiGeneticOptimizer:
         current_idx = 0
         for res_id in self.reservoir_ids:
             params = {
-                'Vr': [], 'V1': [], 'V2': [], 'buffer_coef': []
+                'Vr': [], 'V1': [], 'V2': []
             }
             
             # Get parameters for each month
@@ -293,7 +292,6 @@ class MultiGeneticOptimizer:
                 params['Vr'].append(individual[start_idx])
                 params['V1'].append(individual[start_idx + 1])
                 params['V2'].append(individual[start_idx + 2])
-                params['buffer_coef'].append(individual[start_idx + 3])
             
             reservoir_params[res_id] = params
             current_idx += 12 * genes_per_reservoir_month
@@ -342,10 +340,7 @@ class MultiGeneticOptimizer:
                 V2_max = bounds['V2'][1]
                 V2 = np.random.uniform(V2_min, V2_max)
                 
-                # Generate buffer coefficient
-                buffer_coef = np.random.uniform(bounds['buffer_coef'][0], bounds['buffer_coef'][1])
-                
-                genes.extend([Vr, V1, V2, buffer_coef])
+                genes.extend([Vr, V1, V2])
 
         # Add hydroworks genes
         for hw_id in self.hydroworks_ids:

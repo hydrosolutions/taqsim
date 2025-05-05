@@ -56,22 +56,20 @@ def create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario
     release_params_kattakurgan = {
         'Vr': 400000000,
         'V1': 300000000,
-        'V2': 500000000,
-        'buffer_coef': 0.5
+        'V2': 500000000
     }
     release_params_akdarya = {
         'Vr': 50000000,
         'V1': 3000000,
-        'V2': 60000000,
-        'buffer_coef': 0.5
+        'V2': 60000000
     }
 
     RES_Kattakurgan =StorageNode("RES-Kattakurgan",hv_file='./data/baseline/reservoir/reservoir_kattakurgan_hv.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
                                  evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
-                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
+                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5, buffer_coef=0.2)
     RES_AkDarya = StorageNode("RES-Akdarya", hv_file='./data/baseline/reservoir/reservoir_akdarya_hv.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
                               evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
-                              num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
+                              num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5, buffer_coef=0.2)
     
     # Sink Nodes
     sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/baseline/min_flow/min_flow_jizzakh_2000-2022_monthly.csv', start_year=start_year, 
@@ -537,13 +535,13 @@ if __name__ == "__main__":
     ### Run Tests ###
     #################
 
-    #run_tests(start_year=2017, start_month=1, num_time_steps=12)
+    #run_tests(start_year=2017, start_month=1, num_time_steps=6*12)
 
 
     ###########################
     ### Run Baseline Period ###
     ###########################
-    
+    #'''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
@@ -563,7 +561,7 @@ if __name__ == "__main__":
         efficiency = ''
     )
     
-    
+    #'''
     ###########################
     ### Run Future Scenario ###
     ###########################
@@ -590,7 +588,7 @@ if __name__ == "__main__":
     ############################################
     ### Run Optimization for Baseline Period ###
     ############################################
-    
+    '''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
@@ -617,7 +615,7 @@ if __name__ == "__main__":
     )        
 
     save_optimized_parameters(results, f"./model_output/optimisation/baseline_param_test.json")
-    
+    '''
     ############################################
     ### Run Optimization for Future Scenario ###
     ############################################
