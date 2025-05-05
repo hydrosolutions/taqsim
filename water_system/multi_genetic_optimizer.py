@@ -19,7 +19,7 @@ class MultiGeneticOptimizer:
         self.ngen = ngen
         self.cxpb = cxpb
         self.mutpb = mutpb
-        
+        self.dt = base_system.dt  # Time step in seconds
         self.reservoir_ids = []
         self.hydroworks_ids = []
         self.hydroworks_targets = {}
@@ -33,20 +33,19 @@ class MultiGeneticOptimizer:
                 self.reservoir_ids.append(node_id)
                 reservoir = node_data['node']
                 
-                # Get water level bounds from hv data
-                min_level = reservoir.dead_storage_level
-                max_level = reservoir.hv_data['max_waterlevel']
-                
                 # Calculate total outflow capacity using numpy
                 total_capacity = np.sum([edge.capacity for edge in reservoir.outflow_edges.values()])
                 
+                # Set volume-based bounds for the new parameterization
+                dead_storage = reservoir.dead_storage
+                capacity = reservoir.capacity
+                
                 # Set reservoir-specific bounds
                 self.reservoir_bounds[node_id] = {
-                    'h1': (min_level, max_level),  # Full range for h1
-                    'h2': (min_level, max_level),  # Full range for h2
-                    'w': (0, total_capacity),      # From 0 to total outflow capacity
-                    'm1': (1.47, 1.57),            # Standard slopes
-                    'm2': (1.47, 1.57)             # Standard slopes
+                    'Vr': (0, total_capacity*self.dt),              # Target monthly release volume
+                    'V1': (dead_storage, capacity),  # Top of buffer zone
+                    'V2': (dead_storage, capacity),  # Top of conservation zone
+                    'buffer_coef': (0, 1)                # Buffer coefficient
                 }
 
             elif isinstance(node_data['node'], HydroWorks):
@@ -83,19 +82,6 @@ class MultiGeneticOptimizer:
             return np.full_like(values, 1.0 / len(values))
         return values / total
     
-    def _bound_parameter(self, value, bounds):
-        """
-        Helper method to ensure a parameter stays within bounds using numpy for efficiency.
-        
-        Args:
-            value (float): Parameter value to check
-            bounds (tuple): (min, max) bounds for the parameter
-            
-        Returns:
-            float: Value clamped to bounds
-        """
-        return np.clip(value, bounds[0], bounds[1])
-
     def _setup_genetic_operators(self):
         """Configure genetic algorithm operators for multiple structures with dynamic bounds"""
         # Create attributes for each reservoir's parameters
@@ -120,7 +106,7 @@ class MultiGeneticOptimizer:
 
     def _mutate_individual(self, individual, indpb=0.5):
         """Custom mutation operator with enforced parameter bounds for monthly parameters"""
-        genes_per_reservoir_month = 5
+        genes_per_reservoir_month = 4
         
         individual = np.array(individual)
         # Track which months need renormalization for each hydroworks
@@ -131,20 +117,24 @@ class MultiGeneticOptimizer:
             for month in range(12):
                 start_idx = (res_idx * 12 * genes_per_reservoir_month) + (month * genes_per_reservoir_month)
                 
-                for param_idx, param_name in enumerate(['h1', 'h2', 'w', 'm1', 'm2']):
+                for param_idx, param_name in enumerate(['Vr', 'V1', 'V2', 'buffer_coef']):
                     if random.random() < indpb:
                         bounds = self.reservoir_bounds[res_id][param_name]
                         value = np.random.uniform(bounds[0], bounds[1])
                         
-                        # Special handling for h2 to maintain h1 < h2
-                        if param_name == 'h2':
-                            min_bound = max(bounds[0], individual[start_idx] + 0.1)
+                        # Special handling for volume relationships
+                        if param_name == 'V2':
+                            # Ensure V2 > V1
+                            min_bound = max(bounds[0], individual[start_idx + 1])  # V1 index is 1, V2 must be > V1
                             value = np.random.uniform(min_bound, bounds[1])
-                        elif param_name == 'h1':
-                            max_bound = min(bounds[1], individual[start_idx + 1] - 0.1)
-                            value = np.random.uniform(bounds[0], max_bound)
+                        elif param_name == 'V1':
+                            # Ensure V1 < V2 and V1 > dead_storage
+                            dead_storage = self.base_system.graph.nodes[res_id]['node'].dead_storage
+                            min_bound = max(bounds[0], dead_storage)
+                            max_bound = min(bounds[1], individual[start_idx + 2])  # V2 index is 2
+                            value = np.random.uniform(min_bound, max_bound)
                         
-                        individual[start_idx + param_idx] = self._bound_parameter(value, bounds)
+                        individual[start_idx + param_idx] = value
 
         # Mutate hydroworks parameters
         hw_genes_start = len(self.reservoir_ids) * 12 * genes_per_reservoir_month
@@ -183,7 +173,7 @@ class MultiGeneticOptimizer:
         ind1, ind2 = np.array(ind1), np.array(ind2)
         
         # Handle reservoirs month by month
-        genes_per_month = 5  # h1, h2, w, m1, m2
+        genes_per_month = 4 
         num_reservoirs = len(self.reservoir_ids)
         
         # For each month
@@ -198,22 +188,7 @@ class MultiGeneticOptimizer:
                     # Swap parameters for this month
                     ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
                         ind2[start_idx:end_idx].copy(), ind1[start_idx:end_idx].copy()
-                    
-                    # Check and fix h1 < h2 constraint after swap
-                    h1_idx = start_idx + 0
-                    h2_idx = start_idx + 1
-                    
-                    # Fix ind1 if needed
-                    if ind1[h1_idx] >= ind1[h2_idx]:
-                        mid_point = (ind1[h1_idx] + ind1[h2_idx]) / 2
-                        ind1[h1_idx] = mid_point - 0.1
-                        ind1[h2_idx] = mid_point + 0.1
-                    
-                    # Fix ind2 if needed
-                    if ind2[h1_idx] >= ind2[h2_idx]:
-                        mid_point = (ind2[h1_idx] + ind2[h2_idx]) / 2
-                        ind2[h1_idx] = mid_point - 0.1
-                        ind2[h2_idx] = mid_point + 0.1
+
         
         # Handle hydroworks month by month
         hw_start = num_reservoirs * 12 * genes_per_month
@@ -245,7 +220,7 @@ class MultiGeneticOptimizer:
 
     def _evaluate_individual(self, individual):
         """Evaluate fitness of an individual with bound checking"""
-        genes_per_reservoir = 5  # 5 parameters per reservoir
+        genes_per_reservoir = 4  # 5 parameters per reservoir
         
         try:
             # Decode parameters and continue with evaluation
@@ -298,7 +273,7 @@ class MultiGeneticOptimizer:
 
     def _decode_individual(self, individual):
         """Decode individual genes into monthly reservoir and hydroworks parameters"""
-        genes_per_reservoir_month = 5  # 5 parameters per month per reservoir
+        genes_per_reservoir_month = 4  # 5 parameters per month per reservoir
         reservoir_params = {}
         hydroworks_params = {}
         
@@ -309,17 +284,16 @@ class MultiGeneticOptimizer:
         current_idx = 0
         for res_id in self.reservoir_ids:
             params = {
-                'h1': [], 'h2': [], 'w': [], 'm1': [], 'm2': []
+                'Vr': [], 'V1': [], 'V2': [], 'buffer_coef': []
             }
             
             # Get parameters for each month
             for month in range(12):
                 start_idx = current_idx + month * genes_per_reservoir_month
-                params['h1'].append(individual[start_idx])
-                params['h2'].append(individual[start_idx + 1])
-                params['w'].append(individual[start_idx + 2])
-                params['m1'].append(individual[start_idx + 3])
-                params['m2'].append(individual[start_idx + 4])
+                params['Vr'].append(individual[start_idx])
+                params['V1'].append(individual[start_idx + 1])
+                params['V2'].append(individual[start_idx + 2])
+                params['buffer_coef'].append(individual[start_idx + 3])
             
             reservoir_params[res_id] = params
             current_idx += 12 * genes_per_reservoir_month
@@ -355,19 +329,23 @@ class MultiGeneticOptimizer:
         for res_id in self.reservoir_ids:
             bounds = self.reservoir_bounds[res_id]
             for month in range(12):
-                # Generate h1 and ensure h2 > h1
-                h1_bounds = bounds['h1']
-                h1 = np.random.uniform(h1_bounds[0], h1_bounds[1])
+                # Generate parameters ensuring proper relationships
+                Vr = np.random.uniform(bounds['Vr'][0], bounds['Vr'][1])
                 
-                h2_bounds = bounds['h2']
-                h2 = np.random.uniform(h1, h2_bounds[1])  # Ensure h2 > h1
+                # Ensure V1 is properly bounded
+                V1_min = bounds['V1'][0]
+                V1_max = bounds['V1'][1]
+                V1 = np.random.uniform(V1_min, V1_max)
                 
-                # Generate remaining parameters
-                w = np.random.uniform(bounds['w'][0], bounds['w'][1])
-                m1 = np.random.uniform(bounds['m1'][0], bounds['m1'][1])
-                m2 = np.random.uniform(bounds['m2'][0], bounds['m2'][1])
+                # Ensure V2 > V1
+                V2_min = max(bounds['V2'][0], V1)
+                V2_max = bounds['V2'][1]
+                V2 = np.random.uniform(V2_min, V2_max)
                 
-                genes.extend([h1, h2, w, m1, m2])
+                # Generate buffer coefficient
+                buffer_coef = np.random.uniform(bounds['buffer_coef'][0], bounds['buffer_coef'][1])
+                
+                genes.extend([Vr, V1, V2, buffer_coef])
 
         # Add hydroworks genes
         for hw_id in self.hydroworks_ids:

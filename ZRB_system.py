@@ -447,23 +447,15 @@ def run_system_with_optimized_parameters(system_creator, optimization_results, s
     system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(system, name)
-    
-    
-    # visulizations for the Report
     vis.plot_minimum_flow_compliance()
-    vis.plot_system_demands_vs_inflow()
-    vis.plot_demand_deficit_heatmap()
+    vis.plot_storage_dynamics()
+    vis.plot_reservoir_dynamics()
+    vis.plot_flow_compliance_heatmap()
+    vis.plot_spills()
     vis.plot_reservoir_volumes()
+    vis.plot_system_demands_vs_inflow()
     vis.plot_objective_function_breakdown()
-    vis.print_water_balance_summary()
-    vis.plot_network_overview()
-    vis.plot_network_layout()
-    vis.plot_network_layout_2()
-    
-
-    html_file = vis.create_interactive_network_visualization()
-    print(f"Interactive visualization saved to: {html_file}")
-    #webbrowser.open(f'file://{os.path.abspath(html_file)}')
+    print("Visualizations complete")
     
     return system
 
@@ -545,18 +537,18 @@ if __name__ == "__main__":
     ### Run Tests ###
     #################
 
-    run_tests(start_year=2017, start_month=1, num_time_steps=12)
+    #run_tests(start_year=2017, start_month=1, num_time_steps=12)
 
 
     ###########################
     ### Run Baseline Period ###
     ###########################
-    '''
+    
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
 
-    loaded_results = load_parameters_from_file(f"data/optimization/optimised_parameter/param_baseline_period.json")
+    loaded_results = load_parameters_from_file(f"./model_output/optimisation/baseline_param_test.json")
      
     system = run_system_with_optimized_parameters(
         create_ZRB_system_baseline,
@@ -570,7 +562,7 @@ if __name__ == "__main__":
         agr_scenario = '', 
         efficiency = ''
     )
-    '''
+    
     
     ###########################
     ### Run Future Scenario ###
@@ -598,7 +590,7 @@ if __name__ == "__main__":
     ############################################
     ### Run Optimization for Baseline Period ###
     ############################################
-    '''
+    
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
@@ -625,7 +617,7 @@ if __name__ == "__main__":
     )        
 
     save_optimized_parameters(results, f"./model_output/optimisation/baseline_param_test.json")
-    '''
+    
     ############################################
     ### Run Optimization for Future Scenario ###
     ############################################
