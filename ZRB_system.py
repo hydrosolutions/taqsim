@@ -686,12 +686,12 @@ if __name__ == "__main__":
     ###########################
     ### Run Baseline Period ###
     ###########################
-    '''
+    
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
 
-    loaded_results = load_parameters_from_file(f"./model_output/optimisation/baseline_param_test.json")
+    loaded_results = load_parameters_from_file(f"./data/optimised_parameter/euler_new_res_param_baseline.json")
      
     system = run_system_with_optimized_parameters(
         create_ZRB_system_baseline,
@@ -706,7 +706,7 @@ if __name__ == "__main__":
         efficiency = ''
     )
     
-    '''
+    
     ###########################
     ### Run Future Scenario ###
     ###########################
@@ -733,7 +733,7 @@ if __name__ == "__main__":
     ############################################
     ### Run Optimization for Baseline Period ###
     ############################################
-    #'''
+    '''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
