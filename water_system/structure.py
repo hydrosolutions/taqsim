@@ -631,9 +631,9 @@ class DemandNode(Node):
 
 class StorageNode(Node):  
 
-    def __init__(self, id, hv_file, initial_storage=0, easting=None, northing=None, 
+    def __init__(self, id, easting=None, northing=None, hv_file=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 dead_storage=0, buffer_coef=0):
+                 initial_storage=0, dead_storage=0, buffer_coef=0):
         """
         Initialize a StorageNode object.
 

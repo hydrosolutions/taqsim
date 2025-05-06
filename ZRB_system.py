@@ -9,335 +9,188 @@ import cProfile
 import pstats
 import io
 
-def create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario='', period='', agr_scenario='', efficiency=''):
-
+def create_ZRB_system(start_year, start_month, num_time_steps, system_type="baseline", 
+                     scenario='', period='', agr_scenario='', efficiency=''):
+    """
+    Flexible function to create a ZRB water system model for either baseline or scenario simulations.
+    
+    Args:
+        start_year (int): Start year for simulation
+        start_month (int): Start month for simulation (1-12)
+        num_time_steps (int): Number of time steps to simulate
+        system_type (str): "baseline" or "scenario"
+        scenario (str): Climate scenario (e.g., 'ssp126') - only used for scenario simulations
+        period (str): Time period (e.g., '2041-2070') - only used for scenario simulations
+        agr_scenario (str): Agricultural scenario - only used for scenario simulations
+        efficiency (str): Efficiency scenario (e.g., 'improved_efficiency') - only used for scenario simulations
+        
+    Returns:
+        WaterSystem: Configured water system ready for simulation
+    """
     # Set up the system with monthly time steps
     dt = 30.44 * 24 * 3600  # Average month in seconds
     system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
-
-    # Create nodes
-    supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file="data/baseline/inflow/inflow_ravatkhoza_2010-2023_monthly.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
-    # HydroWorks Nodes
-    HW_Ravadhoza = HydroWorks("HW-Ravatkhoza", easting=363094.43,northing=4377810.64)
-    HW_AkKaraDarya = HydroWorks("HW-AkKaraDarya", easting=333156.64,northing=4395650.43)
-    HW_Damkodzha = HydroWorks("HW-Damkhoza", easting=284720.68, northing=4417759.40)
-    HW_Narpay = HydroWorks("HW-Narpay", easting=270403.55,northing=4424501.92)
-    HW_Confluence=HydroWorks("HW-Confluence", easting=239889.6,northing=4433214.0)
-    HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
-    HW_EskiAnkhor=HydroWorks("HW-EskiAnkhor", easting=315015,northing=4390976)
     
-    # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,easting,northing,field_efficiency,conveyance_efficiency,weight)
-    Demand_info = pd.read_csv('./data/baseline/config/demand_nodes_config.csv', sep=',')
-    demand_nodes = []
-    for index, row in Demand_info.iterrows():
+    # Set base path according to system type
+    base_path = f"./data/{'baseline' if system_type == 'baseline' else 'scenarios'}"
+    
+    # Create Source Node with appropriate path
+    if system_type == "baseline":
+        inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_2010-2023_monthly.csv"
+    else:
+        inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_{scenario}_2012-2099.csv"
+    
+    Source = SupplyNode("Source", 
+                       easting=381835, 
+                       northing=4374682, 
+                       csv_file=inflow_path, 
+                       start_year=start_year, 
+                       start_month=start_month, 
+                       num_time_steps=num_time_steps)
+    system.add_node(Source)
+    
+    # Load Hydroworks Node Configuration
+    hydrowork_info = pd.read_csv(f'{base_path}/config/hydrowork_nodes_config.csv', sep=',')
+    for index, row in hydrowork_info.iterrows():
+        hw_node = HydroWorks(
+            row['name'],
+            easting=row['easting'],
+            northing=row['northing']
+        )
+        globals()[row['name']] = hw_node
+        system.add_node(hw_node)
+    
+    # Load Demand Node Configuration
+    demand_config_path = f'{base_path}/config/demand_nodes_config'
+    if system_type == "scenario" and efficiency:
+        demand_config_path += f"_{efficiency}"
+    demand_config_path += ".csv"
+    
+    demand_info = pd.read_csv(demand_config_path, sep=',')
+    
+    # Determine demand data file path
+    if system_type == "baseline":
+        demand_data_path = f"{base_path}/demand/demand_all_districts_2017-2022_monthly.csv"
+    else:
+        demand_data_path = f"{base_path}/demand/demand_{scenario}_{agr_scenario}_{period}.csv"
+    
+    # Create demand nodes
+    for index, row in demand_info.iterrows():
         demand_node = DemandNode(
             row['name'],
             easting=row['easting'],
             northing=row['northing'],
-            csv_file=f"./data/baseline/demand/demand_all_districts_2017-2022_monthly.csv",
+            csv_file=demand_data_path,
             start_year=start_year,
             start_month=start_month,
             num_time_steps=num_time_steps,
             field_efficiency=row['field_efficiency'],
             conveyance_efficiency=row['conveyance_efficiency'],
-            weight=row['weight'],
+            weight=row['weight']
         )
-        demand_nodes.append(demand_node)
+        globals()[row['name']] = demand_node
+        system.add_node(demand_node)
     
-    # Unpack demand nodes into individual variables based on Demand_info['name'] row
-    for index, row in Demand_info.iterrows():
-        globals()[row['name']] = demand_nodes[index]
-        #print(f"Created demand node: {row['name']}")
-
-    # Demand Thermal powerplant Navoi (25 m³/s)
-    Powerplant = DemandNode("Navoiy-Powerplant", demand_rates=25, non_consumptive_rate=17, easting=186146.3,northing=4454459.3, weight=1000)
-
-    # Reservoir
-    release_params_kattakurgan = {
-        'Vr': 400000000,
-        'V1': 300000000,
-        'V2': 500000000
-    }
-    release_params_akdarya = {
-        'Vr': 50000000,
-        'V1': 3000000,
-        'V2': 60000000
-    }
-
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hv_file='./data/baseline/reservoir/reservoir_kattakurgan_hv.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
-                                 evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
-                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5, buffer_coef=0.2)
-    RES_AkDarya = StorageNode("RES-Akdarya", hv_file='./data/baseline/reservoir/reservoir_akdarya_hv.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
-                              evaporation_file='./data/baseline/reservoir/reservoir_evaporation_2017-2022_monthly.csv', start_year=start_year, start_month=start_month, 
-                              num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5, buffer_coef=0.2)
+    # Add Industrial Demand Node
+    Powerplant = DemandNode("Powerplant", 
+                           demand_rates=25, 
+                           non_consumptive_rate=17, 
+                           easting=186146.3,
+                           northing=4454459.3, 
+                           weight=1000)
+    system.add_node(Powerplant)
     
-    # Sink Nodes
-    sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/baseline/min_flow/min_flow_jizzakh_2000-2022_monthly.csv', start_year=start_year, 
-                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/baseline/min_flow/min_flow_kashkadarya_2000-2022_monthly.csv', start_year=start_year, 
-                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/baseline/min_flow/min_flow_navoi_1968-2022_monthly.csv', start_year=start_year, 
-                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
-
-    # Add nodes to the system
-    supply_node = [supply]  # List of supply nodes
-    reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
-    hydroworks = [HW_EskiAnkhor, HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
-    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant]  # List of demand nodes
-    sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
-
-    # Iterate through each category and add nodes to the system
-    for node in supply_node + demand_node + reservoir + hydroworks + sink_node:
-        system.add_node(node)
-
-    # Add Edges to the system
-    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1230))
-    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
-
-    # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=45))
-    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=60))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=45))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=105))
-    system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=35))
-
-
-    # Supply for Toyloq, Urgut, Samarqand
-    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
-    system.add_edge(Edge(Toyloq, Samarqand, capacity=80))
-    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
-    system.add_edge(Edge(Urgut, Samarqand, capacity=125))
-    system.add_edge(Edge(Samarqand, HW_EskiAnkhor, capacity=205))
-    system.add_edge(Edge(HW_EskiAnkhor, Pastdargom, capacity=150))
-    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=150))
-    system.add_edge(Edge(HW_EskiAnkhor, Nurobod, capacity=60))
-    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=60))
-
-    # HW_AkKaraDarya
-    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
-    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=105))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=105))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=125))
-    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
-
-    # Damkodzha
-    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
-    system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
-    system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=90))
-    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=90))
-    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=90))
-
-    # HW_Narpay
-    system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
-    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80))
-    system.add_edge(Edge(Narpay, Paxtachi, capacity=80))
-    system.add_edge(Edge(Paxtachi, Karmana, capacity=80))
-    system.add_edge(Edge(Karmana, sink_downstream, capacity=80))
-
-    # HW_Confluence
-    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=400))
-
-    # HW_Karmana
-    system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
-    system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
-    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=400))
-    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=65))
-    system.add_edge(Edge(Powerplant, sink_downstream, capacity=65))
-
-    # HW-Ravadhoza distribution
-    HW_Ravadhoza.set_distribution_parameters({
-         'HW-AkKaraDarya': [0.7]*12,        
-         'Toyloq': 0.05,           
-         'Urgut': 0.1,
-         'Bulungur': 0.05,          
-         'Jomboy': 0.05,            
-         'Sink-Jizzakh': 0.05               
-    })
- 
-    # HW-EskiAnkhor distribution
-    HW_EskiAnkhor.set_distribution_parameters({
-         'Pastdargom': 0.610,        # 125/205
-         'Nurobod': 0.390            # 80/205
-    })
- 
-     # HW-AkKaraDarya distribution
-    HW_AkKaraDarya.set_distribution_parameters({
-         'Oqdaryo': 0.353,           # 300/850
-         'HW-Damkhoza': 0.647       # 550/850
-    })
- 
-     # HW-Damkhoza distribution
-    HW_Damkodzha.set_distribution_parameters({
-         'RES-Kattakurgan': 0.171,   # 100/585
-         'HW-Narpay': 0.137,         # 80/585
-         'HW-Confluence': 0.598,      # 350/585
-         'Kattaqorgon': 0.094        # 55/585
-    })
- 
-     # HW-Narpay distribution
-    HW_Narpay.set_distribution_parameters({
-         'HW-Confluence': 0.510,      # 125/245
-         'Narpay': 0.49,            # 80/245
-    })
- 
-     # HW-Confluence distribution
-    HW_Confluence.set_distribution_parameters({
-         'HW-Karmana': 1.0           # All flow goes to Karmana
-    })
- 
-     # HW-Karmana distribution
-    HW_Karmana.set_distribution_parameters({
-         'Navbahor': 0.078,          # 45/580
-         'Sink-Navoi': 0.862,    # 500/580
-         'Navoiy-Powerplant': 0.060         # 35/580
-    })
-
-    return system
-
-def create_ZRB_system_scenarios(start_year, start_month, num_time_steps, scenario='', period='', agr_scenario='', efficiency=''):
-
-    # Set up the system with monthly time steps
-    dt = 30.44 * 24 * 3600  # Average month in seconds
-    system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
-
-    # Create nodes
-    supply = SupplyNode("MountainSource", easting=381835,northing=4374682, csv_file=f"data/scenarios/inflow/inflow_ravatkhoza_{scenario}_2012-2099.csv", start_year= start_year, start_month=start_month, num_time_steps=num_time_steps)
-    # HydroWorks Nodes
-    HW_Ravadhoza = HydroWorks("HW-Ravatkhoza", easting=363094.43,northing=4377810.64)
-    HW_AkKaraDarya = HydroWorks("HW-AkKaraDarya", easting=333156.64,northing=4395650.43)
-    HW_Damkodzha = HydroWorks("HW-Damkhoza", easting=284720.68, northing=4417759.40)
-    HW_Narpay = HydroWorks("HW-Narpay", easting=270403.55,northing=4424501.92)
-    HW_Confluence=HydroWorks("HW-Confluence", easting=239889.6,northing=4433214.0)
-    HW_Karmana=HydroWorks("HW-Karmana", easting=209334.3,northing=4448118.7)
-    HW_EskiAnkhor=HydroWorks("HW-EskiAnkhor", easting=315015,northing=4390976)
+    # Determine evaporation file path
+    if system_type == "baseline":
+        evap_path = f"{base_path}/reservoir/reservoir_evaporation_2017-2022_monthly.csv"
+    else:
+        evap_path = f"{base_path}/reservoir/reservoir_evaporation_{scenario}_2015-2100.csv"
     
-    # Creates demand nodes from csv file DemandNode_Info.csv (columns: name,easting,northing,field_efficiency,conveyance_efficiency,weight)
-    Demand_info = pd.read_csv(f'./data/scenarios/config/demand_nodes_config_{efficiency}.csv', sep=',')
-    demand_nodes = []
-    for index, row in Demand_info.iterrows():
-        demand_node = DemandNode(
-            row['name'],
-            easting=row['easting'],
-            northing=row['northing'],
-            csv_file=f"./data/scenarios/demand/demand_{scenario}_{agr_scenario}_{period}.csv",
-            start_year=start_year,
-            start_month=start_month,
-            num_time_steps=num_time_steps,
-            field_efficiency=row['field_efficiency'],
-            conveyance_efficiency=row['conveyance_efficiency'],
-            weight=row['weight'],
-        )
-        demand_nodes.append(demand_node)
+    # Add Reservoir Nodes
+    RES_Kattakurgan = StorageNode("RES_Kattakurgan",
+                                 easting=265377.2,
+                                 northing=4414217.5, 
+                                 hv_file=f"./data/baseline/reservoir/reservoir_kattakurgan_hv.csv",
+                                 evaporation_file=evap_path,
+                                 start_year=start_year,
+                                 start_month=start_month,
+                                 num_time_steps=num_time_steps,
+                                 initial_storage=3e8,
+                                 dead_storage=32e5,
+                                 buffer_coef=0.2)
     
-    # Unpack demand nodes into individual variables based on Demand_info['name'] row
-    for index, row in Demand_info.iterrows():
-        globals()[row['name']] = demand_nodes[index]
-        #print(f"Created demand node: {row['name']}")
-
-    # Demand Thermal powerplant Navoi (25 m³/s)
-    Powerplant = DemandNode("Navoiy-Powerplant", demand_rates=25, non_consumptive_rate=17, easting=186146.3,northing=4454459.3, weight=1000)
-
-    # Reservoir
-    release_params_kattakurgan = {
-        'h1': 504.0,
-        'h2': 511.0,
-        'w': 5.0,
-        'm1': 1.5,
-        'm2': 1.5,
-    }
-    release_params_akdarya = {
-        'h1': 489.0,
-        'h2': 495.0,
-        'w': 30.0,
-        'm1': 1.51,
-        'm2': 1.54,
-    }
-    RES_Kattakurgan =StorageNode("RES-Kattakurgan",hv_file='./data/baseline/reservoir/reservoir_kattakurgan_hv.csv',easting=265377.2,northing= 4414217.5, initial_storage=3e8,
-                                 evaporation_file=f'./data/scenarios/reservoir/reservoir_evaporation_{scenario}_2015-2100.csv', start_year=start_year, start_month=start_month, 
-                                 num_time_steps=num_time_steps, release_params=release_params_kattakurgan, dead_storage=32e5)
-    RES_AkDarya = StorageNode("RES-Akdarya", hv_file='./data/baseline/reservoir/reservoir_akdarya_hv.csv' ,easting= 274383.7,northing=4432954.7, initial_storage=4e7, 
-                              evaporation_file=f'./data/scenarios/reservoir/reservoir_evaporation_{scenario}_2015-2100.csv', start_year=start_year, start_month=start_month, 
-                              num_time_steps=num_time_steps, release_params=release_params_akdarya, dead_storage=14e5)
+    RES_Akdarya = StorageNode("RES_Akdarya",
+                             easting=274383.7,
+                             northing=4432954.7,
+                             hv_file=f"./data/baseline/reservoir/reservoir_akdarya_hv.csv",
+                             evaporation_file=evap_path, 
+                             start_year=start_year,
+                             start_month=start_month,
+                             num_time_steps=num_time_steps,
+                             initial_storage=4e7,
+                             dead_storage=14e5,
+                             buffer_coef=0.2)
     
-    # Sink Nodes
-    sink_tuyatortor = SinkNode("Sink-Jizzakh", min_flow_csv_file='./data/scenarios/min_flow/min_flow_jizzakh_2015-2100.csv', start_year=start_year, 
-                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=376882.3,northing=4411307.9)
-    sink_eskiankhor = SinkNode("Sink-Kashkadarya",min_flow_csv_file='./data/scenarios/min_flow/min_flow_kashkadarya_2015-2100.csv', start_year=start_year, 
-                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=272551,northing=4361872)
-    sink_downstream = SinkNode("Sink-Navoi", min_flow_csv_file='./data/scenarios/min_flow/min_flow_navoi_2015-2100.csv', start_year=start_year, 
-                               start_month=start_month, num_time_steps=num_time_steps, weight=10, easting=153771,northing=4454402)
-
-    # Add nodes to the system
-    supply_node = [supply]  # List of supply nodes
-    reservoir = [RES_Kattakurgan, RES_AkDarya]  # List of reservoir nodes
-    hydroworks = [HW_EskiAnkhor, HW_Ravadhoza, HW_AkKaraDarya, HW_Damkodzha, HW_Narpay, HW_Confluence, HW_Karmana]  # List of agricultural demand nodes
-    demand_node = [Bulungur, Ishtixon, Jomboy, Karmana, Kattaqorgon, Narpay, Navbahor, Nurobod, Oqdaryo, Pastdargom, Paxtachi, Payariq, Samarqand, Toyloq, Urgut, Xatirchi, Powerplant]  # List of demand nodes
-    sink_node = [sink_tuyatortor, sink_eskiankhor, sink_downstream]  # List of sink nodes
-
-    # Iterate through each category and add nodes to the system
-    for node in supply_node + demand_node + reservoir + hydroworks + sink_node:
-        system.add_node(node)
-
-    # Add Edges to the system
-    system.add_edge(Edge(supply, HW_Ravadhoza, capacity=1230))
-    system.add_edge(Edge(HW_Ravadhoza, HW_AkKaraDarya, capacity=885))
-
-    # Supply for Bulungur, Jomboy and Payriq (and Jizzakh-Region)
-    system.add_edge(Edge(HW_Ravadhoza, Bulungur, capacity=45))
-    system.add_edge(Edge(HW_Ravadhoza, Jomboy, capacity=60))
-    system.add_edge(Edge(Bulungur, Jomboy, capacity=45))
-    system.add_edge(Edge(Jomboy, Payariq, capacity=105))
-    system.add_edge(Edge(HW_Ravadhoza, sink_tuyatortor, capacity=35))
-
-
-    # Supply for Toyloq, Urgut, Samarqand
-    system.add_edge(Edge(HW_Ravadhoza, Toyloq, capacity=80))
-    system.add_edge(Edge(Toyloq, Samarqand, capacity=80))
-    system.add_edge(Edge(HW_Ravadhoza, Urgut, capacity=125))
-    system.add_edge(Edge(Urgut, Samarqand, capacity=125))
-    system.add_edge(Edge(Samarqand, HW_EskiAnkhor, capacity=205))
-    system.add_edge(Edge(HW_EskiAnkhor, Pastdargom, capacity=150))
-    system.add_edge(Edge(Pastdargom, HW_Damkodzha, capacity=150))
-    system.add_edge(Edge(HW_EskiAnkhor, Nurobod, capacity=60))
-    system.add_edge(Edge(Nurobod, sink_eskiankhor, capacity=60))
-
-    # HW_AkKaraDarya
-    system.add_edge(Edge(HW_AkKaraDarya, Oqdaryo, capacity=230))
-    system.add_edge(Edge(Oqdaryo, RES_AkDarya, capacity=230))
-    system.add_edge(Edge(Payariq, Ishtixon, capacity=105))
-    system.add_edge(Edge(Ishtixon, RES_AkDarya, capacity=105))
-    system.add_edge(Edge(RES_AkDarya, HW_Confluence, capacity=125))
-    system.add_edge(Edge(HW_AkKaraDarya, HW_Damkodzha, capacity=550))
-
-    # Damkodzha
-    system.add_edge(Edge(HW_Damkodzha, RES_Kattakurgan, capacity=100))
-    system.add_edge(Edge(RES_Kattakurgan, HW_Narpay, capacity=125))
-    system.add_edge(Edge(HW_Damkodzha, HW_Narpay, capacity=80))
-    system.add_edge(Edge(HW_Damkodzha, HW_Confluence, capacity=350))
-    system.add_edge(Edge(HW_Damkodzha, Kattaqorgon, capacity=90))
-    system.add_edge(Edge(Kattaqorgon, Xatirchi, capacity=90))
-    system.add_edge(Edge(Xatirchi, HW_Karmana, capacity=90))
-
-    # HW_Narpay
-    system.add_edge(Edge(HW_Narpay, HW_Confluence, capacity=125))
-    system.add_edge(Edge(HW_Narpay, Narpay, capacity=80))
-    system.add_edge(Edge(Narpay, Paxtachi, capacity=80))
-    system.add_edge(Edge(Paxtachi, Karmana, capacity=80))
-    system.add_edge(Edge(Karmana, sink_downstream, capacity=80))
-
-    # HW_Confluence
-    system.add_edge(Edge(HW_Confluence, HW_Karmana, capacity=400))
-
-    # HW_Karmana
-    system.add_edge(Edge(HW_Karmana, Navbahor, capacity=45))
-    system.add_edge(Edge(Navbahor, sink_downstream, capacity=45))
-    system.add_edge(Edge(HW_Karmana, sink_downstream, capacity=400))
-    system.add_edge(Edge(HW_Karmana, Powerplant, capacity=65))
-    system.add_edge(Edge(Powerplant, sink_downstream, capacity=65))
-
+    # Add reservoirs to system
+    system.add_node(RES_Kattakurgan)
+    system.add_node(RES_Akdarya)
+    
+    # Determine min flow paths
+    if system_type == "baseline":
+        jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh_2000-2022_monthly.csv"
+        kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2000-2022_monthly.csv"
+        navoi_path = f"{base_path}/min_flow/min_flow_navoi_1968-2022_monthly.csv"
+    else:
+        jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh_2015-2100.csv"
+        kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2015-2100.csv"
+        navoi_path = f"{base_path}/min_flow/min_flow_navoi_2015-2100.csv"
+    
+    # Add Sink Nodes
+    Sink_Jizzakh = SinkNode("Sink_Jizzakh", 
+                           min_flow_csv_file=jizzakh_path, 
+                           start_year=start_year, 
+                           start_month=start_month, 
+                           num_time_steps=num_time_steps,
+                           weight=10, 
+                           easting=376882.3, 
+                           northing=4411307.9)
+    
+    Sink_Kashkadarya = SinkNode("Sink_Kashkadarya", 
+                               min_flow_csv_file=kashkadarya_path,
+                               start_year=start_year, 
+                               start_month=start_month, 
+                               num_time_steps=num_time_steps,
+                               weight=10, 
+                               easting=272551, 
+                               northing=4361872)
+    
+    Sink_Navoi = SinkNode("Sink_Navoi", 
+                         min_flow_csv_file=navoi_path,
+                         start_year=start_year, 
+                         start_month=start_month, 
+                         num_time_steps=num_time_steps,
+                         weight=10, 
+                         easting=153771, 
+                         northing=4454402)
+    
+    # Add sink nodes to system
+    system.add_node(Sink_Jizzakh)
+    system.add_node(Sink_Kashkadarya) 
+    system.add_node(Sink_Navoi)
+    
+    # Load Edge Configuration
+    with open(f'{base_path}/config/edges_config.json', 'r') as file:
+        edge_list = json.load(file)
+    
+    for node_id in edge_list:
+        node = system.graph.nodes[node_id]['node']
+        for edge in edge_list[node_id]:
+            target_node = system.graph.nodes[edge['target']]['node']
+            system.add_edge(Edge(node, target_node, capacity=edge['capacity']))
+    
+    # Finalize and validate the system
+    system._check_network()
+    
     return system
 
 def load_optimized_parameters(system, optimization_results):
@@ -460,7 +313,8 @@ def save_optimized_parameters(optimization_results, filename):
                     'id': i,
                     'objective_values': convert_to_float(ind.fitness.values),
                     'demand_deficit': float(ind.fitness.values[0]),
-                    'minflow_deficit': float(ind.fitness.values[1]),
+                    'priority_demand_deficit': float(ind.fitness.values[1]),
+                    'minflow_deficit': float(ind.fitness.values[2]),
                     'reservoir_parameters': convert_to_float(reservoir_params),
                     'hydroworks_parameters': convert_to_float(hydroworks_params)
                 }
@@ -482,38 +336,10 @@ def save_optimized_parameters(optimization_results, filename):
     if is_multi_objective and 'pareto_solutions' in save_data:
         print(f"Saved {save_data['num_pareto_solutions']} Pareto-optimal solutions")
 
-def run_system_with_optimized_parameters(system_creator, optimization_results, start_year, start_month, 
-                                         num_time_steps, name='ZRB_system', scenario='', period='', agr_scenario='', efficiency=''):
-    
-    # Create new system
-    system = system_creator(start_year, start_month, num_time_steps, scenario, period, agr_scenario, efficiency)
-    
-    # Load optimized parameters
-    system = load_optimized_parameters(system, optimization_results)
-    
-    # Run simulation
-    system.simulate(num_time_steps)
-
-    vis=WaterSystemVisualizer(system, name)
-    vis.plot_minimum_flow_compliance()
-    vis.plot_storage_dynamics()
-    vis.plot_reservoir_dynamics()
-    vis.plot_flow_compliance_heatmap()
-    vis.plot_spills()
-    vis.plot_reservoir_volumes()
-    vis.plot_system_demands_vs_inflow()
-    vis.plot_objective_function_breakdown()
-    vis.print_water_balance_summary()
-    vis.plot_demand_satisfaction()
-    vis.plot_demand_deficit_heatmap()
-    print("Visualizations complete")
-    
-    return system
-
-def run_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, scenario = '', period = '', agr_scenario= ' ', efficiency = ' ',
+def run_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, system_type='baseline',  scenario = '', period = '', agr_scenario= ' ', efficiency = ' ',
                      ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
     
-    ZRB_system = system_creator(start_year, start_month, num_time_steps, scenario, period, agr_scenario, efficiency)
+    ZRB_system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
 
     
     optimizer = SingleObjectiveOptimizer(
@@ -557,35 +383,33 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
             print("]")
 
     optimizer.plot_convergence()
+    if system_type == 'baseline':
+        save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+    else:
+        save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+
+    ZRB_system = load_optimized_parameters(ZRB_system, results)
+    ZRB_system.simulate(num_time_steps)
+
+    vis=WaterSystemVisualizer(ZRB_system, name=f'ZRB_optimization_{system_type}')
+    vis.plot_storage_dynamics()
+    vis.plot_reservoir_dynamics()
+    vis.plot_spills()
+    vis.plot_reservoir_volumes()
+    vis.plot_system_demands_vs_inflow()
+    vis.plot_objective_function_breakdown()
+    vis.print_water_balance_summary()
+    vis.plot_demand_deficit_heatmap()
+    vis.plot_network_layout()
+    vis.plot_network_layout_2()
 
     return results
 
-def run_tests(start_year=2017, start_month=1, num_time_steps=12):
- 
-     ZRB_system = create_ZRB_system_baseline(start_year, start_month, num_time_steps, scenario='', period='', agr_scenario='', efficiency='')
- 
-     print("ZRB system simulation:")
-     ZRB_system._check_network()
-     ZRB_system.simulate(num_time_steps)
-     print("Simulation complete")
- 
-     print('ZRB system visualization:')
-     vis_ZRB=WaterSystemVisualizer(ZRB_system, 'ZRB')
-     vis_ZRB.plot_minimum_flow_compliance()
-     vis_ZRB.plot_storage_dynamics()
-     vis_ZRB.plot_reservoir_dynamics()
-     vis_ZRB.plot_flow_compliance_heatmap()
-     vis_ZRB.plot_spills()
-     vis_ZRB.plot_reservoir_volumes()
-     vis_ZRB.plot_system_demands_vs_inflow()
-     vis_ZRB.plot_objective_function_breakdown()
-     print("Visualizations complete")
-
-def run_multi_objective_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, scenario='', period='', agr_scenario='', efficiency='',
+def run_multi_objective_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, system_type='baseline', scenario='', period='', agr_scenario='', efficiency='',
                      ngen=100, pop_size=100, cxpb=0.5, mutpb=0.2):
     
     # Create the base water system
-    water_system = system_creator(start_year, start_month, num_time_steps, scenario, period, agr_scenario, efficiency)
+    water_system = system_creator(start_year, start_month, num_time_steps, system_type, scenario, period, agr_scenario, efficiency)
     
     # Initialize the multi-objective optimizer
     optimizer = MultiObjectiveOptimizer(
@@ -639,179 +463,149 @@ def run_multi_objective_optimization(system_creator, start_year=2017, start_mont
             print(f"{target}: [", end="")
             print(", ".join(f"{v:.3f}" for v in values), end="")
             print("]")
-
+    
     return results
+
+def run_simulation(system_creator, optimization_results, start_year, start_month, num_time_steps, 
+                                         system_type='baseline', scenario='', period='', agr_scenario='', efficiency=''):
+    
+    # Create new system
+    system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
+    
+    # Load optimized parameters
+    system = load_optimized_parameters(system, optimization_results)
+    
+    # Run simulation
+    system.simulate(num_time_steps)
+
+    vis=WaterSystemVisualizer(system, name=f'ZRB_simulation_{system_type}')
+    vis.plot_network_layout()
+    vis.plot_minimum_flow_compliance()
+    vis.plot_spills()
+    vis.plot_reservoir_volumes()
+    vis.plot_system_demands_vs_inflow()
+    vis.plot_demand_deficit_heatmap()
+    vis.print_water_balance_summary()
+    print("Visualizations complete")
+    
+    return system
 
 # Run the sample tests
 if __name__ == "__main__":
+    optimization = False
+    simulation = False
+    multiobjective = True
 
-    ##########################################
-    ### Multiobjective GA: Baseline System ###
-    ##########################################
-    '''
-    start_year = 2017
-    start_month = 1
-    num_time_steps = 12*6
+    if optimization: 
+        # Example of running the optimization for a baseline system
+        results = run_optimization(
+            create_ZRB_system,
+            start_year=2017, 
+            start_month=1, 
+            num_time_steps=12*6,
+            system_type = 'baseline',
+            scenario = '', 
+            period = '', 
+            agr_scenario= ' ', 
+            efficiency = ' ', 
+            ngen=10, 
+            pop_size=30, 
+            cxpb=0.65, 
+            mutpb= 0.32
+        )
+        # Example of running the optimization for a future scenario
+        results = run_optimization(
+            create_ZRB_system,
+            start_year=2041, 
+            start_month=1, 
+            num_time_steps=12*30,
+            system_type = 'scenario',
+            scenario = 'ssp126',
+            period = '2041-2070',
+            agr_scenario = 'diversification', 
+            efficiency = 'improved_efficiency', # or 'noeff' 
+            ngen=10, 
+            pop_size=30, 
+            cxpb=0.65, 
+            mutpb= 0.32
+        ) 
 
-    # GA settings
-    ngen = 10  # Number of generations
-    pop_size = 50  # Population size
-    cxpb = 0.65  # Crossover probability
-    mutpb = 0.32  # Mutation probability
+    if simulation:
+        # Example of running the simulation with optimized parameters for a baseline system
+        loaded_results = load_parameters_from_file(f"./data/optimised_parameter/2025-05-05_euler_new_res_param_baseline.json")
+        
+        system = run_simulation(
+            create_ZRB_system,
+            loaded_results,
+            start_year=2017,
+            start_month=1,
+            num_time_steps=12*6,
+            system_type = 'baseline', 
+            scenario = '',
+            period = '',
+            agr_scenario = '', 
+            efficiency = ''
+        )
 
-    # Run multi-objective optimization
-    results = run_multi_objective_optimization(
-        create_ZRB_system_baseline,
-        start_year, 
-        start_month, 
-        num_time_steps,
-        scenario = '', 
-        period = '', 
-        agr_scenario= '', 
-        efficiency = '', 
-        ngen=ngen, 
-        pop_size=pop_size, 
-        cxpb=cxpb, 
-        mutpb=mutpb
-    )        
+        system = run_simulation(
+            create_ZRB_system,
+            loaded_results,
+            start_year=2041,
+            start_month=1,
+            num_time_steps=12*30,
+            system_type = 'scenario', 
+            scenario = 'ssp126',
+            period = '2041-2070',
+            agr_scenario = 'diversification', 
+            efficiency = 'improved_efficiency' # or 'noeff'
+        )
 
-    # Save the results
-    save_optimized_parameters(results, f"./model_output/optimisation/multiobjective_baseline_params.json")
-
-    #'''
-    with open("./model_output/optimisation/multiobjective_baseline_params.json", "r") as f:
-        data = json.load(f)
-    
-    pareto_solutions = data.get('pareto_solutions', [])
-    
-    # Create dashboard
-    dashboard = ParetoFrontDashboard(
-        pareto_solutions=pareto_solutions,
-        output_dir="./model_output/dashboard/baseline"
-    )
-    
-    # Generate all visualizations
-    dashboard.generate_full_report()
-    
-    print(f"Dashboard created at {dashboard.output_dir}/index.html")
-
-    #################
-    ### Run Tests ###
-    #################
-
-    #run_tests(start_year=2017, start_month=1, num_time_steps=6*12)
+    if multiobjective:
+        # Example of running the multi-objective optimization for a baseline system
+        results = run_multi_objective_optimization(
+            create_ZRB_system,
+            start_year=2017, 
+            start_month=1, 
+            num_time_steps=12*6,
+            system_type = 'baseline',
+            scenario = '', 
+            period = '', 
+            agr_scenario= '', 
+            efficiency = '', 
+            ngen=90, 
+            pop_size=3000, 
+            cxpb=0.65, 
+            mutpb=0.32
+        )
 
 
-    ###########################
-    ### Run Baseline Period ###
-    ###########################
-    '''
-    start_year = 2017
-    start_month = 1
-    num_time_steps = 12*6
+        save_optimized_parameters(results, f"./model_output/optimisation/multiobjective_params.json")
 
-    loaded_results = load_parameters_from_file(f"./data/optimised_parameter/2025-05-05_euler_new_res_param_baseline.json")
-     
-    system = run_system_with_optimized_parameters(
-        create_ZRB_system_baseline,
-        loaded_results,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps, 
-        name= 'Baseline Period',
-        scenario = '',
-        period = '',
-        agr_scenario = '', 
-        efficiency = ''
-    )
-    
-    #'''
-    ###########################
-    ### Run Future Scenario ###
-    ###########################
-    '''
-    start_year = 2041
-    start_month = 1
-    num_time_steps = 12*29
+        # Create dashboard for the Pareto front
+        dashboard = ParetoFrontDashboard(
+            pareto_solutions=results['pareto_front'],
+            output_dir=f"./model_output/dashboard/baseline",
+        )
+        
+        # Generate all visualizations
+        dashboard.generate_full_report()
 
-    loaded_results = load_parameters_from_file(f"data/optimization/optimised_parameter/param_ssp126_mid_century_diversification.json")
-     
-    system = run_system_with_optimized_parameters(
-        create_ZRB_system_scenarios,
-        loaded_results,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps, 
-        name= 'Diversification SSP126',
-        scenario = 'ssp126',
-        period = '2041-2070',
-        agr_scenario = 'diversification', 
-        efficiency = 'improved_efficiency' # or 'noeff'
-    )
-    #'''
-    ############################################
-    ### Run Optimization for Baseline Period ###
-    ############################################
-    '''
-    start_year = 2017
-    start_month = 1
-    num_time_steps = 12*6
-
-    # GA settings
-    ngen = 90
-    pop_size = 30
-    cxpb = 0.65
-    mutpb = 0.32
-
-    results = run_optimization(
-        create_ZRB_system_baseline,
-        start_year, 
-        start_month, 
-        num_time_steps,
-        scenario = '', 
-        period = '', 
-        agr_scenario= ' ', 
-        efficiency = ' ', 
-        ngen=ngen, 
-        pop_size=pop_size, 
-        cxpb=cxpb, 
-        mutpb= mutpb
-    )        
-
-    save_optimized_parameters(results, f"./model_output/optimisation/baseline_param_test.json")
-    #'''
-    ############################################
-    ### Run Optimization for Future Scenario ###
-    ############################################
-    '''
-    start_year = 2041
-    start_month = 1
-    num_time_steps = 12*30
-
-    # GA settings
-    ngen = 10
-    pop_size = 20
-    cxpb = 0.65
-    mutpb = 0.32
-
-    results = run_optimization(
-        create_ZRB_system_scenarios,
-        start_year, 
-        start_month, 
-        num_time_steps,
-        scenario = 'ssp126',
-        period = '2041-2070',
-        agr_scenario = 'diversification', 
-        efficiency = 'improved_efficiency', # or 'noeff' 
-        ngen=ngen, 
-        pop_size=pop_size, 
-        cxpb=cxpb, 
-        mutpb= mutpb
-    )        
-
-    save_optimized_parameters(results, f"./model_output/optimisation/ssp126_div_mid_impeff_param_test.json")
-    '''
-
+        with open("./model_output/optimisation/multiobjective_params.json", "r") as f:
+            data = json.load(f)
+        
+        pareto_solutions = data.get('pareto_solutions', [])
+        
+        # Create dashboard
+        dashboard = ParetoFrontDashboard(
+            pareto_solutions=pareto_solutions,
+            output_dir="./model_output/dashboard/baseline"
+        )
+        
+        # Generate all visualizations
+        dashboard.generate_full_report()
+        
+        print(f"Dashboard created at {dashboard.output_dir}/index.html")
+   
 
     ##################################
     ### Options for Code Profiling ###
