@@ -293,11 +293,9 @@ class MultiObjectiveOptimizer:
                 elif hasattr(node, 'spill_register'):
                     spill_penalty += 100.0 * np.sum(node.spill_register)
             
-            # Distribute spill penalty across objectives (proportionally or equally)
-            spill_per_objective = spill_penalty / 3
-            regular_demand_deficit += spill_per_objective
-            priority_demand_deficit += spill_per_objective
-            minflow_deficit += spill_per_objective
+            # Place Spill penalty to priority objective
+            priority_demand_deficit += spill_penalty
+            
             
             return (regular_demand_deficit, priority_demand_deficit, minflow_deficit)
         

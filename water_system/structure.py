@@ -633,7 +633,7 @@ class StorageNode(Node):
 
     def __init__(self, id, hv_file, initial_storage=0, easting=None, northing=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 release_params=None, dead_storage=0, buffer_coef=0):
+                 dead_storage=0, buffer_coef=0):
         """
         Initialize a StorageNode object.
 
@@ -647,12 +647,6 @@ class StorageNode(Node):
             start_year (int, optional): Starting year for evaporation data
             start_month (int, optional): Starting month (1-12) for evaporation data
             num_time_steps (int, optional): Number of time steps to import from evaporation data
-            release_params (dict): Dictionary of monthly release parameters {
-                'Vr': list[12] or float,  # Target monthly release volume [m³]
-                'V1': list[12] or float,  # Top of buffer zone volume [m³]
-                'V2': list[12] or float,  # Top of conservation zone volume [m³]
-                'buffer_coef': list[12] or float,  # Buffer zone coefficient for low storage
-            }
             dead_storage (float): Dead storage volume (V0) [m³]
         """
         # Call parent class (Node) initialization
@@ -679,10 +673,6 @@ class StorageNode(Node):
         self.evaporation_rates = self._initialize_evaporation_rates(
             id, evaporation_file, start_year, start_month, num_time_steps
         )
-
-
-        # Set release parameters with validation
-        self.set_release_params(release_params)
 
         # Validate initial storage against capacity
         if initial_storage > self.capacity:
