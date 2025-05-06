@@ -9,7 +9,6 @@ import networkx as nx
 import pandas as pd
 from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode
 from .edge import Edge
-from .visualization import WaterSystemVisualizer
 import numpy as np
 
 class WaterSystem:

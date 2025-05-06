@@ -5,7 +5,7 @@ import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
 import copy
 
-class MultiObjectiveOptimizer:
+class TwoObjectiveOptimizer:
     """
     Two-objective genetic algorithm optimizer for water systems with multiple
     reservoirs and hydroworks nodes.
@@ -59,7 +59,7 @@ class MultiObjectiveOptimizer:
         if 'Individual' in creator.__dict__:
             del creator.Individual
             
-        creator.create("FitnessMulti", base.Fitness, weights=(-1.0, -1.0, -1.0))
+        creator.create("FitnessMulti", base.Fitness, weights=(-1.0, -1.0))  # Minimize both objectives
         creator.create("Individual", list, fitness=creator.FitnessMulti)
         
         self.toolbox = base.Toolbox()
@@ -69,8 +69,7 @@ class MultiObjectiveOptimizer:
         
         # Store convergence history for both objectives
         self.history = {'min_obj1': [], 'avg_obj1': [], 'std_obj1': [],
-                       'min_obj2': [], 'avg_obj2': [], 'std_obj2': [], 
-                       'min_obj3': [], 'avg_obj3': [], 'std_obj3': []}
+                       'min_obj2': [], 'avg_obj2': [], 'std_obj2': []}
         
         # Store Pareto front
         self.pareto_front = []
@@ -229,14 +228,11 @@ class MultiObjectiveOptimizer:
         return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
     def _evaluate_individual(self, individual):
-        """
-        Evaluate multi-objective fitness with three objectives:
-        1. Minimize unmet demand for regular demand nodes (weight = 1)
-        2. Minimize unmet demand for high-priority demand nodes (weight = 1000)
-        3. Minimize deficit in minimum flow requirements at sink nodes
-        """
+        """Evaluate multi-objective fitness of an individual"""
+        genes_per_reservoir = 3 
+        
         try:
-            # Decode parameters and configure water system
+            # Decode parameters and continue with evaluation
             reservoir_params, hydroworks_params = self._decode_individual(individual)
             
             # Create and configure water system
@@ -256,33 +252,25 @@ class MultiObjectiveOptimizer:
             system.simulate(self.num_time_steps)
             
             # Initialize objective values
-            regular_demand_deficit = 0  # Objective 1: Regular demand nodes (weight = 1)
-            priority_demand_deficit = 0  # Objective 2: High-priority demand nodes (weight = 1000)
-            minflow_deficit = 0  # Objective 3: Minimum flow requirements at sink nodes
+            demand_deficit_penalty = 0
+            minflow_deficit_penalty = 0
             
             # Calculate penalties for each component
             for node_id, node_data in system.graph.nodes(data=True):
                 node = node_data['node']
                 
                 if isinstance(node, DemandNode):
-                    # Get demand data
                     demand = np.array([node.get_demand_rate(t) for t in range(self.num_time_steps)])
                     satisfied = np.array(node.satisfied_demand_total)
                     deficit = (demand - satisfied) * system.dt
-                    
-                    # Separate nodes based on their weight
-                    if node.weight > 1:  # High-priority node
-                        priority_demand_deficit += np.sum(deficit)
-                    elif node.weight == 1:  # Regular node
-                        regular_demand_deficit += np.sum(deficit)
-
+                    weighted_deficit = deficit * node.weight
+                    demand_deficit_penalty += np.sum(weighted_deficit)
                 
                 elif isinstance(node, SinkNode):
-                    # Objective 3: Calculate minimum flow deficit
-                    min_flow_volume = node.get_total_deficit_volume(system.dt)
-                    minflow_deficit += min_flow_volume  # Use the weight if needed
+                    total_deficit_volume = node.get_total_deficit_volume(system.dt)
+                    minflow_deficit_penalty += total_deficit_volume * node.weight
             
-            # Handle spills (distribute evenly among objectives or based on priority)
+            # Add spill penalties (distributed between objectives)
             spill_penalty = 0
             for node_id, node_data in system.graph.nodes(data=True):
                 node = node_data['node']
@@ -293,18 +281,16 @@ class MultiObjectiveOptimizer:
                 elif hasattr(node, 'spill_register'):
                     spill_penalty += 100.0 * np.sum(node.spill_register)
             
-            # Distribute spill penalty across objectives (proportionally or equally)
-            spill_per_objective = spill_penalty / 3
-            regular_demand_deficit += spill_per_objective
-            priority_demand_deficit += spill_per_objective
-            minflow_deficit += spill_per_objective
+            # Add half of spill penalty to each objective
+            demand_deficit_penalty += 0.5 * spill_penalty
+            minflow_deficit_penalty += 0.5 * spill_penalty
             
-            return (regular_demand_deficit, priority_demand_deficit, minflow_deficit)
+            return (demand_deficit_penalty, minflow_deficit_penalty)
         
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'), float('inf'), float('inf'))
-    
+            return (float('inf'), float('inf'))
+
     def _decode_individual(self, individual):
         """Decode individual genes into monthly reservoir and hydroworks parameters"""
         genes_per_reservoir_month = 3
@@ -389,7 +375,7 @@ class MultiObjectiveOptimizer:
         return creator.Individual(genes)
 
     def optimize(self):
-        """Run multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection for three objectives"""
+        """Run multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
         
@@ -398,7 +384,7 @@ class MultiObjectiveOptimizer:
         for ind, fit in zip(pop, fitnesses):
             ind.fitness.values = fit
             
-        # Initialize statistics tracking for all three objectives
+        # Initialize statistics tracking for both objectives
         stats_obj1 = tools.Statistics(lambda ind: ind.fitness.values[0])
         stats_obj1.register("min", np.min)
         stats_obj1.register("avg", np.mean)
@@ -409,13 +395,8 @@ class MultiObjectiveOptimizer:
         stats_obj2.register("avg", np.mean)
         stats_obj2.register("std", np.std)
         
-        stats_obj3 = tools.Statistics(lambda ind: ind.fitness.values[2])
-        stats_obj3.register("min", np.min)
-        stats_obj3.register("avg", np.mean)
-        stats_obj3.register("std", np.std)
-        
         # Combine statistics into a multi-statistics object
-        mstats = tools.MultiStatistics(obj1=stats_obj1, obj2=stats_obj2, obj3=stats_obj3)
+        mstats = tools.MultiStatistics(obj1=stats_obj1, obj2=stats_obj2)
         
         # Create the logbook for statistics
         logbook = tools.Logbook()
@@ -439,47 +420,44 @@ class MultiObjectiveOptimizer:
                 if random.random() < self.cxpb:
                     offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
                     del offspring[i-1].fitness.values, offspring[i].fitness.values
-                        
+                    
             for i in range(len(offspring)):
                 if random.random() < self.mutpb:
                     offspring[i], = self.toolbox.mutate(offspring[i])
                     del offspring[i].fitness.values
-                
+            
             # Evaluate the individuals with an invalid fitness
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = map(self.toolbox.evaluate, invalid_ind)
             for ind, fit in zip(invalid_ind, fitnesses):
                 ind.fitness.values = fit
-                
+            
             # Select the survivors from the combined population of parents and offspring
             pop = self.toolbox.select(pop + offspring, self.population_size)
-                
+            
             # Record statistics
             record = mstats.compile(pop)
             logbook.record(gen=gen, nevals=len(invalid_ind), **record)
             print(logbook.stream)
-                
-            # Store the history for all three objectives
+            
+            # Store the history
             self.history['min_obj1'].append(record['obj1']['min'])
             self.history['avg_obj1'].append(record['obj1']['avg'])
             self.history['std_obj1'].append(record['obj1']['std'])
             self.history['min_obj2'].append(record['obj2']['min'])
             self.history['avg_obj2'].append(record['obj2']['avg'])
             self.history['std_obj2'].append(record['obj2']['std'])
-            self.history['min_obj3'].append(record['obj3']['min'])
-            self.history['avg_obj3'].append(record['obj3']['avg'])
-            self.history['std_obj3'].append(record['obj3']['std'])
         
         # Extract the Pareto front
         self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
         
-        # Get the overall best individual based on a weighted sum of all three objectives
-        best_ind = min(pop, key=lambda ind: (ind.fitness.values[0] + ind.fitness.values[1] + ind.fitness.values[2])/3)
+        # Get the overall best individual based on a weighted sum of objectives
+        best_ind = min(pop, key=lambda ind: 0.5 * ind.fitness.values[0] + 0.5 * ind.fitness.values[1])
         reservoir_params, hydroworks_params = self._decode_individual(best_ind)
 
         return {
             'success': True,
-            'message': "Three-objective optimization completed successfully",
+            'message': "Optimization completed successfully",
             'population_size': self.population_size,
             'generations': self.ngen,
             'crossover_probability': self.cxpb,
@@ -488,15 +466,15 @@ class MultiObjectiveOptimizer:
             'optimal_reservoir_parameters': reservoir_params,
             'optimal_hydroworks_parameters': hydroworks_params,
             'pareto_front': self.pareto_front,
-            'optimizer': self  # Include the optimizer instance
+            'optimizer': self
         }
 
     def plot_convergence(self):
-        """Plot convergence history for all three objectives"""
-        plt.figure(figsize=(15, 15))
+        """Plot convergence history for both objectives"""
+        plt.figure(figsize=(15, 10))
         
-        # Plot regular demand objective convergence
-        plt.subplot(3, 1, 1)
+        # Plot first objective convergence
+        plt.subplot(2, 1, 1)
         gens = range(len(self.history['min_obj1']))
         
         plt.plot(gens, self.history['min_obj1'], 'b-', label='Best Fitness')
@@ -507,13 +485,13 @@ class MultiObjectiveOptimizer:
                         alpha=0.2, color='r')
         
         plt.xlabel('Generation')
-        plt.ylabel('Regular Demand Deficit [m³]')
-        plt.title('Regular Demand Deficit Convergence')
+        plt.ylabel('Objective 1: Demand Deficit')
+        plt.title('Objective 1 Convergence')
         plt.legend()
         plt.grid(True)
         
-        # Plot priority demand objective convergence
-        plt.subplot(3, 1, 2)
+        # Plot second objective convergence
+        plt.subplot(2, 1, 2)
         
         plt.plot(gens, self.history['min_obj2'], 'b-', label='Best Fitness')
         plt.plot(gens, self.history['avg_obj2'], 'r-', label='Average Fitness')
@@ -523,176 +501,47 @@ class MultiObjectiveOptimizer:
                         alpha=0.2, color='r')
         
         plt.xlabel('Generation')
-        plt.ylabel('Priority Demand Deficit [m³]')
-        plt.title('Priority Demand Deficit Convergence')
-        plt.legend()
-        plt.grid(True)
-        
-        # Plot minimum flow objective convergence
-        plt.subplot(3, 1, 3)
-        
-        plt.plot(gens, self.history['min_obj3'], 'b-', label='Best Fitness')
-        plt.plot(gens, self.history['avg_obj3'], 'r-', label='Average Fitness')
-        plt.fill_between(gens, 
-                        np.array(self.history['avg_obj3']) - np.array(self.history['std_obj3']),
-                        np.array(self.history['avg_obj3']) + np.array(self.history['std_obj3']),
-                        alpha=0.2, color='r')
-        
-        plt.xlabel('Generation')
-        plt.ylabel('Minimum Flow Deficit [m³]')
-        plt.title('Minimum Flow Deficit Convergence')
+        plt.ylabel('Objective 2: Min Flow Deficit')
+        plt.title('Objective 2 Convergence')
         plt.legend()
         plt.grid(True)
         
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/three_objective_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        plt.savefig(f'./model_output/optimisation/multiobjective_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         
-        # Also plot the 3D Pareto front
-        self.plot_pareto_front_3d()
-
-    def plot_pareto_front_3d(self):
-        """Plot the 3D Pareto front of non-dominated solutions"""
+        # Also plot the Pareto front
+        self.plot_pareto_front()
+        
+    def plot_pareto_front(self):
+        """Plot the Pareto front of non-dominated solutions"""
         if not self.pareto_front:
             print("No Pareto front available. Run optimization first.")
             return
             
-        fig = plt.figure(figsize=(12, 10))
-        ax = fig.add_subplot(111, projection='3d')
+        plt.figure(figsize=(10, 8))
         
         # Extract objective values from Pareto front
         obj1_values = [ind.fitness.values[0] for ind in self.pareto_front]
         obj2_values = [ind.fitness.values[1] for ind in self.pareto_front]
-        obj3_values = [ind.fitness.values[2] for ind in self.pareto_front]
         
-        # Apply sqrt transformation for better visualization
-        # This helps when values have large ranges
-        obj1_norm = np.sqrt(np.array(obj1_values))
-        obj2_norm = np.sqrt(np.array(obj2_values))
-        obj3_norm = np.sqrt(np.array(obj3_values))
+        # Plot Pareto front
+        plt.scatter(obj1_values, obj2_values, c='blue', s=50, alpha=0.8)
         
-        # Plot Pareto front points
-        sc = ax.scatter(obj1_norm, obj2_norm, obj3_norm, 
-                c=range(len(self.pareto_front)), cmap='viridis', 
-                s=50, alpha=0.8)
+        # Connect points to show the front
+        sorted_indices = np.argsort(obj1_values)
+        sorted_obj1 = [obj1_values[i] for i in sorted_indices]
+        sorted_obj2 = [obj2_values[i] for i in sorted_indices]
+        plt.plot(sorted_obj1, sorted_obj2, 'b-', alpha=0.5)
         
         # Highlight the weighted best solution
-        best_ind = min(self.pareto_front, 
-                    key=lambda ind: (ind.fitness.values[0] + 
-                                    ind.fitness.values[1] + 
-                                    ind.fitness.values[2])/3)
-        best_obj1 = np.sqrt(best_ind.fitness.values[0])
-        best_obj2 = np.sqrt(best_ind.fitness.values[1])
-        best_obj3 = np.sqrt(best_ind.fitness.values[2])
+        best_ind = min(self.pareto_front, key=lambda ind: 0.5 * ind.fitness.values[0] + 0.5 * ind.fitness.values[1])
+        plt.scatter(best_ind.fitness.values[0], best_ind.fitness.values[1], 
+                   c='red', s=150, alpha=0.8, marker='*', label='Selected Solution')
         
-        ax.scatter([best_obj1], [best_obj2], [best_obj3], 
-                c='red', s=200, alpha=0.8, marker='*', 
-                label='Balanced Solution')
+        plt.xlabel('Objective 1: Demand Deficit')
+        plt.ylabel('Objective 2: Min Flow Deficit')
+        plt.title('Pareto Front of Non-dominated Solutions')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
         
-        # Add a colorbar for reference
-        cbar = plt.colorbar(sc, label='Solution Index')
-        
-        # Add labels for each objective
-        ax.set_xlabel('Regular Demand Deficit')
-        ax.set_ylabel('Priority Demand Deficit')
-        ax.set_zlabel('Minimum Flow Deficit')
-        ax.set_title('3D Pareto Front (Square Root Scale)')
-        
-        # Add a legend
-        ax.legend()
-        
-        # Save the 3D plot
-        plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/pareto_front_3d_pop{self.population_size}_ngen{self.ngen}.png')
-        
-        # Also create 2D projections for easier analysis
-        self.plot_pareto_front_2d_projections()
-
-    def plot_pareto_front_2d_projections(self):
-        """Create 2D projections of the 3D Pareto front for easier analysis"""
-        if not self.pareto_front:
-            print("No Pareto front available. Run optimization first.")
-            return
-            
-        # Extract objective values from Pareto front
-        obj1_values = [ind.fitness.values[0] for ind in self.pareto_front]
-        obj2_values = [ind.fitness.values[1] for ind in self.pareto_front]
-        obj3_values = [ind.fitness.values[2] for ind in self.pareto_front]
-        
-        # Create figure with 2D projections
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6))
-        
-        # Plot Regular vs Priority
-        sc1 = ax1.scatter(obj1_values, obj2_values, 
-                        c=range(len(self.pareto_front)), cmap='viridis', s=80, alpha=0.8)
-        ax1.set_xlabel('Regular Demand Deficit [m³]')
-        ax1.set_ylabel('Priority Demand Deficit [m³]')
-        ax1.set_title('Regular vs Priority Demand')
-        ax1.grid(True, alpha=0.3)
-        
-        # Plot Regular vs MinFlow
-        sc2 = ax2.scatter(obj1_values, obj3_values, 
-                        c=range(len(self.pareto_front)), cmap='viridis', s=80, alpha=0.8)
-        ax2.set_xlabel('Regular Demand Deficit [m³]')
-        ax2.set_ylabel('Minimum Flow Deficit [m³]')
-        ax2.set_title('Regular Demand vs Min Flow')
-        ax2.grid(True, alpha=0.3)
-        
-        # Plot Priority vs MinFlow
-        sc3 = ax3.scatter(obj2_values, obj3_values, 
-                        c=range(len(self.pareto_front)), cmap='viridis', s=80, alpha=0.8)
-        ax3.set_xlabel('Priority Demand Deficit [m³]')
-        ax3.set_ylabel('Minimum Flow Deficit [m³]')
-        ax3.set_title('Priority Demand vs Min Flow')
-        ax3.grid(True, alpha=0.3)
-        
-        # Highlight points of interest in all plots
-        # Best for regular demand
-        min_obj1_idx = obj1_values.index(min(obj1_values))
-        ax1.scatter([obj1_values[min_obj1_idx]], [obj2_values[min_obj1_idx]], 
-                c='red', s=150, marker='o')
-        ax2.scatter([obj1_values[min_obj1_idx]], [obj3_values[min_obj1_idx]], 
-                c='red', s=150, marker='o')
-        
-        # Best for priority demand
-        min_obj2_idx = obj2_values.index(min(obj2_values))
-        ax1.scatter([obj1_values[min_obj2_idx]], [obj2_values[min_obj2_idx]], 
-                c='blue', s=150, marker='o')
-        ax3.scatter([obj2_values[min_obj2_idx]], [obj3_values[min_obj2_idx]], 
-                c='blue', s=150, marker='o')
-        
-        # Best for minimum flow
-        min_obj3_idx = obj3_values.index(min(obj3_values))
-        ax2.scatter([obj1_values[min_obj3_idx]], [obj3_values[min_obj3_idx]], 
-                c='green', s=150, marker='o')
-        ax3.scatter([obj2_values[min_obj3_idx]], [obj3_values[min_obj3_idx]], 
-                c='green', s=150, marker='o')
-        
-        # Best balanced solution
-        balanced_idx = np.argmin([(o1/max(obj1_values) + o2/max(obj2_values) + o3/max(obj3_values))/3 
-                                for o1, o2, o3 in zip(obj1_values, obj2_values, obj3_values)])
-        ax1.scatter([obj1_values[balanced_idx]], [obj2_values[balanced_idx]], 
-                c='purple', s=200, marker='*')
-        ax2.scatter([obj1_values[balanced_idx]], [obj3_values[balanced_idx]], 
-                c='purple', s=200, marker='*')
-        ax3.scatter([obj2_values[balanced_idx]], [obj3_values[balanced_idx]], 
-                c='purple', s=200, marker='*')
-        
-        # Add colorbar
-        fig.colorbar(sc1, ax=[ax1, ax2, ax3], label='Solution Index')
-        
-        # Add legend for all plots
-        legend_elements = [
-            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', 
-                    markersize=10, label='Best Regular Demand'),
-            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', 
-                    markersize=10, label='Best Priority Demand'),
-            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='green', 
-                    markersize=10, label='Best Min Flow'),
-            plt.Line2D([0], [0], marker='*', color='w', markerfacecolor='purple', 
-                    markersize=15, label='Balanced Solution')
-        ]
-        
-        ax1.legend(handles=legend_elements, loc='upper right')
-        
-        plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/pareto_front_2d_projections_pop{self.population_size}_ngen{self.ngen}.png')
+        plt.savefig(f'./model_output/optimisation/pareto_front_pop{self.population_size}_ngen{self.ngen}.png')

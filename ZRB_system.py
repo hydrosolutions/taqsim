@@ -3,7 +3,7 @@ import numpy as np
 import webbrowser
 import os
 import json
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer,TwoObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
 import ctypes
 import cProfile
 import pstats
@@ -503,6 +503,9 @@ def run_system_with_optimized_parameters(system_creator, optimization_results, s
     vis.plot_reservoir_volumes()
     vis.plot_system_demands_vs_inflow()
     vis.plot_objective_function_breakdown()
+    vis.print_water_balance_summary()
+    vis.plot_demand_satisfaction()
+    vis.plot_demand_deficit_heatmap()
     print("Visualizations complete")
     
     return system
@@ -674,7 +677,23 @@ if __name__ == "__main__":
 
     # Save the results
     save_optimized_parameters(results, f"./model_output/optimisation/multiobjective_baseline_params.json")
-    '''
+
+    #'''
+    with open("./model_output/optimisation/multiobjective_baseline_params.json", "r") as f:
+        data = json.load(f)
+    
+    pareto_solutions = data.get('pareto_solutions', [])
+    
+    # Create dashboard
+    dashboard = ParetoFrontDashboard(
+        pareto_solutions=pareto_solutions,
+        output_dir="./model_output/dashboard/baseline"
+    )
+    
+    # Generate all visualizations
+    dashboard.generate_full_report()
+    
+    print(f"Dashboard created at {dashboard.output_dir}/index.html")
 
     #################
     ### Run Tests ###
@@ -686,12 +705,12 @@ if __name__ == "__main__":
     ###########################
     ### Run Baseline Period ###
     ###########################
-    
+    '''
     start_year = 2017
     start_month = 1
     num_time_steps = 12*6
 
-    loaded_results = load_parameters_from_file(f"./data/optimised_parameter/euler_new_res_param_baseline.json")
+    loaded_results = load_parameters_from_file(f"./data/optimised_parameter/2025-05-05_euler_new_res_param_baseline.json")
      
     system = run_system_with_optimized_parameters(
         create_ZRB_system_baseline,
@@ -706,7 +725,7 @@ if __name__ == "__main__":
         efficiency = ''
     )
     
-    
+    #'''
     ###########################
     ### Run Future Scenario ###
     ###########################
@@ -729,7 +748,7 @@ if __name__ == "__main__":
         agr_scenario = 'diversification', 
         efficiency = 'improved_efficiency' # or 'noeff'
     )
-    '''
+    #'''
     ############################################
     ### Run Optimization for Baseline Period ###
     ############################################
