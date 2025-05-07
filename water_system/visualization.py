@@ -118,8 +118,8 @@ class WaterSystemVisualizer:
                 for node_id, node_data in self.system.graph.nodes(data=True):
                     node = node_data['node']
                     try:
-                        inflow = sum(edge.get_edge_outflow(time_step) for edge in node.inflow_edges.values())
-                        outflow = sum(edge.get_edge_inflow(time_step) for edge in node.outflow_edges.values())
+                        inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in node.inflow_edges.values())
+                        outflow = sum(edge.get_edge_flow_before_losses(time_step) for edge in node.outflow_edges.values())
 
                         row_data[f"{node_id}_Inflow"] = inflow
                         row_data[f"{node_id}_Outflow"] = outflow
@@ -144,9 +144,9 @@ class WaterSystemVisualizer:
                 for u, v, d in self.system.graph.edges(data=True):
                     edge = d['edge']
                     try:
-                        if time_step < len(edge.inflow):
-                            inflow = edge.inflow[time_step]
-                            outflow = edge.outflow[time_step]
+                        if time_step < len(edge.flow_before_losses):
+                            inflow = edge.flow_before_losses[time_step]
+                            outflow = edge.flow_after_losses[time_step]
                             losses = edge.losses[time_step]
                             loss_percent = (losses / inflow * 100) if inflow > 0 else 0
                             
@@ -743,11 +743,11 @@ class WaterSystemVisualizer:
             ax2 = ax1.twinx()  # Create second y-axis for waterlevel
             
             # Calculate total inflow for each timestep
-            inflows = [sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+            inflows = [sum(edge.get_edge_flow_after_losses(t) for edge in node.inflow_edges.values())
                     for t in time_steps]
             
             # Calculate total outflow for each timestep
-            outflows = [sum(edge.get_edge_inflow(t) for edge in node.outflow_edges.values())
+            outflows = [sum(edge.get_edge_flow_before_losses(t) for edge in node.outflow_edges.values())
                     for t in time_steps]
             
             # Get waterlevels (excluding last entry which is for next timestep)
@@ -1022,7 +1022,7 @@ class WaterSystemVisualizer:
         total_outflows = np.zeros(len(time_steps))
         for idx, (node_id, node) in enumerate(sink_nodes):
             # Calculate total inflow for each timestep
-            flows = [sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+            flows = [sum(edge.get_edge_flow_after_losses(t) for edge in node.inflow_edges.values())
                     for t in time_steps]
             total_outflows += np.array(flows)
             
@@ -1081,12 +1081,12 @@ class WaterSystemVisualizer:
             # Calculate flows for each time step
             for t in time_steps:
                 # Calculate total inflow
-                total_inflow = sum(edge.get_edge_outflow(t) for edge in node.inflow_edges.values())
+                total_inflow = sum(edge.get_edge_flow_after_losses(t) for edge in node.inflow_edges.values())
                 inflows.append(total_inflow)
                 
                 # Calculate outflows to each target
                 for target_id, edge in node.outflow_edges.items():
-                    outflow = edge.get_edge_inflow(t)
+                    outflow = edge.get_edge_flow_before_losses(t)
                     outflows[target_id].append(outflow)
             
             # Create figure with two subplots
@@ -2692,7 +2692,7 @@ class WaterSystemVisualizer:
 
         for u, v, data in self.system.graph.edges(data=True):
             edge = data['edge']
-            flows = [float(f) for f in edge.outflow] if edge.outflow else []
+            flows = [float(f) for f in edge.flow_after_losses] if edge.flow_after_losses else []
             if flows:
                 max_flow = max(max_flow, max(flows))
                 

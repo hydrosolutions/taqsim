@@ -15,7 +15,7 @@ class Edge:
         source (Node): The source node of the edge.
         target (Node): The target node of the edge.
         capacity (float): The maximum flow capacity of the edge.
-        outflow (list): A list of outflow values for each time step of the simulation.
+        flow_after_losses (list): A list of outflow values for each time step of the simulation.
         length (float): The length of the canals in the irrigation/demand system [km]
         loss_factor (float): The loss factor per unit distance [fraction/km].
         inflow (list): A list of inflow values before losses.
@@ -47,14 +47,14 @@ class Edge:
         self.target = target
         self.capacity = capacity
         self.loss_factor = loss_factor
-        self.outflow = []
-        self.inflow = []
+        self.flow_after_losses = []
+        self.flow_before_losses = []
         self.losses = []
 
         # Try to connect nodes
         try:
-            self.source.add_outflow(self)
-            self.target.add_inflow(self)
+            self.source.add_outflow_edge(self)
+            self.target.add_inflow_edge(self)
         except AttributeError as e:
             raise AttributeError(f"Failed to connect nodes: {str(e)}")
 
@@ -97,20 +97,20 @@ class Edge:
                 input_flow = 0
             
             # Record the inflow before losses
-            self.inflow.append(input_flow)
+            self.flow_before_losses.append(input_flow)
             
             # Calculate and record losses
             remaining_flow, losses = self.calculate_edge_losses(input_flow)
-            self.outflow.append(remaining_flow)
+            self.flow_after_losses.append(remaining_flow)
             self.losses.append(losses)
 
         except Exception as e:
             print(f"Error updating edge flow: {str(e)}. Flow values may be incorrect.")
-            self.inflow.append(0)
-            self.outflow.append(0)
+            self.flow_before_losses.append(0)
+            self.flow_after_losses.append(0)
             self.losses.append(0)
 
-    def get_edge_inflow(self, time_step):
+    def get_edge_flow_before_losses(self, time_step):
         """
         Get the inflow value for a specific time step.
 
@@ -121,12 +121,12 @@ class Edge:
             float: The inflow value for the specified time step, or 0 if the time step is out of range.
         """
         try:
-            return self.inflow[time_step] if time_step < len(self.inflow) else 0
+            return self.flow_before_losses[time_step] if time_step < len(self.flow_before_losses) else 0
         except Exception as e:
             print(f"Error retrieving edge inflow for time step {time_step}: {str(e)}")
             return 0
 
-    def get_edge_outflow(self, time_step):
+    def get_edge_flow_after_losses(self, time_step):
         """
         Get the outflow value for a specific time step.
 
@@ -137,7 +137,7 @@ class Edge:
             float: The outflow value for the specified time step, or 0 if the time step is out of range.
         """
         try:
-            return self.outflow[time_step] if time_step < len(self.outflow) else 0
+            return self.flow_after_losses[time_step] if time_step < len(self.flow_after_losses) else 0
         except Exception as e:
             print(f"Error retrieving edge outflow for time step {time_step}: {str(e)}")
             return 0

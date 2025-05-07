@@ -203,7 +203,7 @@ def load_optimized_parameters(system, optimization_results):
     
     Args:
         system (WaterSystem): The water system to update
-        optimization_results (dict): Results from the MultiGeneticOptimizer containing:
+        optimization_results (dict): Results from the GA containing:
             - optimal_reservoir_parameters (dict): Parameters for each reservoir
             - optimal_hydroworks_parameters (dict): Parameters for each hydroworks
             
@@ -347,7 +347,28 @@ def save_optimized_parameters(optimization_results, filename):
 
 def run_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, system_type='baseline',  scenario = '', period = '', agr_scenario= ' ', efficiency = ' ',
                      ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
+    """
+    Run a single-objective optimization for the ZRB water system.
     
+    Args:
+        system_creator (function): Function to create the water system
+        start_year (int): Start year for simulation
+        start_month (int): Start month for simulation (1-12)
+        num_time_steps (int): Number of time steps to simulate
+        system_type (str): "baseline" or "scenario"
+        scenario (str): Climate scenario (e.g., 'ssp126') - only used for scenario simulations
+        period (str): Time period (e.g., '2041-2070') - only used for scenario simulations
+        agr_scenario (str): Agricultural scenario - only used for scenario simulations
+        efficiency (str): Efficiency scenario (e.g., 'improved_efficiency') - only used for scenario simulations
+        ngen (int): Number of generations for the optimizer
+        pop_size (int): Population size for the optimizer
+        cxpb (float): Crossover probability
+        mutpb (float): Mutation probability
+        
+    Returns:
+        dict: Results of the optimization
+    """
+        
     ZRB_system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
 
     
@@ -418,7 +439,28 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
 
 def run_multi_objective_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, system_type='baseline', scenario='', period='', agr_scenario='', efficiency='',
                      ngen=100, pop_size=100, cxpb=0.5, mutpb=0.2):
+    """
+    Run a multi-objective optimization for the ZRB water system.
     
+    Args:
+        system_creator (function): Function to create the water system
+        start_year (int): Start year for simulation
+        start_month (int): Start month for simulation (1-12)
+        num_time_steps (int): Number of time steps to simulate
+        system_type (str): "baseline" or "scenario"
+        scenario (str): Climate scenario (e.g., 'ssp126') - only used for scenario simulations
+        period (str): Time period (e.g., '2041-2070') - only used for scenario simulations
+        agr_scenario (str): Agricultural scenario - only used for scenario simulations
+        efficiency (str): Efficiency scenario (e.g., 'improved_efficiency') - only used for scenario simulations
+        ngen (int): Number of generations for the optimizer
+        pop_size (int): Population size for the optimizer
+        cxpb (float): Crossover probability
+        mutpb (float): Mutation probability
+        
+    Returns:
+        dict: Results of the optimization
+    """
+
     # Create the base water system
     water_system = system_creator(start_year, start_month, num_time_steps, system_type, scenario, period, agr_scenario, efficiency)
     
@@ -479,7 +521,24 @@ def run_multi_objective_optimization(system_creator, start_year=2017, start_mont
 
 def run_simulation(system_creator, optimization_results, start_year, start_month, num_time_steps, 
                                          system_type='baseline', scenario='', period='', agr_scenario='', efficiency=''):
+    """
+    Run a simulation for the ZRB water system using optimized parameters.
     
+    Args:
+        system_creator (function): Function to create the water system
+        optimization_results (dict): Results from the optimizer
+        start_year (int): Start year for simulation
+        start_month (int): Start month for simulation (1-12)
+        num_time_steps (int): Number of time steps to simulate
+        system_type (str): "baseline" or "scenario"
+        scenario (str): Climate scenario (e.g., 'ssp126') - only used for scenario simulations
+        period (str): Time period (e.g., '2041-2070') - only used for scenario simulations
+        agr_scenario (str): Agricultural scenario - only used for scenario simulations
+        efficiency (str): Efficiency scenario (e.g., 'improved_efficiency') - only used for scenario simulations
+        
+    Returns:
+        WaterSystem: Simulated water system
+    """
     # Create new system
     system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
     
@@ -514,7 +573,7 @@ if __name__ == "__main__":
             start_year=2017, 
             start_month=1, 
             num_time_steps=12*6,
-            system_type = 'simplified_ZRB',
+            system_type = 'baseline',
             scenario = '', 
             period = '', 
             agr_scenario= ' ', 
@@ -641,4 +700,3 @@ if __name__ == "__main__":
     #stats.print_stats(40)  # Print top 20 functions
     #print(stream.getvalue())
     '''
-    

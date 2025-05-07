@@ -301,7 +301,7 @@ class WaterSystem:
                 
             elif isinstance(node, SinkNode):
                 for edge in node.inflow_edges.values():
-                    outflow_rates = np.array([edge.get_edge_outflow(t) for t in time_steps])
+                    outflow_rates = np.array([edge.get_edge_flow_after_losses(t) for t in time_steps])
                     sink += outflow_rates * self.dt
         
         for _, _, edge_data in self.graph.edges(data=True):

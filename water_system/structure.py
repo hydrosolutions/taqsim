@@ -1,8 +1,13 @@
 """
 This module defines the various types of nodes that can exist in a water system simulation.
 
-The module includes a base Node class and several specialized node types such as
-SupplyNode, SinkNode, DemandNode, StorageNode, and HydroWorks.
+The module includes a base Node class and several specialized node types such as:
+- SupplyNode: Represents a water supply source in the system.
+- SinkNode: Represents a point where water exits the system with minimum flow requirements.
+- DemandNode: Represents a point of water demand in the system.
+- StorageNode: Represents a reservoir or storage facility in the system.
+- HydroWorks: Represents a node that redistributes water using fixed distribution parameters.
+
 Each node type has its own behavior for handling water inflows and outflows.
 """
 import pandas as pd
@@ -15,8 +20,8 @@ class Node:
 
     Attributes:
         id (str): A unique identifier for the node.
-        inflows (dict): A dictionary of inflow edges, keyed by the source node's id.
-        outflows (dict): A dictionary of outflow edges, keyed by the target node's id.
+        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
+        outflow_edges (dict): A dictionary of outflow edges, keyed by the target node's id.
         easting (float): The easting coordinate of the node.
         northing (float): The northing coordinate of the node.
     """
@@ -48,7 +53,7 @@ class Node:
         self.easting = easting # easting coordinate of the node. Defaults to None.
         self.northing = northing # northing coordinate of the node. Defaults to None.
 
-    def add_inflow(self, edge):
+    def add_inflow_edge(self, edge):
         """
         Add an inflow edge to the node.
 
@@ -57,7 +62,7 @@ class Node:
         """
         self.inflow_edges[edge.source.id] = edge
 
-    def add_outflow(self, edge):
+    def add_outflow_edge(self, edge):
         """
         Add an outflow edge to the node.
 
@@ -373,7 +378,7 @@ class SinkNode(Node):
         """
         try:
             # Calculate total inflow for this timestep
-            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
             
             # Record the actual flow and deficit if any
             self.flow_history.append(total_inflow)
@@ -579,7 +584,7 @@ class DemandNode(Node):
             dt (float): The duration of the time step in seconds.
         """
         try:
-            total_inflow = sum(edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values())
+            total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
             current_demand = self.get_demand_rate(time_step)
             non_consumptive_rate = self.non_consumptive_rate
             
@@ -978,7 +983,7 @@ class StorageNode(Node):
             dt (float): The length of the time step in seconds.
         """
         try:
-            inflow = np.sum([edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values()])
+            inflow = np.sum([edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values()])
             previous_storage = self.storage[-1]
             
             # Convert flow rates (m³/s) to volumes (m³) for the time step
@@ -1069,16 +1074,6 @@ class HydroWorks(Node):
         self.distribution_params = {}
         self.spill_register = []
 
-    def add_outflow(self, edge):
-        """
-        Add an outflow edge to the node and initialize its distribution parameter.
-        Initially distributes flow equally among all edges for all timesteps.
-
-        Args:
-            edge (Edge): The edge to be added as an outflow
-        """
-        super().add_outflow(edge)
-
     def set_distribution_parameters(self, parameters):
         """
         Set distribution parameters for multiple edges.
@@ -1140,7 +1135,7 @@ class HydroWorks(Node):
 
         try:
             # Calculate total inflow
-            total_inflow = np.sum([edge.get_edge_outflow(time_step) for edge in self.inflow_edges.values()])
+            total_inflow = np.sum([edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values()])
             
             # Verify distribution parameters are properly set
             if not self.distribution_params:
