@@ -97,11 +97,12 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     
     # Add Industrial Demand Node
     Powerplant = DemandNode("Powerplant", 
-                           demand_rates=25, 
+                           constant_demand_rate=25, 
                            non_consumptive_rate=17, 
+                           num_time_steps=num_time_steps,
                            easting=186146.3,
                            northing=4454459.3, 
-                           weight=1000)
+                           weight=10)
     system.add_node(Powerplant)
     
     # Determine evaporation file path
@@ -151,29 +152,29 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     
     # Add Sink Nodes
     Sink_Jizzakh = SinkNode("Sink_Jizzakh", 
-                           min_flow_csv_file=jizzakh_path, 
+                           csv_file=jizzakh_path,
                            start_year=start_year, 
                            start_month=start_month, 
                            num_time_steps=num_time_steps,
-                           weight=10, 
+                           weight=1, 
                            easting=376882.3, 
                            northing=4411307.9)
     
     Sink_Kashkadarya = SinkNode("Sink_Kashkadarya", 
-                               min_flow_csv_file=kashkadarya_path,
+                               csv_file=kashkadarya_path,
                                start_year=start_year, 
                                start_month=start_month, 
                                num_time_steps=num_time_steps,
-                               weight=10, 
+                               weight=1, 
                                easting=272551, 
                                northing=4361872)
     
     Sink_Navoi = SinkNode("Sink_Navoi", 
-                         min_flow_csv_file=navoi_path,
+                         csv_file=navoi_path,
                          start_year=start_year, 
                          start_month=start_month, 
                          num_time_steps=num_time_steps,
-                         weight=10, 
+                         weight=1, 
                          easting=153771, 
                          northing=4454402)
     
@@ -434,6 +435,7 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
     vis.plot_demand_deficit_heatmap()
     vis.plot_network_layout()
     vis.plot_network_layout_2()
+    vis.plot_minimum_flow_compliance()
 
     return results
 
@@ -579,13 +581,13 @@ if __name__ == "__main__":
             agr_scenario= ' ', 
             efficiency = ' ', 
             ngen=10, 
-            pop_size=30, 
+            pop_size=100, 
             cxpb=0.65, 
             mutpb= 0.32
         )
-        '''
+        
         # Example of running the optimization for a future scenario
-        results = run_optimization(
+        '''results = run_optimization(
             create_ZRB_system,
             start_year=2041, 
             start_month=1, 
@@ -643,8 +645,8 @@ if __name__ == "__main__":
             period = '', 
             agr_scenario= '', 
             efficiency = '', 
-            ngen=90, 
-            pop_size=3000, 
+            ngen=10, 
+            pop_size=300, 
             cxpb=0.65, 
             mutpb=0.32
         )

@@ -94,15 +94,6 @@ class MultiObjectiveOptimizer:
     
     def _setup_genetic_operators(self):
         """Configure genetic algorithm operators for multiple structures with dynamic bounds"""
-        # Create attributes for each reservoir's parameters
-        for res_id, bounds in self.reservoir_bounds.items():
-            for param, (low, high) in bounds.items():
-                self.toolbox.register(
-                    f"reservoir_{res_id}_{param}",
-                    random.uniform,
-                    low,
-                    high
-                )
 
         # Create individual and population
         self.toolbox.register("individual", self._create_individual)

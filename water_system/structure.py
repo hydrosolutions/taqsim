@@ -14,6 +14,87 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 
+class TimeSeriesImport:
+    """
+    Base class for importing and managing time series data from CSV files.
+    Provides common functionality for nodes that need to import time-based data.
+    """
+    
+    def _initialize_time_series(self, id, csv_file, start_year, start_month, 
+                              num_time_steps, column_name):
+        """
+        Initialize time series data from CSV file.
+        
+        Args:
+            id (str): Node identifier for error messages
+            csv_file (str): Path to CSV file
+            start_year (int): Start year for data
+            start_month (int): Start month for data
+            num_time_steps (int): Number of time steps
+            column_name (str): Name of the column in CSV to import
+            
+        Returns:
+            list: Time series data from CSV, or None if import failed
+        """
+        # If all CSV parameters are provided, try to import data
+        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
+            try:
+                ts_data = self.import_time_series(csv_file, start_year, start_month, 
+                                                num_time_steps, column_name)
+                
+                # Check if data is valid
+                if not (ts_data.empty or 
+                    ts_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
+                    len(ts_data[column_name]) < num_time_steps):
+                    return ts_data[column_name].tolist()
+                
+                # Print warning for invalid data
+                print(f"Warning: Insufficient data in CSV file for node '{id}'")
+                print(f"Requested period: {start_year}-{start_month:02d} to "
+                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
+                if not ts_data.empty:
+                    print(f"Available data range: {ts_data['Date'].min():%Y-%m} to {ts_data['Date'].max():%Y-%m}")
+                
+                return None
+                
+            except Exception as e:
+                print(f"Warning: Time series data import failed for node '{id}': {str(e)}")
+                return None
+        
+        return None
+
+    def import_time_series(self, csv_file, start_year, start_month, num_time_steps, column_name):
+        """
+        Import time series data from a CSV file for a specified time period.
+        
+        Args:
+            csv_file (str): Path to the CSV file 
+            start_year (int): Starting year for the data
+            start_month (int): Starting month (1-12) for the data
+            num_time_steps (int): Number of time steps to import
+            column_name (str): Name of the column to import
+            
+        Returns:
+            DataFrame: Filtered DataFrame containing the requested data period
+        """
+        try:
+            # Read the CSV file into a pandas DataFrame
+            time_series = pd.read_csv(csv_file, parse_dates=['Date'])
+            
+            if 'Date' not in time_series.columns or column_name not in time_series.columns:
+                raise ValueError(f"CSV file must contain 'Date' and '{column_name}' columns")
+        
+            # Filter the DataFrame to find the start point
+            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
+            end_date = start_date + pd.DateOffset(months=num_time_steps)
+            
+            return time_series[(time_series['Date'] >= start_date) & (time_series['Date'] < end_date)]
+            
+        except FileNotFoundError:
+            raise ValueError(f"Data file not found: {csv_file}")
+        except Exception as e:
+            raise ValueError(f"Failed to import time series data: {str(e)}")
+
 class Node:
     """
     Base class for all types of nodes in the water system.
@@ -84,7 +165,7 @@ class Node:
         """
         pass
 
-class SupplyNode(Node):
+class SupplyNode(Node, TimeSeriesImport):
     """
     Represents a water supply source in the system.
 
@@ -94,7 +175,7 @@ class SupplyNode(Node):
         supply_history (list): A record of actual supply amounts for each time step.
     """
 
-    def __init__(self, id, supply_rates=None, default_supply_rate=0, easting=None, northing=None,
+    def __init__(self, id, constant_supply_rate=None, easting=None, northing=None,
                  csv_file=None, start_year=None, start_month=None, num_time_steps=None):
         """
         Initialize a SupplyNode object.
@@ -111,86 +192,23 @@ class SupplyNode(Node):
             num_time_steps (int, optional): Number of time steps to import from CSV. Defaults to None.
         """
         super().__init__(id, easting, northing)
-        self.default_supply_rate = default_supply_rate
         self.supply_history = []
 
-        self.supply_rates = self._initialize_supply_rates(
-            id, csv_file, start_year, start_month, num_time_steps, supply_rates
-        )
-
-    def _initialize_supply_rates(self, id, csv_file, start_year, start_month, 
-                                 num_time_steps, supply_rates):
-        """
-        Initialize supply rates from either CSV or direct input.
-        
-        Args:
-            id (str): Node identifier for error messages
-            csv_file (str): Path to CSV file
-            start_year (int): Start year for data
-            start_month (int): Start month for data
-            num_time_steps (int): Number of time steps
-            supply_rates (list): Direct supply rates input
-            
-        Returns:
-            list: Initialized supply rates
-        """
-        # If all CSV parameters are provided, try to import data
+        # Try to import time series data first
+        imported_data = None
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            try:
-                supply = self.import_supply_data(csv_file, start_year, start_month, num_time_steps)
-                
-                # Check if data is valid
-                if not (supply.empty or 
-                    supply['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                    len(supply['Q']) < num_time_steps):
-                    return supply['Q'].tolist()
-                
-                # Print warning for invalid data
-                print(f"Warning: Using default supply rate ({self.default_supply_rate}) for node '{id}' due to insufficient data")
-                print(f"Requested period: {start_year}-{start_month:02d} to "
-                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
-                if not supply.empty:
-                    print(f"Available data range: {supply['Date'].min():%Y-%m} to {supply['Date'].max():%Y-%m}")
-                return [self.default_supply_rate] * num_time_steps
-                
-            except Exception as e:
-                print(f"Warning: Using default supply rate ({self.default_supply_rate}) for node '{id}' due to error: {str(e)}")
-                return [self.default_supply_rate] * num_time_steps
+            imported_data = self._initialize_time_series(
+                id, csv_file, start_year, start_month, num_time_steps, 'Q'
+            )
         
-        # If no CSV import, use provided rates or initialize empty list
-        return supply_rates if supply_rates is not None else []
-            
-    def import_supply_data(self, csv_file, start_year, start_month, num_time_steps):
-        """
-        Import supply data from a CSV file for a specified time period.
-        
-        Args:
-            csv_file (str): Path to the CSV file containing supply data
-            start_year (int): Starting year for the data
-            start_month (int): Starting month (1-12) for the data
-            num_time_steps (int): Number of time steps to import
-            
-        Returns:
-            DataFrame: Filtered DataFrame containing the requested data period
-        """
-        try:
-            # Read the CSV file into a pandas DataFrame
-            supply = pd.read_csv(csv_file, parse_dates=['Date'])
-            
-            if 'Date' not in supply.columns or 'Q' not in supply.columns:
-                raise ValueError("CSV file must contain 'Date' and 'Q' columns")
-        
-            # Filter the DataFrame to find the start point
-            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
-            end_date = start_date + pd.DateOffset(months=num_time_steps)
-            
-            return supply[(supply['Date'] >= start_date) & (supply['Date'] < end_date)]
-            
-        except FileNotFoundError:
-            raise ValueError(f"Supply data file not found: {csv_file}")
-        except Exception as e:
-            raise ValueError(f"Failed to import supply data: {str(e)}")
-        
+        # Decision tree for setting supply_rates
+        if imported_data is not None:
+            self.supply_rates = imported_data
+        elif constant_supply_rate is not None:
+            self.supply_rates = [constant_supply_rate]*num_time_steps    
+        else:
+            self.supply_rates = [0]*num_time_steps
+      
     def get_supply_rate(self, time_step):
         """
         Get the supply rate for a specific time step.
@@ -230,7 +248,7 @@ class SupplyNode(Node):
         except Exception as e:
             raise ValueError(f"Failed to update supply node {self.id}: {str(e)}")
 
-class SinkNode(Node):
+class SinkNode(Node, TimeSeriesImport):
     """
     Represents a point where water exits the system with minimum flow requirements.
     Minimum flows can be specified either as a constant or loaded from a CSV file.
@@ -243,8 +261,8 @@ class SinkNode(Node):
         weight (float): Weight factor for minimum flow violations in optimization
     """
 
-    def __init__(self, id, min_flow=None, easting=None, northing=None, weight=1.0,
-                 min_flow_csv_file=None, start_year=None, start_month=None, num_time_steps=None):
+    def __init__(self, id, constant_min_flow=None, easting=None, northing=None, weight=1.0,
+                 csv_file=None, start_year=None, start_month=None, num_time_steps=None):
         """
         Initialize a SinkNode object.
 
@@ -269,89 +287,21 @@ class SinkNode(Node):
         self.flow_history = []
         self.flow_deficits = []
 
-        # Initialize minimum flows based on input method
-        if all(param is not None for param in [min_flow_csv_file, start_year, start_month, num_time_steps]):
-            self.min_flows = self._initialize_min_flows(
-                id, min_flow_csv_file, start_year, start_month, num_time_steps, min_flow
+        # Try to import time series data first
+        imported_data = None
+        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
+            imported_data = self._initialize_time_series(
+                id, csv_file, start_year, start_month, num_time_steps, 'Q'
             )
-        elif isinstance(min_flow, (int, float)):
-            if min_flow < 0:
-                raise ValueError("Minimum flow cannot be negative")
-            self.min_flows = [min_flow]
+        
+        # Decision tree for setting supply_rates
+        if imported_data is not None:
+            self.min_flows = imported_data
+        elif constant_min_flow is not None:
+            self.min_flows = [constant_min_flow]*num_time_steps    
         else:
-            self.min_flows = [0]  # Default to no minimum flow requirement
+            self.min_flows = [0]*num_time_steps
             
-    def _initialize_min_flows(self, id, csv_file, start_year, start_month, 
-                            num_time_steps, default_flow):
-        """
-        Initialize minimum flows from CSV file.
-        
-        Args:
-            id (str): Node identifier for error messages
-            csv_file (str): Path to CSV file
-            start_year (int): Start year for data
-            start_month (int): Start month for data
-            num_time_steps (int): Number of time steps
-            default_flow (float): Default flow to use if CSV import fails
-            
-        Returns:
-            list: Initialized minimum flows
-        """
-        try:
-            flow_data = self.import_flow_data(csv_file, start_year, start_month, num_time_steps)
-            
-            # Check if data is valid
-            if not (flow_data.empty or 
-                flow_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                len(flow_data['Q']) < num_time_steps):
-                return flow_data['Q'].tolist()
-            
-            # Print warning for invalid data
-            print(f"Warning: Using default minimum flow ({default_flow if default_flow is not None else 0}) "
-                  f"for node '{id}' due to insufficient data")
-            print(f"Requested period: {start_year}-{start_month:02d} to "
-                  f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
-            if not flow_data.empty:
-                print(f"Available data range: {flow_data['Date'].min():%Y-%m} to {flow_data['Date'].max():%Y-%m}")
-            
-            return [default_flow if default_flow is not None else 0] * num_time_steps
-                
-        except Exception as e:
-            print(f"Warning: Using default minimum flow ({default_flow if default_flow is not None else 0}) "
-                  f"for node '{id}' due to error: {str(e)}")
-            return [default_flow if default_flow is not None else 0] * num_time_steps
-
-    def import_flow_data(self, csv_file, start_year, start_month, num_time_steps):
-        """
-        Import minimum flow data from a CSV file for a specified time period.
-        
-        Args:
-            csv_file (str): Path to the CSV file containing flow data
-            start_year (int): Starting year for the data
-            start_month (int): Starting month (1-12) for the data
-            num_time_steps (int): Number of time steps to import
-            
-        Returns:
-            DataFrame: Filtered DataFrame containing the requested data period
-        """
-        try:
-            # Read the CSV file into a pandas DataFrame
-            flow_data = pd.read_csv(csv_file, parse_dates=['Date'])
-            
-            if 'Date' not in flow_data.columns or 'Q' not in flow_data.columns:
-                raise ValueError("CSV file must contain 'Date' and 'Q' columns")
-        
-            # Filter the DataFrame to find the start point
-            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
-            end_date = start_date + pd.DateOffset(months=num_time_steps)
-            
-            return flow_data[(flow_data['Date'] >= start_date) & (flow_data['Date'] < end_date)]
-            
-        except FileNotFoundError:
-            raise ValueError(f"Flow data file not found: {csv_file}")
-        except Exception as e:
-            raise ValueError(f"Failed to import flow data: {str(e)}")
-
     def get_min_flow(self, time_step):
         """
         Get the minimum flow requirement for a specific time step.
@@ -413,7 +363,7 @@ class SinkNode(Node):
         """
         return sum(deficit * dt for deficit in self.flow_deficits)
     
-class DemandNode(Node):
+class DemandNode(Node, TimeSeriesImport):
     """
     Represents a point of water demand in the system.
 
@@ -423,7 +373,7 @@ class DemandNode(Node):
         excess_flow (list): A record of excess flow for each time step.
     """
 
-    def __init__(self, id, demand_rates=None, easting=None, northing=None,
+    def __init__(self, id, constant_demand_rate=None, easting=None, northing=None,
                  csv_file=None, start_year=None, start_month=None, num_time_steps=None, 
                  field_efficiency=1, conveyance_efficiency=1, weight=1.0, non_consumptive_rate=0):
         """
@@ -465,99 +415,45 @@ class DemandNode(Node):
                 raise ValueError("Non-consumptive rate cannot be negative")
             self.non_consumptive_rate = non_consumptive_rate
         
-        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            self.demand_rates = self._initialize_demand_rates(
-                id, csv_file, start_year, start_month, num_time_steps, demand_rates
-            )
-        elif isinstance(demand_rates, (int, float)):
-            if demand_rates < 0:
-                raise ValueError("Demand rate cannot be negative")
-            if demand_rates < self.non_consumptive_rate:
-                raise ValueError("Demand rate cannot be less than non-consumptive rate")
-            self.demand_rates = [demand_rates/(self.field_efficiency*self.conveyance_efficiency)]
-        elif isinstance(demand_rates, list):
-            if not all(isinstance(rate, (int, float)) for rate in demand_rates):
-                raise ValueError("All demand rates must be numeric values")
-            if any(rate < 0 for rate in demand_rates):
-                raise ValueError("Demand rates cannot be negative")
-            if any(rate < self.non_consumptive_rate for rate in demand_rates):
-                raise ValueError("Demand rates cannot be less than non-consumptive rate")
-            self.demand_rates = [rate/(self.field_efficiency*self.conveyance_efficiency) for rate in demand_rates]
-        else:
-            raise ValueError("demand_rates must be a number or list of numbers or defined by CSV")
-        
+        # Initialize tracking lists
         self.satisfied_consumptive_demand = []
         self.satisfied_non_consumptive_demand = []
         self.satisfied_demand_total = []
         self.excess_flow = []
-    
-    def _initialize_demand_rates(self, id, csv_file, start_year, start_month, 
-                               num_time_steps, demand_rates):
-        """
-        Initialize demand rates from either CSV or direct input.
-        
-        Args:
-            id (str): Node identifier for error messages
-            csv_file (str): Path to CSV file
-            start_year (int): Start year for data
-            start_month (int): Start month for data
-            num_time_steps (int): Number of time steps
-            demand_rates (list or float): Direct demand rates input
-            
-        Returns:
-            list: Initialized demand rates
-        """
-        # If all CSV parameters are provided, try to import data
-        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            try:
-                demand = self.import_demand_data(csv_file, start_year, start_month, num_time_steps)
-                
-                # Check if data is valid
-                if not (demand.empty or 
-                    demand['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                    len(demand[self.id]) < num_time_steps):
-                    return [rate/(self.field_efficiency*self.conveyance_efficiency) for rate in demand[self.id].tolist()]
-                
-                # Print warning for invalid data
-                print(f"Warning: Insufficient data in csv file for node '{id}'")
-                print(f"Requested period: {start_year}-{start_month:02d} to "
-                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
-                if not demand.empty:
-                    print(f"Available data range: {demand['Date'].min():%Y-%m} to {demand['Date'].max():%Y-%m}")
-            except Exception as e:
-                print(f"Warning: Demand from csv could not be used for node '{id}' due to error: {str(e)}")
-    
-    def import_demand_data(self, csv_file, start_year, start_month, num_time_steps):
-        """
-        Import demand data from a CSV file for a specified time period.
-        
-        Args:
-            csv_file (str): Path to the CSV file containing demand data
-            start_year (int): Starting year for the data
-            start_month (int): Starting month (1-12) for the data
-            num_time_steps (int): Number of time steps to import
-            
-        Returns:
-            DataFrame: Filtered DataFrame containing the requested data period
-        """
-        try:
-            # Read the CSV file into a pandas DataFrame and only column 'Q' is used
-            demand = pd.read_csv(csv_file, parse_dates=['Date'], usecols=['Date', self.id])
-            
-            if 'Date' not in demand.columns or self.id not in demand.columns:
-                raise ValueError("CSV file must contain 'Date' and 'Q' columns")
-        
-            # Filter the DataFrame to find the start point
-            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
-            end_date = start_date + pd.DateOffset(months=num_time_steps)
-            
-            return demand[(demand['Date'] >= start_date) & (demand['Date'] < end_date)]
-            
-        except FileNotFoundError:
-            raise ValueError(f"Demand data file not found: {csv_file}")
-        except Exception as e:
-            raise ValueError(f"Failed to import demand data: {str(e)}")
 
+        # Try to import time series data first
+        imported_data = None
+        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
+            imported_data = self._initialize_time_series(
+                id, csv_file, start_year, start_month, num_time_steps, id
+            )
+        
+        # Decision tree for setting demand_rates
+        if imported_data is not None:
+            # Validate imported data
+            if any(rate < 0 for rate in imported_data):
+                raise ValueError("Demand rates cannot be negative")
+            if any(rate < self.non_consumptive_rate for rate in imported_data):
+                raise ValueError("Demand rates cannot be less than non-consumptive rate")
+            
+            # Apply efficiency factors to imported data
+            self.demand_rates = [rate/(self.field_efficiency*self.conveyance_efficiency) 
+                               for rate in imported_data]
+            
+        elif constant_demand_rate is not None:
+            # Validate constant_demand_rate
+            if constant_demand_rate < 0:
+                raise ValueError("Demand rate cannot be negative")
+            if constant_demand_rate < self.non_consumptive_rate:
+                raise ValueError("Demand rate cannot be less than non-consumptive rate")
+            
+            # Apply efficiency factors to constant rate
+            demand_rate = constant_demand_rate/(self.field_efficiency*self.conveyance_efficiency)
+            self.demand_rates = [demand_rate] * num_time_steps
+        else:
+            # Default to zero demand if no other information provided
+            self.demand_rates = [0] * num_time_steps
+    
     def get_demand_rate(self, time_step):
         """
         Get the demand rate for a specific time step.
@@ -634,7 +530,7 @@ class DemandNode(Node):
             return self.satisfied_demand[time_step]
         return 0
 
-class StorageNode(Node):  
+class StorageNode(Node, TimeSeriesImport):  
 
     def __init__(self, id, easting=None, northing=None, hv_file=None, 
                  evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
@@ -674,10 +570,16 @@ class StorageNode(Node):
  
         self.dead_storage = dead_storage  # Dead storage volume [m³]
         self.dead_storage_level = self.get_level_from_volume(dead_storage)
-        # Initialize evaporation rates
-        self.evaporation_rates = self._initialize_evaporation_rates(
-            id, evaporation_file, start_year, start_month, num_time_steps
-        )
+        
+        # Initialize evaporation rates using TimeSeriesImport
+        imported_data = None
+        if evaporation_file is not None and all(param is not None for param in [start_year, start_month, num_time_steps]):
+            imported_data = self._initialize_time_series(
+                id, evaporation_file, start_year, start_month, num_time_steps, 'Evaporation'
+            )
+        
+        self.evaporation_rates = imported_data if imported_data is not None else [0] * num_time_steps
+
 
         # Validate initial storage against capacity
         if initial_storage > self.capacity:
@@ -786,80 +688,6 @@ class StorageNode(Node):
         
         return release
     
-    def _initialize_evaporation_rates(self, id, evaporation_file, start_year, start_month, num_time_steps):
-        """
-        Initialize evaporation rates from CSV file.
-        
-        Args:
-            id (str): Node identifier for error messages
-            evaporation_file (str): Path to evaporation data CSV
-            start_year (int): Start year for data
-            start_month (int): Start month for data
-            num_time_steps (int): Number of time steps
-            
-        Returns:
-            list: Initialized evaporation rates or None if not configured
-        """
-        # If no evaporation file provided, return None
-        if evaporation_file is None:
-            return None
-
-        # If all parameters are provided, try to import data
-        if all(param is not None for param in [evaporation_file, start_year, start_month, num_time_steps]):
-            try:
-                evap_data = self.import_evaporation_data(evaporation_file, start_year, start_month, num_time_steps)
-                
-                # Check if data is valid
-                if not (evap_data.empty or 
-                    evap_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                    len(evap_data['Evaporation']) < num_time_steps):
-                    return evap_data['Evaporation'].tolist()
-                
-                # Print warning for invalid data
-                print(f"Warning: No evaporation rates will be applied for node '{id}' due to insufficient data")
-                print(f"Requested period: {start_year}-{start_month:02d} to "
-                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
-                if not evap_data.empty:
-                    print(f"Available data range: {evap_data['Date'].min():%Y-%m} to {evap_data['Date'].max():%Y-%m}")
-                return None
-                
-            except Exception as e:
-                print(f"Warning: Failed to load evaporation data for node '{id}': {str(e)}")
-                return None
-        
-        return None
-
-    def import_evaporation_data(self, evaporation_file, start_year, start_month, num_time_steps):
-        """
-        Import evaporation data from a CSV file for a specified time period.
-        
-        Args:
-            evaporation_file (str): Path to the CSV file containing evaporation data
-            start_year (int): Starting year for the data
-            start_month (int): Starting month (1-12) for the data
-            num_time_steps (int): Number of time steps to import
-            
-        Returns:
-            DataFrame: Filtered DataFrame containing the requested data period
-        """
-        try:
-            # Read the CSV file into a pandas DataFrame
-            evap_df = pd.read_csv(evaporation_file, parse_dates=['Date'])
-            
-            if 'Date' not in evap_df.columns or 'Evaporation' not in evap_df.columns:
-                raise ValueError("CSV file must contain 'Date' and 'Evaporation' columns")
-        
-            # Filter the DataFrame to find the start point
-            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
-            end_date = start_date + pd.DateOffset(months=num_time_steps)
-            
-            return evap_df[(evap_df['Date'] >= start_date) & (evap_df['Date'] < end_date)]
-            
-        except FileNotFoundError:
-            raise ValueError(f"Evaporation data file not found: {evaporation_file}")
-        except Exception as e:
-            raise ValueError(f"Failed to import evaporation data: {str(e)}")
-
     def _load_hv_data(self, csv_path):
         """Load and validate height-volume-area relationship data."""
         try:

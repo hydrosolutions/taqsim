@@ -168,22 +168,21 @@ class WaterSystem:
 
     def _check_edge_properties(self):
         """Check edge properties and connections."""
-        for u, v, edge_data in self.graph.edges(data=True):
+        for source, target, edge_data in self.graph.edges(data=True):
             edge = edge_data['edge']
-            source_node = self.graph.nodes[u]['node']
-            target_node = self.graph.nodes[v]['node']
+    
 
             # Check edge capacity
             if edge.capacity <= 0:
-                raise ValueError(f"Edge from {u} to {v} has invalid capacity: {edge.capacity}")
+                raise ValueError(f"Edge from {source} to {target} has invalid capacity: {edge.capacity}")
 
             # Check loss factors
             if edge.loss_factor < 0 or edge.loss_factor > 1:
                 raise ValueError(
-                    f"Edge from {u} to {v} has invalid loss factor: {edge.loss_factor}"
+                    f"Edge from {source} to {target} has invalid loss factor: {edge.loss_factor}"
                 )
             if edge.loss_factor > 0.5:
-                print(f"Warning: Edge from {u} to {v} has unusually high loss factor: {edge.loss_factor}")
+                print(f"Warning: Edge from {source} to {target} has unusually high loss factor: {edge.loss_factor}")
 
     def _check_data_consistency(self):
         """Check consistency of node data and time series."""
@@ -239,12 +238,7 @@ class WaterSystem:
             for node_id in sorted_nodes:
                 node_data = self.graph.nodes[node_id]
                 node_data['node'].update(t, self.dt)
-                
-                # Update edges after all nodes have been updated
-                for _, _, edge_data in self.graph.edges(data=True):
-                    if not isinstance(edge_data['edge'].source, (SupplyNode, StorageNode, HydroWorks, DemandNode)):
-                        edge_data['edge'].update(t)
-             
+
     def get_water_balance(self):
         """
         Calculate system-wide water balance for each time step using volumes in m³.

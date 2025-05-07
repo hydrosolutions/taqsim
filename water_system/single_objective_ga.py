@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
 import random
-from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
+from water_system import StorageNode, DemandNode, HydroWorks, SinkNode
 import copy
+import os
 
 class SingleObjectiveOptimizer:
     """
@@ -66,7 +67,7 @@ class SingleObjectiveOptimizer:
         
     def _normalize_distribution(self, values):
         """
-        Normalize a list of values to sum to 1.0 using numpy for efficiency.
+        Normalize a list of values to sum to 1.0.
         
         Args:
             values (list): List of values to normalize
@@ -83,15 +84,6 @@ class SingleObjectiveOptimizer:
     
     def _setup_genetic_operators(self):
         """Configure genetic algorithm operators for multiple structures with dynamic bounds"""
-        # Create attributes for each reservoir's parameters
-        for res_id, bounds in self.reservoir_bounds.items():
-            for param, (low, high) in bounds.items():
-                self.toolbox.register(
-                    f"reservoir_{res_id}_{param}",
-                    random.uniform,
-                    low,
-                    high
-                )
 
         # Create individual and population
         self.toolbox.register("individual", self._create_individual)
@@ -218,9 +210,7 @@ class SingleObjectiveOptimizer:
         return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
     def _evaluate_individual(self, individual):
-        """Evaluate fitness of an individual with bound checking"""
-        genes_per_reservoir = 3 
-        
+        """Evaluate fitness of an individual with bound checking"""        
         try:
             # Decode parameters and continue with evaluation
             reservoir_params, hydroworks_params = self._decode_individual(individual)
@@ -259,10 +249,10 @@ class SingleObjectiveOptimizer:
                     total_penalty += total_deficit_volume * node.weight
                     
                 elif hasattr(node, 'spillway_register'):
-                    total_penalty += 100.0 * np.sum(node.spillway_register)
+                    total_penalty += 10.0 * np.sum(node.spillway_register)
                 
                 elif hasattr(node, 'spill_register'):
-                    total_penalty += 100.0 * np.sum(node.spill_register)
+                    total_penalty += 10.0 * np.sum(node.spill_register)
             
             return (total_penalty,)
         
@@ -393,6 +383,10 @@ class SingleObjectiveOptimizer:
 
     def plot_convergence(self):
         """Plot convergence history"""
+        directory = './model_output/optimisation'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
         plt.figure(figsize=(10, 6))
         gens = range(len(self.history['min']))
         
