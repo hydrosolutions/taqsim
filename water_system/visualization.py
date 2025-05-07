@@ -434,6 +434,9 @@ class WaterSystemVisualizer:
             df['minflow requirement'] = min_flow_requirements
         
         wb = pd.DataFrame(df)
+        directory = './model_output/water_balances'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
         wb.to_csv(f'./model_output/water_balances/{self.name}_water_balance.csv', index=False)
         
         print(f"\nWater Balance Summary for {self.name}")

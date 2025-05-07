@@ -32,13 +32,16 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
     
     # Set base path according to system type
-    base_path = f"./data/{'baseline' if system_type == 'baseline' else 'scenarios'}"
+    if system_type == 'simplified_ZRB':
+        base_path = './data/simplified_ZRB'
+    else:
+        base_path = f"./data/{'baseline' if system_type == 'baseline' else 'scenarios'}"
     
     # Create Source Node with appropriate path
-    if system_type == "baseline":
-        inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_2010-2023_monthly.csv"
-    else:
+    if system_type == "scenario":
         inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_{scenario}_2012-2099.csv"
+    else:
+        inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_2010-2023_monthly.csv"
     
     Source = SupplyNode("Source", 
                        easting=381835, 
@@ -69,10 +72,11 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     demand_info = pd.read_csv(demand_config_path, sep=',')
     
     # Determine demand data file path
-    if system_type == "baseline":
-        demand_data_path = f"{base_path}/demand/demand_all_districts_2017-2022_monthly.csv"
-    else:
+    if system_type == "scenario":
         demand_data_path = f"{base_path}/demand/demand_{scenario}_{agr_scenario}_{period}.csv"
+    else:
+        demand_data_path = f"{base_path}/demand/demand_all_districts_2017-2022_monthly.csv"
+        
     
     # Create demand nodes
     for index, row in demand_info.iterrows():
@@ -101,10 +105,10 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     system.add_node(Powerplant)
     
     # Determine evaporation file path
-    if system_type == "baseline":
-        evap_path = f"{base_path}/reservoir/reservoir_evaporation_2017-2022_monthly.csv"
-    else:
+    if system_type == "scenario":
         evap_path = f"{base_path}/reservoir/reservoir_evaporation_{scenario}_2015-2100.csv"
+    else :
+        evap_path = f"{base_path}/reservoir/reservoir_evaporation_2017-2022_monthly.csv"
     
     # Add Reservoir Nodes
     RES_Kattakurgan = StorageNode("RES_Kattakurgan",
@@ -136,14 +140,14 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     system.add_node(RES_Akdarya)
     
     # Determine min flow paths
-    if system_type == "baseline":
-        jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh_2000-2022_monthly.csv"
-        kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2000-2022_monthly.csv"
-        navoi_path = f"{base_path}/min_flow/min_flow_navoi_1968-2022_monthly.csv"
-    else:
+    if system_type == "scenario":
         jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh_2015-2100.csv"
         kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2015-2100.csv"
         navoi_path = f"{base_path}/min_flow/min_flow_navoi_2015-2100.csv"
+    else:
+        jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh_2000-2022_monthly.csv"
+        kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2000-2022_monthly.csv"
+        navoi_path = f"{base_path}/min_flow/min_flow_navoi_1968-2022_monthly.csv"
     
     # Add Sink Nodes
     Sink_Jizzakh = SinkNode("Sink_Jizzakh", 
@@ -259,6 +263,11 @@ def save_optimized_parameters(optimization_results, filename):
         optimization_results (dict): Results from the optimizer
         filename (str): Path to save the parameters
     """
+
+    # Ensure the directory exists
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     
     # Convert all numeric values to floats for JSON serialization
     def convert_to_float(obj):
@@ -383,11 +392,13 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
             print("]")
 
     optimizer.plot_convergence()
-    if system_type == 'baseline':
+    if system_type == 'scenario':
+        save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+    elif system_type == 'baseline':
         save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
     else:
-        save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
-
+        save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{system_type}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+        
     ZRB_system = load_optimized_parameters(ZRB_system, results)
     ZRB_system.simulate(num_time_steps)
 
@@ -492,9 +503,9 @@ def run_simulation(system_creator, optimization_results, start_year, start_month
 
 # Run the sample tests
 if __name__ == "__main__":
-    optimization = False
+    optimization = True
     simulation = False
-    multiobjective = True
+    multiobjective = False
 
     if optimization: 
         # Example of running the optimization for a baseline system
@@ -503,7 +514,7 @@ if __name__ == "__main__":
             start_year=2017, 
             start_month=1, 
             num_time_steps=12*6,
-            system_type = 'baseline',
+            system_type = 'simplified_ZRB',
             scenario = '', 
             period = '', 
             agr_scenario= ' ', 
@@ -513,6 +524,7 @@ if __name__ == "__main__":
             cxpb=0.65, 
             mutpb= 0.32
         )
+        '''
         # Example of running the optimization for a future scenario
         results = run_optimization(
             create_ZRB_system,
@@ -528,7 +540,7 @@ if __name__ == "__main__":
             pop_size=30, 
             cxpb=0.65, 
             mutpb= 0.32
-        ) 
+        )''' 
 
     if simulation:
         # Example of running the simulation with optimized parameters for a baseline system
