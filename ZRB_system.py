@@ -204,7 +204,7 @@ def load_optimized_parameters(system, optimization_results):
     
     Args:
         system (WaterSystem): The water system to update
-        optimization_results (dict): Results from the GA containing:
+        optimization_results (dict): Results from the optimizer containing:
             - optimal_reservoir_parameters (dict): Parameters for each reservoir
             - optimal_hydroworks_parameters (dict): Parameters for each hydroworks
             
@@ -212,8 +212,18 @@ def load_optimized_parameters(system, optimization_results):
         WaterSystem: Updated system with optimized parameters
     """
     try:
+        # Check if the results have the recommended_solution structure or direct parameters
+        if 'recommended_solution' in optimization_results:
+            # Use the recommended solution structure
+            reservoir_params = optimization_results['recommended_solution']['reservoir_parameters'] 
+            hydroworks_params = optimization_results['recommended_solution']['hydroworks_parameters']
+        else:
+            # Use the direct structure from the optimizer
+            reservoir_params = optimization_results['optimal_reservoir_parameters']
+            hydroworks_params = optimization_results['optimal_hydroworks_parameters']
+        
         # Load reservoir parameters
-        for res_id, params in optimization_results['optimal_reservoir_parameters'].items():
+        for res_id, params in reservoir_params.items():
             reservoir_node = system.graph.nodes[res_id]['node']
             if not hasattr(reservoir_node, 'set_release_params'):
                 raise ValueError(f"Node {res_id} does not appear to be a StorageNode")
@@ -221,7 +231,7 @@ def load_optimized_parameters(system, optimization_results):
             print(f"Successfully updated parameters for reservoir {res_id}")
             
         # Load hydroworks parameters
-        for hw_id, params in optimization_results['optimal_hydroworks_parameters'].items():
+        for hw_id, params in hydroworks_params.items():
             hydroworks_node = system.graph.nodes[hw_id]['node']
             if not hasattr(hydroworks_node, 'set_distribution_parameters'):
                 raise ValueError(f"Node {hw_id} does not appear to be a HydroWorks")
@@ -231,7 +241,7 @@ def load_optimized_parameters(system, optimization_results):
         return system
         
     except Exception as e:
-        raise ValueError(f"Failed to load optimized parameters: {str(e)}")
+        raise ValueError(f"Failed to load optimized parameters: {str(e)}")  
 
 def load_parameters_from_file(filename):
     """
@@ -248,12 +258,14 @@ def load_parameters_from_file(filename):
     with open(filename, 'r') as f:
         data = json.load(f)
     
+    # Extract relevant data from the JSON structure
     return {
         'success': True,
         'message': "Parameters loaded from file",
-        'objective_value': data['objective_value'],
-        'optimal_reservoir_parameters': data['reservoir_parameters'],
-        'optimal_hydroworks_parameters': data['hydroworks_parameters']
+        'recommended_solution': {
+            'reservoir_parameters': data['recommended_solution']['reservoir_parameters'],
+            'hydroworks_parameters': data['recommended_solution']['hydroworks_parameters']
+        }
     }
 
 def save_optimized_parameters(optimization_results, filename):
@@ -564,8 +576,9 @@ def run_simulation(system_creator, optimization_results, start_year, start_month
 
 # Run the sample tests
 if __name__ == "__main__":
-    optimization = True
-    simulation = False
+
+    optimization = False
+    simulation = True
     multiobjective = False
 
     if optimization: 
@@ -580,8 +593,8 @@ if __name__ == "__main__":
             period = '', 
             agr_scenario= ' ', 
             efficiency = ' ', 
-            ngen=10, 
-            pop_size=100, 
+            ngen=50, 
+            pop_size=10, 
             cxpb=0.65, 
             mutpb= 0.32
         )
@@ -605,7 +618,7 @@ if __name__ == "__main__":
 
     if simulation:
         # Example of running the simulation with optimized parameters for a baseline system
-        loaded_results = load_parameters_from_file(f"./data/optimised_parameter/2025-05-05_euler_new_res_param_baseline.json")
+        loaded_results = load_parameters_from_file(f"./data/optimised_parameter/singleobjective_params_100_3000_0.65_0.32.json")
         
         system = run_simulation(
             create_ZRB_system,
@@ -619,7 +632,7 @@ if __name__ == "__main__":
             agr_scenario = '', 
             efficiency = ''
         )
-
+        '''#Example of running the simulation with optimized parameters for a future scenario
         system = run_simulation(
             create_ZRB_system,
             loaded_results,
@@ -631,7 +644,7 @@ if __name__ == "__main__":
             period = '2041-2070',
             agr_scenario = 'diversification', 
             efficiency = 'improved_efficiency' # or 'noeff'
-        )
+        )'''
 
     if multiobjective:
         # Example of running the multi-objective optimization for a baseline system
@@ -685,20 +698,20 @@ if __name__ == "__main__":
     ##################################
     '''
     # Start profiling
-    #profiler = cProfile.Profile()
-    #profiler.enable()
+    profiler = cProfile.Profile()
+    profiler.enable()
 
     # Stop profiling
-    #profiler.disable()
+    profiler.disable()
 
     # Save profiling stats
     #profile_output = 'cprofile_stats.prof'
     #profiler.dump_stats(profile_output)
 
     # Display profiling stats
-    #stream = io.StringIO()
-    #stats = pstats.Stats(profiler, stream=stream)
-    #stats.sort_stats('cumulative')  # Sort by cumulative time
-    #stats.print_stats(40)  # Print top 20 functions
-    #print(stream.getvalue())
+    stream = io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+    stats.sort_stats('cumulative')  # Sort by cumulative time
+    stats.print_stats(20)  # Print top 20 functions
+    print(stream.getvalue())
     '''
