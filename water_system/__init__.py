@@ -23,13 +23,12 @@ from .structure import Node, SupplyNode, SinkNode, DemandNode, StorageNode, Hydr
 from .edge import Edge
 from .visualization import WaterSystemVisualizer
 from .single_objective_ga import SingleObjectiveOptimizer
-from .two_objective_ga import TwoObjectiveOptimizer
 from .multi_objective_ga import MultiObjectiveOptimizer
 from .pareto_dashboard_3d import ParetoFrontDashboard
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'Node', 'SupplyNode', 'SinkNode', 'DemandNode', 
-           'StorageNode', 'HydroWorks','RunoffNode', 'Edge', 'WaterSystemVisualizer', 'SingleObjectiveOptimizer', 'TwoObjectiveOptimizer', 'MultiObjectiveOptimizer', 'ParetoFrontDashboard']
+           'StorageNode', 'HydroWorks','RunoffNode', 'Edge', 'WaterSystemVisualizer', 'SingleObjectiveOptimizer', 'MultiObjectiveOptimizer', 'ParetoFrontDashboard']
 
 # Package version
 __version__ = '0.2.0'

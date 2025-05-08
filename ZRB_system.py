@@ -3,7 +3,7 @@ import numpy as np
 import webbrowser
 import os
 import json
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer,TwoObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
 import ctypes
 import cProfile
 import pstats
@@ -63,7 +63,7 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
         globals()[row['name']] = hw_node
         system.add_node(hw_node)
 
-    # Determine precipitation data file path
+    # Determine precipitation data file path (so far only for simplified ZRB possible)
     if system_type == "simplified_ZRB":
         precip_data_path = f"{base_path}/precipitation/precipitation_2017-2022.csv"
 
@@ -616,7 +616,7 @@ if __name__ == "__main__":
             agr_scenario= ' ', 
             efficiency = ' ', 
             ngen=10, 
-            pop_size=10, 
+            pop_size=50, 
             cxpb=0.65, 
             mutpb= 0.32
         )
@@ -640,7 +640,7 @@ if __name__ == "__main__":
 
     if simulation:
         # Example of running the simulation with optimized parameters for a baseline system
-        loaded_results = load_parameters_from_file(f"./data/optimised_parameter/singleobjective_params_100_3000_0.65_0.32.json")
+        loaded_results = load_parameters_from_file(f"./data/baseline/parameter/singleobjective_params_100_3000_0.65_0.32.json")
         
         system = run_simulation(
             create_ZRB_system,
