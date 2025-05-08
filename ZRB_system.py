@@ -3,7 +3,7 @@ import numpy as np
 import webbrowser
 import os
 import json
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer,TwoObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer,TwoObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
 import ctypes
 import cProfile
 import pstats
@@ -62,6 +62,29 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
         )
         globals()[row['name']] = hw_node
         system.add_node(hw_node)
+
+    # Determine precipitation data file path
+    if system_type == "simplified_ZRB":
+        precip_data_path = f"{base_path}/precipitation/precipitation_2017-2022.csv"
+
+
+        # Load Runoff Node Configuration
+        runoff_info = pd.read_csv(f'{base_path}/config/runoff_nodes_config.csv', sep=',')
+        for index, row in runoff_info.iterrows():
+            runoff_node = RunoffNode(
+                row['name'],
+                area=row['area'],
+                runoff_coefficient=row['runoff_coefficient'],
+                easting=row['easting'],
+                northing=row['northing'],
+                rainfall_csv=precip_data_path,
+                start_year=start_year,
+                start_month=start_month,
+                num_time_steps=num_time_steps
+            )
+            globals()[row['name']] = runoff_node
+            system.add_node(runoff_node)
+  
     
     # Load Demand Node Configuration
     demand_config_path = f'{base_path}/config/demand_nodes_config'
@@ -445,8 +468,7 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
     vis.plot_objective_function_breakdown()
     vis.print_water_balance_summary()
     vis.plot_demand_deficit_heatmap()
-    vis.plot_network_layout()
-    vis.plot_network_layout_2()
+    vis.plot_network_overview()
     vis.plot_minimum_flow_compliance()
 
     return results
@@ -577,8 +599,8 @@ def run_simulation(system_creator, optimization_results, start_year, start_month
 # Run the sample tests
 if __name__ == "__main__":
 
-    optimization = False
-    simulation = True
+    optimization = True
+    simulation = False
     multiobjective = False
 
     if optimization: 
@@ -588,12 +610,12 @@ if __name__ == "__main__":
             start_year=2017, 
             start_month=1, 
             num_time_steps=12*6,
-            system_type = 'baseline',
+            system_type = 'simplified_ZRB',
             scenario = '', 
             period = '', 
             agr_scenario= ' ', 
             efficiency = ' ', 
-            ngen=50, 
+            ngen=10, 
             pop_size=10, 
             cxpb=0.65, 
             mutpb= 0.32

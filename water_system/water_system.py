@@ -7,7 +7,7 @@ The WaterSystem class allows users to add nodes and edges to the system and run 
 
 import networkx as nx
 import pandas as pd
-from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode
+from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode
 from .edge import Edge
 import numpy as np
 
@@ -242,15 +242,12 @@ class WaterSystem:
     def get_water_balance(self):
         """
         Calculate system-wide water balance for each time step using volumes in m³.
-        Initial storage is only considered at the first timestep.
-        Storage change is calculated as current minus previous storage, with zero at first timestep.
         
         Returns:
             pandas.DataFrame: A DataFrame containing water balance volumes for each timestep
         """
         if self.time_steps == 0:
             return pd.DataFrame()
-        
         
         # Initialize arrays to store data
         time_steps = np.arange(self.time_steps)
@@ -261,6 +258,7 @@ class WaterSystem:
         reservoir_spills = np.zeros(self.time_steps)
         hydroworks_spills = np.zeros(self.time_steps)
         source = np.zeros(self.time_steps)
+        surfacerunoff = np.zeros(self.time_steps)  # Added for runoff
         sink = np.zeros(self.time_steps)
         edge_losses = np.zeros(self.time_steps)
         demands = np.zeros(self.time_steps)
@@ -273,6 +271,11 @@ class WaterSystem:
             if isinstance(node, SupplyNode):
                 supply_rates = np.array([node.get_supply_rate(t) for t in time_steps])
                 source += supply_rates * self.dt
+            
+            # Add runoff contribution 
+            elif isinstance(node, RunoffNode):
+                runoff_rates = np.array([node.get_runoff(t) for t in time_steps])
+                surfacerunoff += runoff_rates * self.dt
                 
             elif isinstance(node, DemandNode):
                 demand_rates = np.array([node.get_demand_rate(t) for t in time_steps])
@@ -304,6 +307,7 @@ class WaterSystem:
         
         balance_error = (
             source 
+            + surfacerunoff  # Add runoff to inputs
             - supplied_demand
             - sink
             - edge_losses
@@ -323,6 +327,7 @@ class WaterSystem:
             'reservoir spills': reservoir_spills,
             'hydroworks spills': hydroworks_spills,
             'source': source,
+            'surfacerunoff': surfacerunoff,  # Added runoff column
             'sink': sink,
             'edge losses': edge_losses,
             'demands': demands,

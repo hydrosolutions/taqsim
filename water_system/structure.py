@@ -1033,3 +1033,154 @@ class HydroWorks(Node):
                 
         except Exception as e:
             raise ValueError(f"Failed to update hydroworks node {self.id}: {str(e)}")
+        
+class RunoffNode(Node, TimeSeriesImport):
+    """
+    Represents a runoff generation area in the water system using a simple runoff coefficient approach.
+    
+    Attributes:
+        id (str): A unique identifier for the node.
+        area (float): The catchment area in square kilometers.
+        runoff_coefficient (float): Proportion of rainfall that becomes runoff (0-1).
+        rainfall_data (list): A list of rainfall depths for each time step in mm.
+        runoff_history (list): A record of generated runoff for each time step in m³/s.
+    """
+
+    def __init__(self, id, area, runoff_coefficient, easting=None, northing=None, 
+                 rainfall_csv=None, start_year=None, start_month=None, num_time_steps=None):
+        """
+        Initialize a RunoffNode object.
+
+        Args:
+            id (str): A unique identifier for the node.
+            area (float): The catchment area in square kilometers.
+            runoff_coefficient (float): Proportion of rainfall that becomes runoff (0-1).
+            easting (float, optional): The easting coordinate of the node.
+            northing (float, optional): The northing coordinate of the node.
+            rainfall_csv (str, optional): Path to CSV file containing rainfall data.
+            start_year (int, optional): Starting year for CSV data import.
+            start_month (int, optional): Starting month (1-12) for CSV data import.
+            num_time_steps (int, optional): Number of time steps to import from CSV.
+        """
+        super().__init__(id, easting, northing)
+        
+        # Validate inputs
+        if area <= 0:
+            raise ValueError(f"Area must be positive, got {area}")
+        if not (0 <= runoff_coefficient <= 1):
+            raise ValueError(f"Runoff coefficient must be between 0 and 1, got {runoff_coefficient}")
+            
+        self.area = area  # km²
+        self.runoff_coefficient = runoff_coefficient
+        self.runoff_history = []
+        
+        # Import rainfall data from CSV if provided
+        self.rainfall_data = self._initialize_time_series(
+            id, rainfall_csv, start_year, start_month, num_time_steps, 'Precipitation'
+        ) if rainfall_csv else []
+        
+        # Initialize with zeros if no data provided
+        if not self.rainfall_data and num_time_steps:
+            self.rainfall_data = [0] * num_time_steps
+            print(f"Warning: No rainfall data provided for RunoffNode '{id}'. Initializing with zeros.")
+    
+    def calculate_runoff(self, rainfall, dt):
+        """
+        Calculate runoff using a simple runoff coefficient approach.
+        
+        Args:
+            rainfall (float): Rainfall depth in mm for the current time step
+            dt (float): Time step duration in seconds
+            
+        Returns:
+            float: Runoff rate in m³/s
+        """
+        if rainfall <= 0:
+            return 0
+            
+        # Calculate runoff volume
+        # Convert rainfall from mm to m and multiply by area (km²) to get volume in m³
+        # Then apply runoff coefficient to determine how much becomes runoff
+        volume = (rainfall / 1000) * self.area * 1e6 * self.runoff_coefficient
+        
+        # Convert volume to flow rate (m³/s) based on the time step duration
+        runoff_rate = volume / dt
+        
+        return runoff_rate
+    
+    def get_rainfall(self, time_step):
+        """
+        Get the rainfall for a specific time step.
+        
+        Args:
+            time_step (int): The time step for which to retrieve the rainfall
+            
+        Returns:
+            float: Rainfall in mm or 0 if not available
+        """
+        if time_step < len(self.rainfall_data):
+            return self.rainfall_data[time_step]
+        return 0
+    
+    def update(self, time_step, dt):
+        """
+        Update the RunoffNode's state for the given time step.
+        
+        Args:
+            time_step (int): The current time step of the simulation
+            dt (float): The duration of the time step in seconds
+        """
+        try:
+            # Get rainfall for current time step
+            rainfall = self.get_rainfall(time_step)
+            
+            # Calculate runoff
+            runoff = self.calculate_runoff(rainfall, dt)
+            
+            # Store runoff in history
+            self.runoff_history.append(runoff)
+            
+            # Update outflow edges
+            total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
+            
+            if total_capacity > 0:
+                # Distribute runoff proportionally based on edge capacities
+                for edge in self.outflow_edges.values():
+                    edge_flow = (edge.capacity / total_capacity) * runoff
+                    edge.update(time_step, min(edge_flow, edge.capacity))
+            else:
+                # If no capacity, set flow to zero
+                for edge in self.outflow_edges.values():
+                    edge.update(time_step, 0)
+                    
+        except Exception as e:
+            print(f"Error updating RunoffNode {self.id}: {str(e)}")
+            self.runoff_history.append(0)
+            for edge in self.outflow_edges.values():
+                edge.update(time_step, 0)
+    
+    def get_runoff(self, time_step):
+        """
+        Get the runoff rate for a specific time step.
+        
+        Args:
+            time_step (int): The time step for which to retrieve the runoff
+            
+        Returns:
+            float: Runoff rate in m³/s or 0 if not available
+        """
+        if time_step < len(self.runoff_history):
+            return self.runoff_history[time_step]
+        return 0
+    
+    def get_total_runoff_volume(self, dt):
+        """
+        Calculate the total runoff volume across all time steps.
+        
+        Args:
+            dt (float): The duration of each time step in seconds
+            
+        Returns:
+            float: Total runoff volume in m³
+        """
+        return sum(runoff * dt for runoff in self.runoff_history)

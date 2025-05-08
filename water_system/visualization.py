@@ -16,7 +16,7 @@ import os
 import json
 import networkx as nx
 from datetime import datetime
-from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks
+from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
@@ -457,8 +457,12 @@ class WaterSystemVisualizer:
         
         # Source volumes
         print_section("Source Volumes")
-        total_source = df['source'].sum()
-        print(f"Total source volume: {total_source:,.0f} m³ (100%)")
+        total_sourcenode = df['source'].sum()
+        total_surfacerunoff = df['surfacerunoff'].sum()
+        total_source = total_sourcenode + total_surfacerunoff
+        print(f"Source Node: {total_sourcenode:,.0f} m³")
+        print(f"Surface Runoff: {total_surfacerunoff:,.0f} m³")
+        print(f"Total Source: {total_source:,.0f} m³ (100%)")
         
         # Component volumes and percentages
         print_section("Sink Volumes")
@@ -491,8 +495,6 @@ class WaterSystemVisualizer:
         total_demand = df['demands'].sum()
         total_satisfied = df['supplied demand'].sum()
         unmet_demand = df['unmet demand'].sum()
-        satisfied_percentage = (total_satisfied / total_demand * 100) if total_demand > 0 else 0
-        unmet_percentage = (unmet_demand / total_demand * 100) if total_demand > 0 else 0
         print(f"Total demand:        {total_demand:15,.0f} m³")
         print(f"Satisfied demand:    {total_satisfied:15,.0f} m³")
         print(f"Unmet demand:        {unmet_demand:15,.0f} m³")
@@ -1825,7 +1827,7 @@ class WaterSystemVisualizer:
     def plot_network_overview(self):
         
         # Create a larger figure for detailed visualization
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(20, 10.5))
         
         # Setting node positions based on easting and northing
         pos = {}
@@ -1857,7 +1859,8 @@ class WaterSystemVisualizer:
             StorageNode: 2500,
             DemandNode: 1600,
             SinkNode: 2500,
-            HydroWorks: 2000
+            HydroWorks: 2000,
+            RunoffNode: 500
         }
         
         node_colors = {
@@ -1865,7 +1868,8 @@ class WaterSystemVisualizer:
             StorageNode: '#4CAF50',  # Green
             DemandNode: '#F44336',  # Red
             SinkNode: '#9E9E9E',    # Grey
-            HydroWorks: '#FF9800'    # Orange
+            HydroWorks: '#FF9800',    # Orange
+            RunoffNode: '#8B4513'  
         }
         
         node_shapes = {
@@ -1873,7 +1877,8 @@ class WaterSystemVisualizer:
             StorageNode: 'h',       # Hexagon
             DemandNode: 'o',        # Circle
             SinkNode: 'd',          # Diamond
-            HydroWorks: 'p'         # Pentagon
+            HydroWorks: 'p',         # Pentagon
+            RunoffNode: 's'        # Square
         }
 
         node_names = {
@@ -1881,14 +1886,15 @@ class WaterSystemVisualizer:
             StorageNode: 'Storage Node',       # Hexagon
             DemandNode: 'Demand Node',        # Circle
             SinkNode: 'Sink Node',          # Diamond
-            HydroWorks: 'Hydrowork Node'         # Pentagon
+            HydroWorks: 'Hydrowork Node',         # Pentagon
+            RunoffNode: 'Surfacerunoff Node'        # Square
         }
         
         # Group nodes by type
         grouped_nodes = {
             node_type: [node for node, data in self.system.graph.nodes(data=True) 
                         if isinstance(data['node'], node_type)]
-            for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks]
+            for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode]
         }
         
         # Create edge color mapping based on capacity
@@ -1952,21 +1958,21 @@ class WaterSystemVisualizer:
             node_labels[node_id] = label
         
         # Draw node labels with white outline for better visibility
-        '''for node, label in node_labels.items():
+        for node, label in node_labels.items():
             x, y = pos[node]
             txt = ax.text(x, y, label, fontsize=15, ha='center', va='center', 
                         fontweight='bold', zorder=5)
-            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='white')])'''
+            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='white')])
         
         # Create a legend
         legend_elements = []
         
         # Node type legend
-        for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks]:
+        for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode]:
             if grouped_nodes[node_type]:  # Only add to legend if this type exists
                 legend_elements.append(
                     Line2D([0], [0], marker=node_shapes[node_type], color='w', 
-                        markerfacecolor=node_colors[node_type], markersize=20, 
+                        markerfacecolor=node_colors[node_type], markersize=15, 
                         label=node_names[node_type])
                 )
         
@@ -1977,8 +1983,8 @@ class WaterSystemVisualizer:
         )
         
         # Add the legend
-        '''ax.legend(handles=legend_elements, loc='upper right', fontsize=22,
-                framealpha=0.9, fancybox=True, shadow=True)'''
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=22,
+                framealpha=0.9, fancybox=True, shadow=True)
     
 
         # Find geographic bounding box
