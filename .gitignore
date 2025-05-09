@@ -153,8 +153,8 @@ cython_debug/
 
 # Images and Folders
 *.png
-model_output/*
-data/*
+model_output/
+data/
 
 *.csv
 .DS_Store
