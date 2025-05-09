@@ -1,6 +1,6 @@
+from typing import Callable, Dict, List, Optional, Union
 import pandas as pd
 import numpy as np
-import webbrowser
 import os
 import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
@@ -9,8 +9,8 @@ import cProfile
 import pstats
 import io
 
-def create_ZRB_system(start_year, start_month, num_time_steps, system_type="baseline", 
-                     scenario='', period='', agr_scenario='', efficiency=''):
+def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,system_type: str = "baseline",
+    scenario: str = '',period: str = '',agr_scenario: str = '',efficiency: str = '') -> WaterSystem:
     """
     Flexible function to create a ZRB water system model for either baseline or scenario simulations.
     
@@ -41,7 +41,7 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     if system_type == "scenario":
         inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_{scenario}_2012-2099.csv"
     else:
-        inflow_path = f"{base_path}/inflow/inflow_ravatkhoza_2010-2023_monthly.csv"
+        inflow_path = f"{base_path}/inflow/inflow_ravatkhoza.csv"
     
     Source = SupplyNode("Source", 
                        easting=381835, 
@@ -132,7 +132,7 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     if system_type == "scenario":
         evap_path = f"{base_path}/reservoir/reservoir_evaporation_{scenario}_2015-2100.csv"
     else :
-        evap_path = f"{base_path}/reservoir/reservoir_evaporation_2017-2022_monthly.csv"
+        evap_path = f"{base_path}/reservoir/reservoir_evaporation.csv"
     
     # Add Reservoir Nodes
     RES_Kattakurgan = StorageNode("RES_Kattakurgan",
@@ -169,9 +169,9 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
         kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2015-2100.csv"
         navoi_path = f"{base_path}/min_flow/min_flow_navoi_2015-2100.csv"
     else:
-        jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh_2000-2022_monthly.csv"
-        kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya_2000-2022_monthly.csv"
-        navoi_path = f"{base_path}/min_flow/min_flow_navoi_1968-2022_monthly.csv"
+        jizzakh_path = f"{base_path}/min_flow/min_flow_jizzakh.csv"
+        kashkadarya_path = f"{base_path}/min_flow/min_flow_kashkadarya.csv"
+        navoi_path = f"{base_path}/min_flow/min_flow_navoi.csv"
     
     # Add Sink Nodes
     Sink_Jizzakh = SinkNode("Sink_Jizzakh", 
@@ -221,7 +221,7 @@ def create_ZRB_system(start_year, start_month, num_time_steps, system_type="base
     
     return system
 
-def load_optimized_parameters(system, optimization_results):
+def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str, Union[Dict, List]]) -> WaterSystem:
     """
     Load optimized parameters into an existing water system.
     
@@ -266,7 +266,7 @@ def load_optimized_parameters(system, optimization_results):
     except Exception as e:
         raise ValueError(f"Failed to load optimized parameters: {str(e)}")  
 
-def load_parameters_from_file(filename):
+def load_parameters_from_file(filename: str) -> Dict[str, Union[Dict, List]]:
     """
     Load previously saved optimized parameters from a file.
     
@@ -291,7 +291,7 @@ def load_parameters_from_file(filename):
         }
     }
 
-def save_optimized_parameters(optimization_results, filename):
+def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]],filename: str) -> None:
     """
     Save optimized parameters to a file for later use.
     
@@ -381,8 +381,21 @@ def save_optimized_parameters(optimization_results, filename):
     if is_multi_objective and 'pareto_solutions' in save_data:
         print(f"Saved {save_data['num_pareto_solutions']} Pareto-optimal solutions")
 
-def run_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, system_type='baseline',  scenario = '', period = '', agr_scenario= ' ', efficiency = ' ',
-                     ngen=100, pop_size=2000, cxpb=0.5, mutpb=0.2):
+def run_optimization(
+    system_creator: Callable[..., WaterSystem],
+    start_year: int = 2017,
+    start_month: int = 1,
+    num_time_steps: int = 12,
+    system_type: str = 'baseline',
+    scenario: str = '',
+    period: str = '',
+    agr_scenario: str = '',
+    efficiency: str = '',
+    ngen: int = 100,
+    pop_size: int = 2000,
+    cxpb: float = 0.5,
+    mutpb: float = 0.2
+) -> Dict[str, Union[Dict, List]]:
     """
     Run a single-objective optimization for the ZRB water system.
     
@@ -473,8 +486,21 @@ def run_optimization(system_creator, start_year=2017, start_month=1, num_time_st
 
     return results
 
-def run_multi_objective_optimization(system_creator, start_year=2017, start_month=1, num_time_steps=12, system_type='baseline', scenario='', period='', agr_scenario='', efficiency='',
-                     ngen=100, pop_size=100, cxpb=0.5, mutpb=0.2):
+def run_multi_objective_optimization(
+    system_creator: Callable[..., WaterSystem],
+    start_year: int = 2017,
+    start_month: int = 1,
+    num_time_steps: int = 12,
+    system_type: str = 'baseline',
+    scenario: str = '',
+    period: str = '',
+    agr_scenario: str = '',
+    efficiency: str = '',
+    ngen: int = 100,
+    pop_size: int = 100,
+    cxpb: float = 0.5,
+    mutpb: float = 0.2
+) -> Dict[str, Union[Dict, List]]:
     """
     Run a multi-objective optimization for the ZRB water system.
     
@@ -555,8 +581,18 @@ def run_multi_objective_optimization(system_creator, start_year=2017, start_mont
     
     return results
 
-def run_simulation(system_creator, optimization_results, start_year, start_month, num_time_steps, 
-                                         system_type='baseline', scenario='', period='', agr_scenario='', efficiency=''):
+def run_simulation(
+    system_creator: Callable[..., WaterSystem],
+    optimization_results: Dict[str, Union[Dict, List]],
+    start_year: int,
+    start_month: int,
+    num_time_steps: int,
+    system_type: str = 'baseline',
+    scenario: str = '',
+    period: str = '',
+    agr_scenario: str = '',
+    efficiency: str = ''
+) -> WaterSystem:
     """
     Run a simulation for the ZRB water system using optimized parameters.
     
@@ -640,7 +676,7 @@ if __name__ == "__main__":
 
     if simulation:
         # Example of running the simulation with optimized parameters for a baseline system
-        loaded_results = load_parameters_from_file(f"./data/baseline/parameter/singleobjective_params_100_3000_0.65_0.32.json")
+        loaded_results = load_parameters_from_file(f"./data/baseline/parameter/2025-05-08_euler_multiobjective_params.json")
         
         system = run_simulation(
             create_ZRB_system,
