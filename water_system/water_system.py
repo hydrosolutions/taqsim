@@ -32,6 +32,8 @@ class WaterSystem:
         self.dt = dt
         self.start_year = start_year
         self.start_month = start_month
+
+        self.has_been_checked = False  # Flag to indicate if the network has been checked
         
     def add_node(self, node):
         """
@@ -68,12 +70,11 @@ class WaterSystem:
         Raises:
             ValueError: If critical network configuration issues are found
         """
-        #print("Checking network configuration...")
         self._check_network_structure()
         self._check_node_configuration()
         self._check_edge_properties()
         self._check_data_consistency()
-        #print("Network configuration check complete. No issues found.")
+        self.has_been_checked = True  # Set the flag to indicate the network has been checked
 
     def _check_network_structure(self):
         """Check overall network structure and connectivity."""
@@ -155,7 +156,7 @@ class WaterSystem:
                     )
 
             # Check capacity mismatches
-            if not isinstance(node, (StorageNode, SupplyNode, SinkNode)):
+            if isinstance(node, (DemandNode)):
                 total_inflow_capacity = sum(edge.capacity for edge in node.inflow_edges.values())
                 total_outflow_capacity = sum(edge.capacity for edge in node.outflow_edges.values())
                 
@@ -229,7 +230,10 @@ class WaterSystem:
 
         This method updates all nodes and edges in the system for each time step.
         """
+        if not self.has_been_checked:
+            self._check_network()  # Check network configuration before simulation
         self.time_steps = time_steps
+        self._check_network()  # Check network configuration before simulation
         # Perform a topological sort to determine the correct order for node updates
         sorted_nodes = list(nx.topological_sort(self.graph))
 
