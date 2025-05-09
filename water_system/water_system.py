@@ -4,7 +4,7 @@ a water system simulation. It uses NetworkX for graph representation.
 
 The WaterSystem class allows users to add nodes and edges to the system and run simulations
 """
-
+from typing import Dict, List, Union, Optional
 import networkx as nx
 import pandas as pd
 from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode
@@ -20,7 +20,7 @@ class WaterSystem:
         time_steps (int): The number of time steps in the most recent simulation.
     """
 
-    def __init__(self, dt=2629800, start_year=2017, start_month=1):  # Default to average month in seconds (365.25 days / 12 months * 24 hours * 3600 seconds)
+    def __init__(self, dt: float = 2629800, start_year: int = 2017, start_month: int = 1) -> None:
         """
         Initialize a new WaterSystem instance.
 
@@ -35,7 +35,7 @@ class WaterSystem:
 
         self.has_been_checked = False  # Flag to indicate if the network has been checked
         
-    def add_node(self, node):
+    def add_node(self, node: Union[SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode]) -> None:
         """
         Add a node to the water system.
 
@@ -45,12 +45,9 @@ class WaterSystem:
         This method adds the node to the graph and stores its type as an attribute.
         """
         node_type = type(node).__name__
-        if node_type == 'SupplyNode':
-            self.graph.add_node(node.id, node=node, node_type=node_type, supply_rates=node.supply_rates)
-        else:
-            self.graph.add_node(node.id, node=node, node_type=node_type)
+        self.graph.add_node(node.id, node=node, node_type=node_type)
 
-    def add_edge(self, edge):
+    def add_edge(self, edge: Edge) -> None:
         """
         Add an edge to the water system.
 
@@ -61,7 +58,7 @@ class WaterSystem:
         """
         self.graph.add_edge(edge.source.id, edge.target.id, edge=edge)
 
-    def _check_network(self):
+    def _check_network(self) -> None:
         """
         Comprehensive check of network configuration for potential issues.
         Performs multiple validations on network structure, node configuration,
@@ -74,9 +71,10 @@ class WaterSystem:
         self._check_node_configuration()
         self._check_edge_properties()
         self._check_data_consistency()
+        print("Network checking was successfull.")
         self.has_been_checked = True  # Set the flag to indicate the network has been checked
 
-    def _check_network_structure(self):
+    def _check_network_structure(self)-> None:
         """Check overall network structure and connectivity."""
         # Check for empty network
         if len(self.graph) == 0:
@@ -112,7 +110,7 @@ class WaterSystem:
                 if not paths_exist:
                     raise ValueError(f"Node {node} has no path to any DemandNode or SinkNode")
 
-    def _check_node_configuration(self):
+    def _check_node_configuration(self)-> None:
         """Check individual node configurations and connections."""
         for node_id, node_data in self.graph.nodes(data=True):
             node = node_data['node']
@@ -120,11 +118,11 @@ class WaterSystem:
             out_degree = len(node.outflow_edges)
 
             # Check SupplyNode configuration
-            if isinstance(node, SupplyNode):
+            if isinstance(node, (SupplyNode, RunoffNode)):
                 if in_degree > 0:
-                    raise ValueError(f"SupplyNode {node_id} should not have any inflows")
-                if out_degree == 0:
-                    raise ValueError(f"SupplyNode {node_id} must have one outflow")
+                    raise ValueError(f"Node {node_id} should not have any inflows")
+                if out_degree != 1:
+                    raise ValueError(f"Node {node_id} must have exactly one outflow")
 
             # Check SinkNode configuration
             elif isinstance(node, SinkNode):
@@ -134,11 +132,11 @@ class WaterSystem:
                     raise ValueError(f"SinkNode {node_id} must have one inflow")
 
             # Check StorageNode configuration
-            elif isinstance(node, StorageNode):
+            elif isinstance(node, (StorageNode, DemandNode)):
                 if in_degree == 0:
-                    raise ValueError(f"StorageNode {node_id} must have at least one inflow")
-                if out_degree == 0:
-                    raise ValueError(f"StorageNode {node_id} must have one outflow")
+                    raise ValueError(f"Node {node_id} must have at least one inflow")
+                if out_degree != 1:
+                    raise ValueError(f"Node {node_id} must have exactly one outflow")
                 
             # Check HydroWorks configuration
             elif isinstance(node, HydroWorks):
@@ -167,7 +165,7 @@ class WaterSystem:
                         f"This can lead to undefined water losses and errors in the water balance."
                     )
 
-    def _check_edge_properties(self):
+    def _check_edge_properties(self)-> None:
         """Check edge properties and connections."""
         for source, target, edge_data in self.graph.edges(data=True):
             edge = edge_data['edge']
@@ -185,18 +183,15 @@ class WaterSystem:
             if edge.loss_factor > 0.5:
                 print(f"Warning: Edge from {source} to {target} has unusually high loss factor: {edge.loss_factor}")
 
-    def _check_data_consistency(self):
+    def _check_data_consistency(self)-> None:
         """Check consistency of node data and time series."""
         for node_id, node_data in self.graph.nodes(data=True):
             node = node_data['node']
 
             # Check SupplyNode data
             if isinstance(node, SupplyNode):
-                if not node.supply_rates and node.default_supply_rate <= 0:
-                    print(
-                        f"Warning: SupplyNode {node_id} has no supply rates defined "
-                        f"and default rate is {node.default_supply_rate}"
-                    )
+                if not node.supply_rates:
+                    raise ValueError(f"SupplyNode {node_id} has no supply rates defined")
 
             # Check DemandNode data
             elif isinstance(node, DemandNode):
@@ -211,8 +206,8 @@ class WaterSystem:
                 
                 # Check evaporation data if node has evaporation rates
                 if node.evaporation_rates is not None:
-                    if len(node.evaporation_rates) == 0:
-                        print(f"Warning: StorageNode {node_id} has empty evaporation rates")
+                    if not node.evaporation_rates:
+                        raise ValueError(f"StorageNode {node_id} has empty evaporation rates")
 
                 # Check initial storage
                 if node.storage and node.storage[0] > node.capacity:
@@ -221,7 +216,7 @@ class WaterSystem:
                         f"exceeds capacity ({node.capacity})"
                     )
       
-    def simulate(self, time_steps):
+    def simulate(self, time_steps: int) -> None:
         """
         Run the water system simulation for a specified number of time steps.
 
@@ -233,7 +228,6 @@ class WaterSystem:
         if not self.has_been_checked:
             self._check_network()  # Check network configuration before simulation
         self.time_steps = time_steps
-        self._check_network()  # Check network configuration before simulation
         # Perform a topological sort to determine the correct order for node updates
         sorted_nodes = list(nx.topological_sort(self.graph))
 
