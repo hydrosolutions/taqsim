@@ -5,7 +5,8 @@ This module defines the Edge class, which represents a connection between two no
 The Edge class is responsible for managing the flow of water between nodes and enforcing capacity constraints.
 """
 
-from .structure import SupplyNode, StorageNode
+from .structure import Node, SupplyNode
+from typing import Optional, Tuple
 
 class Edge:
     """
@@ -22,7 +23,14 @@ class Edge:
         losses (list): A list of total losses for each time step.
     """
 
-    def __init__(self, source, target, capacity, length=None, loss_factor=0):
+    def __init__(
+        self,
+        source: Node,
+        target: Node,
+        capacity: float,
+        length: Optional[float] = None,
+        loss_factor: float = 0
+    ) -> None:
         """
         Initialize an Edge object.
 
@@ -70,7 +78,7 @@ class Edge:
                 print(f"Warning: Could not calculate edge length from coordinates. Using length = 0.")
                 self.length = 0
 
-    def update(self, time_step, flow=None):
+    def update(self, time_step: int, flow: Optional[float] = None) -> None:
         """
         Update the flow of the edge for the given time step, accounting for losses.
 
@@ -110,7 +118,7 @@ class Edge:
             self.flow_after_losses.append(0)
             self.losses.append(0)
 
-    def get_edge_flow_before_losses(self, time_step):
+    def get_edge_flow_before_losses(self, time_step: int) -> float:
         """
         Get the inflow value for a specific time step.
 
@@ -126,7 +134,7 @@ class Edge:
             print(f"Error retrieving edge inflow for time step {time_step}: {str(e)}")
             return 0
 
-    def get_edge_flow_after_losses(self, time_step):
+    def get_edge_flow_after_losses(self, time_step: int) -> float:
         """
         Get the outflow value for a specific time step.
 
@@ -142,7 +150,7 @@ class Edge:
             print(f"Error retrieving edge outflow for time step {time_step}: {str(e)}")
             return 0
     
-    def get_edge_length(self):
+    def get_edge_length(self) -> float:
         """
         Calculate the length of the edge using the easting and northing coordinates
         of the source and target nodes.
@@ -175,7 +183,7 @@ class Edge:
         except Exception as e:
             raise ValueError(f"Failed to calculate edge length: {str(e)}")
     
-    def calculate_edge_losses(self, flow):
+    def calculate_edge_losses(self, flow: float) -> Tuple[float, float]:
         """
         Calculate water losses along the edge based on distance and loss factor.
         
