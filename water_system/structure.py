@@ -1019,20 +1019,6 @@ class RunoffNode(Node, TimeSeriesImport):
         
         return runoff_rate
     
-    def get_rainfall(self, time_step: int) -> float:
-        """
-        Get the rainfall for a specific time step.
-        
-        Args:
-            time_step (int): The time step for which to retrieve the rainfall
-            
-        Returns:
-            float: Rainfall in mm or 0 if not available
-        """
-        if time_step < len(self.rainfall_data):
-            return self.rainfall_data[time_step]
-        return 0
-    
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the RunoffNode's state for the given time step.
@@ -1043,7 +1029,7 @@ class RunoffNode(Node, TimeSeriesImport):
         """
         try:
             # Get rainfall for current time step
-            rainfall = self.get_rainfall(time_step)
+            rainfall = self.rainfall_data[time_step]
             
             # Calculate runoff
             runoff = self.calculate_runoff(rainfall, dt)
@@ -1070,28 +1056,3 @@ class RunoffNode(Node, TimeSeriesImport):
             for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
     
-    def get_runoff(self, time_step: int) -> float:  
-        """
-        Get the runoff rate for a specific time step.
-        
-        Args:
-            time_step (int): The time step for which to retrieve the runoff
-            
-        Returns:
-            float: Runoff rate in m³/s or 0 if not available
-        """
-        if time_step < len(self.runoff_history):
-            return self.runoff_history[time_step]
-        return 0
-    
-    def get_total_runoff_volume(self, dt: float) -> float:
-        """
-        Calculate the total runoff volume across all time steps.
-        
-        Args:
-            dt (float): The duration of each time step in seconds
-            
-        Returns:
-            float: Total runoff volume in m³
-        """
-        return sum(runoff * dt for runoff in self.runoff_history)

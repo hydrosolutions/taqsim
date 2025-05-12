@@ -272,7 +272,7 @@ class WaterSystem:
             
             # Add runoff contribution 
             elif isinstance(node, RunoffNode):
-                runoff_rates = np.array([node.get_runoff(t) for t in time_steps])
+                runoff_rates = np.array([node.runoff_history[t] for t in time_steps])
                 surfacerunoff += runoff_rates * self.dt
                 
             elif isinstance(node, DemandNode):
