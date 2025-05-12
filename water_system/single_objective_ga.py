@@ -256,7 +256,7 @@ class SingleObjectiveOptimizer:
                     total_penalty += np.sum(weighted_deficit)
                 
                 elif isinstance(node, SinkNode):
-                    total_deficit_volume = node.get_total_deficit_volume(system.dt)
+                    total_deficit_volume = sum(deficit * system.dt for deficit in node.flow_deficits)
                     total_penalty += total_deficit_volume * node.weight
                     
                 elif hasattr(node, 'spillway_register'):

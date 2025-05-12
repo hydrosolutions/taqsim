@@ -270,7 +270,7 @@ class MultiObjectiveOptimizer:
                 
                 elif isinstance(node, SinkNode):
                     # Objective 3: Calculate minimum flow deficit
-                    min_flow_volume = node.get_total_deficit_volume(system.dt)
+                    min_flow_volume = sum(deficit * system.dt for deficit in node.flow_deficits)
                     minflow_deficit += min_flow_volume  # Use the weight if needed
             
             # Handle spills (distribute evenly among objectives or based on priority)

@@ -339,32 +339,6 @@ class SinkNode(Node, TimeSeriesImport):
             
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
-            
-    def get_flow_deficit(self, time_step: int) -> float:
-        """
-        Get the flow deficit for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the deficit
-
-        Returns:
-            float: The flow deficit for the specified time step, or 0 if not available
-        """
-        if time_step < len(self.flow_deficits):
-            return self.flow_deficits[time_step]
-        return 0.0
-        
-    def get_total_deficit_volume(self, dt: float) -> float:
-        """
-        Calculate the total deficit volume across all time steps.
-
-        Args:
-            dt (float): The duration of each time step in seconds
-
-        Returns:
-            float: Total deficit volume in m³
-        """
-        return sum(deficit * dt for deficit in self.flow_deficits)
     
 class DemandNode(Node, TimeSeriesImport):
     """

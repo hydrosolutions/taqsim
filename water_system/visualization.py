@@ -1807,7 +1807,7 @@ class WaterSystemVisualizer:
             mean_required = np.mean(min_flows)
             mean_deficit = np.mean(deficits)
             max_deficit = max(deficits)
-            total_deficit_volume = node.get_total_deficit_volume(self.system.dt)
+            total_deficit_volume = sum(deficit * self.system.dt for deficit in node.flow_deficits)
             
             # Calculate compliance metrics
             compliant_steps = sum(1 for a, m in zip(actual_flows, min_flows) if a >= m)
