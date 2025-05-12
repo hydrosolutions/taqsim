@@ -320,21 +320,6 @@ class SinkNode(Node, TimeSeriesImport):
         else:
             self.min_flows = [0]*num_time_steps
             
-    def get_min_flow(self, time_step: int) -> float:
-        """
-        Get the minimum flow requirement for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the minimum flow
-
-        Returns:
-            float: The minimum flow requirement for the specified time step,
-                  or the last known requirement if out of range
-        """
-        if time_step < len(self.min_flows):
-            return self.min_flows[time_step]
-        return self.min_flows[-1]
-
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the SinkNode's state for the given time step.
@@ -350,7 +335,7 @@ class SinkNode(Node, TimeSeriesImport):
             
             # Record the actual flow and deficit if any
             self.flow_history.append(total_inflow)
-            self.flow_deficits.append(max(0, self.get_min_flow(time_step) - total_inflow))
+            self.flow_deficits.append(max(0, self.min_flows[time_step] - total_inflow))
             
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")

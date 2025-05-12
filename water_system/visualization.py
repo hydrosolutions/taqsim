@@ -1188,8 +1188,8 @@ class WaterSystemVisualizer:
             # Calculate total minimum flow requirements
             total_min_flows = np.zeros(len(time_steps))
             for _, node in sink_nodes:
-                if hasattr(node, 'get_min_flow'):
-                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                if hasattr(node, 'min_flows'):
+                    min_flows = [node.min_flows[t] for t in time_steps]
                     total_min_flows += np.array(min_flows)
             
             # Calculate total system requirements (demands + minimum flows)
@@ -1257,8 +1257,8 @@ class WaterSystemVisualizer:
             sink_colors = plt.cm.Purples(np.linspace(0.3, 0.7, len(sink_nodes)))
             
             for (node_id, node), color in zip(sink_nodes, sink_colors):
-                if hasattr(node, 'get_min_flow'):
-                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                if hasattr(node, 'min_flows'):
+                    min_flows = [node.min_flows[t] for t in time_steps]
                     ax2.bar(time_steps, min_flows, bottom=min_flow_bottom, 
                         label=f'{node_id} Min Flow', color=color, alpha=0.7)
                     min_flow_bottom += np.array(min_flows)
@@ -1320,8 +1320,8 @@ class WaterSystemVisualizer:
             # Calculate total minimum flow requirements
             total_min_flows = np.zeros(len(time_steps))
             for _, node in sink_nodes:
-                if hasattr(node, 'get_min_flow'):
-                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                if hasattr(node, 'min_flows'):
+                    min_flows = [node.min_flows[t] for t in time_steps]
                     total_min_flows += np.array(min_flows)
             
             # Calculate total system requirements (demands + minimum flows)
@@ -1390,8 +1390,8 @@ class WaterSystemVisualizer:
             sink_colors = plt.cm.Purples(np.linspace(0.3, 0.7, len(sink_nodes)))
             
             for (node_id, node), color in zip(sink_nodes, sink_colors):
-                if hasattr(node, 'get_min_flow'):
-                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                if hasattr(node, 'min_flows'):
+                    min_flows = [node.min_flows[t] for t in time_steps]
                     ax2.bar(time_steps, min_flows, bottom=min_flow_bottom, 
                         label=f'{node_id} Min Flow', color=color, alpha=0.7)
                     min_flow_bottom += np.array(min_flows)
@@ -1485,8 +1485,8 @@ class WaterSystemVisualizer:
             # Calculate total minimum flow requirements
             total_min_flows = np.zeros(len(time_steps))
             for _, node in sink_nodes:
-                if hasattr(node, 'get_min_flow'):
-                    min_flows = [node.get_min_flow(t) for t in time_steps]
+                if hasattr(node, 'min_flows'):
+                    min_flows = [node.min_flows[t] for t in time_steps]
                     total_min_flows += np.array(min_flows)
             
             # Calculate total evaporation losses
@@ -1597,7 +1597,7 @@ class WaterSystemVisualizer:
         
         for node_id, node in sink_nodes_with_requirements:
             deficits = node.flow_deficits[:len(time_steps)]
-            min_flows = [node.get_min_flow(t) for t in time_steps]
+            min_flows = [node.min_flows[t] for t in time_steps]
             
             absolute_deficits[node_id] = deficits
             percentage_deficits[node_id] = [
@@ -1799,7 +1799,7 @@ class WaterSystemVisualizer:
             print("-" * 20)
             
             actual_flows = node.flow_history
-            min_flows = [node.get_min_flow(t) for t in range(len(actual_flows))]
+            min_flows = [node.min_flows[t] for t in range(len(actual_flows))]
             deficits = node.flow_deficits
             
             # Calculate statistics
@@ -2080,7 +2080,7 @@ class WaterSystemVisualizer:
             ax = axes[idx]
             
             # Get flow data
-            min_flows = [node.get_min_flow(t) for t in time_steps]
+            min_flows = [node.min_flows[t] for t in time_steps]
             actual_flows = node.flow_history[:len(time_steps)]
             deficits = node.flow_deficits[:len(time_steps)]
             
