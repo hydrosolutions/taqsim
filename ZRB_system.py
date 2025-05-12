@@ -635,9 +635,9 @@ def run_simulation(
 # Run the sample tests
 if __name__ == "__main__":
 
-    optimization = False
+    optimization = True
     simulation = False
-    multiobjective = True
+    multiobjective = False
 
     start = datetime.now()
 

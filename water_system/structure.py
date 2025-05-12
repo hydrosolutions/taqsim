@@ -16,6 +16,8 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from typing import Dict, List, Optional, Union, Any
+from .validation_functions import validate_node_id, validate_coordinates, validate_positive_integer,validate_positive_float, validate_probability, validate_nonnegativity_int_or_float
+
 
 class TimeSeriesImport:
     """
@@ -164,14 +166,10 @@ class SupplyNode(TimeSeriesImport):
             Supply data priority: CSV file (if valid) > constant_supply_rate > zeros.
             This allows flexible specification of supply rates based on available data.
         """
-        # Validate inputs
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
-        
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+        # Validate Node ID
+        validate_node_id(id, "SupplyNode")
+        # Validate coordinates
+        validate_coordinates(easting, northing, id)
 
         self.id = id
         self.easting = easting  # easting coordinate of the node in UTM system
@@ -291,22 +289,17 @@ class SinkNode(TimeSeriesImport):
             Minimum flow data priority: CSV file (if valid) > constant_min_flow > zeros.
             This allows flexible specification of minimum flows based on available data.
         """
-        # Validate inputs
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
-        
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
-        
+        # Validate Node ID
+        validate_node_id(id, "SinkNode")
+        # Validate coordinates
+        validate_coordinates(easting, northing, id)
+        # Validate weight
+        validate_positive_integer(weight, "SinkNode weight")
+
         self.id = id
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
-        
-        if weight <= 0:
-            raise ValueError("Weight must be positive")
         self.weight = weight
         
         # Initialize tracking lists
@@ -428,48 +421,29 @@ class DemandNode(TimeSeriesImport):
             water requirements. When efficiencies < 1, more water is required to 
             satisfy the same net demand.
         """
-        # Validate inputs
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
+        # Validate Node ID
+        validate_node_id(id, "DemandNode")
+        # Validate coordinates
+        validate_coordinates(easting, northing, id)
+        # Validate weight
+        validate_positive_integer(weight, "DemandNode weight")
+        # Validate field efficiency
+        validate_probability(field_efficiency, "field_efficiency")
+        # Validate conveyance efficiency
+        validate_probability(conveyance_efficiency, "conveyance_efficiency")
         
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
-
         self.id = id
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
         self.outflow_edge = None  # Single outflow edge
-
-        # Validate field efficiency
-        if not isinstance(field_efficiency, (int, float)):
-            raise ValueError("Field efficiency must be a number")
-        if field_efficiency <= 0 or field_efficiency > 1:
-            raise ValueError("Field efficiency must be between 0 and 1")
-        self.field_efficiency = field_efficiency
-
-        # Validate conveyance efficiency
-        if not isinstance(conveyance_efficiency, (int, float)):
-            raise ValueError("Conveyance efficiency must be a number")
-        if conveyance_efficiency <= 0 or conveyance_efficiency > 1:
-            raise ValueError("Conveyance efficiency must be between 0 and 1")
-        self.conveyance_efficiency = conveyance_efficiency
-
-        # Validate weight
-        if not isinstance(weight, (int, float)):
-            raise ValueError("Weight must be a number")
-        if weight <= 0:
-            raise ValueError("Weight must be positive")
-        self.weight = weight
+        self.weight = weight  # Weight factor for demand shortfalls in optimization
+        self.field_efficiency = field_efficiency  # Field efficiency (0-1)
+        self.conveyance_efficiency = conveyance_efficiency # Conveyance efficiency (0-1)
 
         # Validate non consumptive flow
         if non_consumptive_rate is not None:
-            if not isinstance(non_consumptive_rate, (int, float)):
-                raise ValueError("Non-consumptive rate must be a number")
-            if non_consumptive_rate < 0:
-                raise ValueError("Non-consumptive rate cannot be negative")
+            validate_nonnegativity_int_or_float(non_consumptive_rate, "non_consumptive_rate")
             self.non_consumptive_rate = non_consumptive_rate
         
         # Initialize tracking lists
@@ -498,8 +472,7 @@ class DemandNode(TimeSeriesImport):
             
         elif constant_demand_rate is not None:
             # Validate constant_demand_rate
-            if constant_demand_rate < 0:
-                raise ValueError("Demand rate cannot be negative")
+            validate_nonnegativity_int_or_float(constant_demand_rate, "constant_demand_rate")
             if constant_demand_rate < self.non_consumptive_rate:
                 raise ValueError("Demand rate cannot be less than non-consumptive rate")
             
@@ -645,15 +618,13 @@ class StorageNode(TimeSeriesImport):
             The relationship is used to calculate water levels from volumes and vice versa.
             Evaporation losses are calculated based on water surface area and evaporation rates.
         """
-        # Validate inputs
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
+        # Validate Node ID
+        validate_node_id(id, "StorageNode")
+        # Validate coordinates
+        validate_coordinates(easting, northing, id)
+        # Validate buffer coefficient
+        validate_probability(buffer_coef, "buffer_coef")
         
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
-
         self.id = id
         self.easting = easting
         self.northing = northing
@@ -668,9 +639,6 @@ class StorageNode(TimeSeriesImport):
         # Load height-volume-area data
         self._load_hv_data(hv_file)
         
-        if buffer_coef < 0 and buffer_coef > 1:
-            raise ValueError(f"buffer_coef ({buffer_coef}) must be between 0 and 1")
-
         self.buffer_coef = buffer_coef  # Buffer coefficient for low storage
         self.dead_storage = dead_storage  # Dead storage volume [m³]
         self.dead_storage_level = self._volume_to_level(dead_storage)
@@ -1038,14 +1006,10 @@ class HydroWorks():
             After initialization, the set_distribution_parameters method must be called
             to define how water should be distributed among outflow edges.
         """
-        # Validate inputs
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
-        
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+        # Validate Node ID
+        validate_node_id(id, "HydroWorks")
+        # Validate coordinates
+        validate_coordinates(easting, northing, id)
 
         self.id = id
         self.easting = easting
@@ -1288,28 +1252,21 @@ class RunoffNode(TimeSeriesImport):
             This is a simplified approach that does not account for infiltration,
             evapotranspiration, or other complex hydrological processes.
         """
-        # Validate inputs
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
-        
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
-        
+        # Validate Node ID
+        validate_node_id(id, "RunoffNode")
+        # Validate coordinates
+        validate_coordinates(easting, northing, id)
+        # Validate area 
+        validate_positive_float(area, "area")
+        # Validate runoff coefficient
+        validate_probability(runoff_coefficient, "runoff_coefficient")
+
         self.id = id
         self.easting = easting
         self.northing = northing
+        self.area = area # km²
         self.outflow_edge = None  # Single outflow edge
-        
-        # Validate inputs
-        if area <= 0:
-            raise ValueError(f"Area must be positive, got {area}")
-        if not (0 <= runoff_coefficient <= 1):
-            raise ValueError(f"Runoff coefficient must be between 0 and 1, got {runoff_coefficient}")
-            
-        self.area = area  # km²
-        self.runoff_coefficient = runoff_coefficient
+        self.runoff_coefficient = runoff_coefficient # Fraction of rainfall that becomes runoff
         self.runoff_history = []
         
         # Import rainfall data from CSV if provided
