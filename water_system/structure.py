@@ -1,14 +1,17 @@
 """
 This module defines the various types of nodes that can exist in a water system simulation.
 
-The module includes a base Node class and several specialized node types such as:
-- SupplyNode: Represents a water supply source in the system.
-- SinkNode: Represents a point where water exits the system with minimum flow requirements.
-- DemandNode: Represents a point of water demand in the system.
-- StorageNode: Represents a reservoir or storage facility in the system.
-- HydroWorks: Represents a node that redistributes water using fixed distribution parameters.
+The module provides a hierarchical structure of node classes for water system modeling:
+- Base Node: The fundamental building block for all system components.
+- SupplyNode: Water sources (rivers, intakes) that provide inflow to the system.
+- SinkNode: Terminal points where water exits the system with minimum flow requirements.
+- DemandNode: Consumption points (agriculture, domestic, industrial) with specific water demands.
+- StorageNode: Reservoirs and storage facilities with volume-based operation rules.
+- HydroWorks: Distribution nodes that split water among multiple targets based on predefined rules.
+- RunoffNode: Surface runoff sources that generate flow based on rainfall and catchment characteristics.
 
-Each node type has its own behavior for handling water inflows and outflows.
+Each node type implements specialized behavior for handling inflows and outflows, while
+maintaining compatibility with the overall water system architecture.
 """
 import pandas as pd
 import numpy as np
@@ -18,7 +21,10 @@ from typing import Dict, List, Optional, Union
 class TimeSeriesImport:
     """
     Base class for importing and managing time series data from CSV files.
-    Provides common functionality for nodes that need to import time-based data.
+    
+    This class provides common functionality for nodes that need to import time-based data,
+    such as inflows, demands, evaporation rates, etc. It handles file reading, date filtering,
+    and error handling for time series operations.
     """
     
     def _initialize_time_series(
@@ -31,18 +37,22 @@ class TimeSeriesImport:
         column_name: str = 'Q'
     ) -> List[float]:
         """
-        Initialize time series data from CSV file.
+        Initialize time series data from a CSV file for a specified time period.
         
         Args:
-            id (str): Node identifier for error messages
-            csv_file (str): Path to CSV file
-            start_year (int): Start year for data
-            start_month (int): Start month for data
-            num_time_steps (int): Number of time steps
-            column_name (str): Name of the column in CSV to import
+            id (str): Node identifier for error messages and logging
+            csv_file (str): Path to CSV file containing time series data
+            start_year (int): Starting year for the data extraction
+            start_month (int): Starting month (1-12) for the data extraction
+            num_time_steps (int): Number of time steps to import
+            column_name (str): Name of the column in CSV to import (default: 'Q' for flow)
             
         Returns:
-            list: Time series data from CSV, or None if import failed
+            list: Time series data extracted from the CSV, or zeros if import failed
+            
+        Note:
+            If CSV import fails or parameters are missing, returns an array of zeros
+            with length equal to num_time_steps to ensure simulation can continue.
         """
         # If all CSV parameters are provided, try to import data
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
@@ -50,7 +60,7 @@ class TimeSeriesImport:
                 ts_data = self.import_time_series(csv_file, start_year, start_month, 
                                                 num_time_steps, column_name)
                 
-                # Check if data is valid
+                # Check if data is valid (not empty and matches requested period)
                 if not (ts_data.empty or 
                     ts_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
                     len(ts_data[column_name]) < num_time_steps):
@@ -81,14 +91,17 @@ class TimeSeriesImport:
         Import time series data from a CSV file for a specified time period.
         
         Args:
-            csv_file (str): Path to the CSV file 
-            start_year (int): Starting year for the data
-            start_month (int): Starting month (1-12) for the data
-            num_time_steps (int): Number of time steps to import
-            column_name (str): Name of the column to import
+            csv_file (str): Path to the CSV file containing time series data
+            start_year (int): Starting year for the data extraction 
+            start_month (int): Starting month (1-12) for the data extraction
+            num_time_steps (int): Number of time steps (months) to import
+            column_name (str): Name of the column to import from the CSV
             
         Returns:
-            DataFrame: Filtered DataFrame containing the requested data period
+            pd.DataFrame: Filtered DataFrame containing the requested data period
+            
+        Raises:
+            ValueError: If the CSV file is not found, has invalid format, or other import errors
         """
         try:
             # Read the CSV file into a pandas DataFrame
@@ -111,13 +124,17 @@ class TimeSeriesImport:
 class Node:
     """
     Base class for all types of nodes in the water system.
+    
+    The Node class provides the fundamental structure for water system components,
+    defining the core attributes and methods that are common to all node types. 
+    Specialized node types inherit from this class and extend its functionality.
 
     Attributes:
         id (str): A unique identifier for the node.
         inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
         outflow_edges (dict): A dictionary of outflow edges, keyed by the target node's id.
-        easting (float): The easting coordinate of the node.
-        northing (float): The northing coordinate of the node.
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
     """
 
     def __init__(self, id: str, easting: Optional[float] = None, northing: Optional[float] = None) -> None:
@@ -126,11 +143,11 @@ class Node:
 
         Args:
             id (str): A unique identifier for the node.
-            easting (float, optional): The easting coordinate of the node.
-            northing (float, optional): The northing coordinate of the node.
+            easting (float): The easting coordinate of the node in UTM system.
+            northing (float): The northing coordinate of the node in UTM system.
 
         Raises:
-            ValueError: If id is empty or coordinates are invalid.
+            ValueError: If id is empty or coordinates are invalid/missing.
         """
         if not id or not isinstance(id, str):
             raise ValueError(f"Invalid node ID: {id}")
@@ -144,12 +161,14 @@ class Node:
         self.id = id
         self.inflow_edges = {}  # Dictionary of inflow edges
         self.outflow_edges = {}  # Dictionary of outflow edges
-        self.easting = easting # easting coordinate of the node. Defaults to None.
-        self.northing = northing # northing coordinate of the node. Defaults to None.
+        self.easting = easting # easting coordinate of the node in UTM system
+        self.northing = northing # northing coordinate of the node in UTM system
 
     def add_inflow_edge(self, edge):
         """
         Add an inflow edge to the node.
+        
+        This method registers an incoming connection from another node.
 
         Args:
             edge (Edge): The edge to be added as an inflow.
@@ -159,6 +178,8 @@ class Node:
     def add_outflow_edge(self, edge):
         """
         Add an outflow edge to the node.
+        
+        This method registers an outgoing connection to another node.
 
         Args:
             edge (Edge): The edge to be added as an outflow.
@@ -168,24 +189,27 @@ class Node:
     def update(self, time_step: int, dt: float):
         """
         Update the node's state for the given time step.
-
-        This method should be overridden by subclasses to implement
-        specific behavior for each node type.
+        
+        This is a base method that should be overridden by subclasses to implement
+        node-specific behavior for each time step of the simulation.
 
         Args:
-            time_step (int): The current time step of the simulation.
-            dt (float): Number of seconds in time step.
+            time_step (int): The current time step index of the simulation.
+            dt (float): Duration of the time step in seconds.
         """
         pass
 
 class SupplyNode(Node, TimeSeriesImport):
     """
     Represents a water supply source in the system.
+    
+    A SupplyNode serves as an entry point for water into the system, such as a river,
+    a water intake, or an external inflow. It can have a constant supply rate or
+    a time-varying rate loaded from a CSV file.
 
     Attributes:
-        supply_rates (list): A list of supply rates for each time step.
-        default_supply_rate (float): The default supply rate if not specified for a time step.
-        supply_history (list): A record of actual supply amounts for each time step.
+        supply_rates (list): A list of water supply rates [m³/s] for each time step.
+        supply_history (list): A record of actual supply amounts [m³/s] for each time step.
     """
 
     def __init__(
@@ -204,14 +228,17 @@ class SupplyNode(Node, TimeSeriesImport):
 
         Args:
             id (str): A unique identifier for the node.
-            supply_rates (list, optional): A list of supply rates for each time step. Defaults to None.
-            default_supply_rate (float, optional): The default supply rate. Defaults to 0.
-            easting (float, optional): The easting coordinate of the node. Defaults to None.
-            northing (float, optional): The northing coordinate of the node. Defaults to None.
-            csv_file (str, optional): Path to CSV file containing supply data. Defaults to None.
-            start_year (int, optional): Starting year for CSV data import. Defaults to None.
-            start_month (int, optional): Starting month (1-12) for CSV data import. Defaults to None.
-            num_time_steps (int, optional): Number of time steps to import from CSV. Defaults to None.
+            constant_supply_rate (float, optional): A constant water supply rate [m³/s].
+            easting (float): The easting coordinate of the node in UTM system.
+            northing (float): The northing coordinate of the node in UTM system.
+            csv_file (str, optional): Path to CSV file containing time-varying supply data.
+            start_year (int, optional): Starting year for CSV data import.
+            start_month (int, optional): Starting month (1-12) for CSV data import.
+            num_time_steps (int): Number of time steps to simulate.
+        
+        Note:
+            Supply data priority: CSV file (if valid) > constant_supply_rate > zeros.
+            This allows flexible specification of supply rates based on available data.
         """
         super().__init__(id, easting, northing)
         self.supply_history = []
@@ -234,23 +261,31 @@ class SupplyNode(Node, TimeSeriesImport):
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the SupplyNode's state for the given time step.
-
-        This method calculates the current supply rate and distributes it among outflow edges.
+        
+        This method calculates the current supply rate and distributes it proportionally
+        among outflow edges based on their capacities.
 
         Args:
-            time_step (int): The current time step of the simulation.
+            time_step (int): The current time step index of the simulation.
             dt (float): The duration of the time step in seconds.
+            
+        Raises:
+            ValueError: If there's an error in updating the supply node.
         """
         try:
+            # Get the supply rate for the current time step
             current_supply_rate = self.supply_rates[time_step]
             self.supply_history.append(current_supply_rate)
 
+            # Calculate total outflow capacity and distribute water proportionally
             total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
             if total_capacity > 0:
+                # Distribute water proportionally to capacity
                 edge_flow = current_supply_rate / total_capacity
                 for edge in self.outflow_edges.values():
                     edge.update(time_step, edge.capacity * edge_flow)
             else:
+                # If no capacity, no flow
                 for edge in self.outflow_edges.values():
                     edge.update(time_step, 0)
         except Exception as e:
@@ -259,13 +294,17 @@ class SupplyNode(Node, TimeSeriesImport):
 class SinkNode(Node, TimeSeriesImport):
     """
     Represents a point where water exits the system with minimum flow requirements.
-    Minimum flows can be specified either as a constant or loaded from a CSV file.
+    
+    A SinkNode acts as a terminal point in the water system where flow must meet or exceed
+    minimum requirements. It can be used to model environmental flow demands, downstream
+    water rights, or other system outflow constraints. Minimum flows can be specified as 
+    a constant or loaded from a CSV file.
     
     Attributes:
         id (str): Unique identifier for the node
-        min_flows (list): List of minimum required flow rates for each timestep
-        flow_history (list): Record of actual flows for each timestep
-        flow_deficits (list): Record of flow requirement deficits for each timestep
+        min_flows (list): List of minimum required flow rates [m³/s] for each timestep
+        flow_history (list): Record of actual flows [m³/s] for each timestep
+        flow_deficits (list): Record of flow requirement deficits [m³/s] for each timestep
         weight (float): Weight factor for minimum flow violations in optimization
     """
 
@@ -286,14 +325,21 @@ class SinkNode(Node, TimeSeriesImport):
 
         Args:
             id (str): Unique identifier for the node
-            min_flow (float, optional): Constant minimum required flow rate in m³/s
-            easting (float, optional): Easting coordinate
-            northing (float, optional): Northing coordinate
-            weight (float, optional): Weight factor for minimum flow violations
-            csv_file (str, optional): Path to CSV file containing minimum flow data
+            constant_min_flow (float, optional): Constant minimum required flow rate [m³/s]
+            easting (float): Easting coordinate in UTM system
+            northing (float): Northing coordinate in UTM system
+            weight (float): Weight factor for minimum flow violations in optimization objective function
+            csv_file (str, optional): Path to CSV file containing minimum flow requirements
             start_year (int, optional): Starting year for CSV data import
             start_month (int, optional): Starting month (1-12) for CSV data import
-            num_time_steps (int, optional): Number of time steps to import from CSV
+            num_time_steps (int): Number of time steps to simulate
+            
+        Raises:
+            ValueError: If weight is non-positive
+            
+        Note:
+            Minimum flow data priority: CSV file (if valid) > constant_min_flow > zeros.
+            This allows flexible specification of minimum flows based on available data.
         """
         super().__init__(id, easting, northing)
         
@@ -323,17 +369,22 @@ class SinkNode(Node, TimeSeriesImport):
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the SinkNode's state for the given time step.
-        Calculates actual flow and deficit relative to minimum requirement.
+        
+        Calculates actual flow and deficit relative to minimum flow requirement.
+        Flow deficits are tracked for optimization and reporting purposes.
 
         Args:
-            time_step (int): The current time step of the simulation
+            time_step (int): The current time step index of the simulation
             dt (float): The duration of the time step in seconds
+            
+        Raises:
+            ValueError: If there's an error in updating the sink node
         """
         try:
-            # Calculate total inflow for this timestep
+            # Calculate total inflow for this timestep from all incoming edges
             total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
             
-            # Record the actual flow and deficit if any
+            # Record the actual flow and deficit (if any)
             self.flow_history.append(total_inflow)
             self.flow_deficits.append(max(0, self.min_flows[time_step] - total_inflow))
             
@@ -343,11 +394,21 @@ class SinkNode(Node, TimeSeriesImport):
 class DemandNode(Node, TimeSeriesImport):
     """
     Represents a point of water demand in the system.
+    
+    A DemandNode models water consumption for uses like irrigation, municipal supply,
+    or industrial processes. It can include both consumptive use (water that is removed
+    from the system) and non-consumptive use (water that returns to the system).
+    Efficiency factors can be applied to model system losses.
 
     Attributes:
-        demand_rates (list): A list of demand rates for each time step.
-        satisfied_demand (list): A record of satisfied demand for each time step.
-        excess_flow (list): A record of excess flow for each time step.
+        demand_rates (list): List of total demand rates [m³/s] for each time step
+        field_efficiency (float): Efficiency of water use at the field/end-use level (0-1)
+        conveyance_efficiency (float): Efficiency of the water delivery system (0-1)
+        non_consumptive_rate (float): Flow rate [m³/s] that returns to the system
+        weight (float): Weight factor for demand shortfalls in optimization
+        satisfied_consumptive_demand (list): Record of met consumptive demand [m³/s]
+        satisfied_non_consumptive_demand (list): Record of met non-consumptive demand [m³/s]
+        satisfied_demand_total (list): Record of total satisfied demand [m³/s]
     """
 
     def __init__(
@@ -369,9 +430,27 @@ class DemandNode(Node, TimeSeriesImport):
         Initialize a DemandNode object.
 
         Args:
-            id (str): A unique identifier for the node.
-            demand_rates (list or float): Either a list of demand rates for each time step,
-                                          or a constant demand rate.
+            id (str): A unique identifier for the node
+            easting (float): Easting coordinate in UTM system
+            northing (float): Northing coordinate in UTM system
+            constant_demand_rate (float, optional): Constant water demand rate [m³/s]
+            non_consumptive_rate (float): Flow rate that returns to system [m³/s]
+            csv_file (str, optional): Path to CSV file with time-varying demand data
+            start_year (int, optional): Starting year for CSV data import
+            start_month (int, optional): Starting month (1-12) for CSV data import
+            num_time_steps (int): Number of time steps to simulate
+            field_efficiency (float): Efficiency of water use at field/end-use (0-1)
+            conveyance_efficiency (float): Efficiency of water delivery system (0-1)
+            weight (int): Weight factor for demand shortfalls in optimization
+            
+        Raises:
+            ValueError: If efficiency values are invalid, weight is non-positive,
+                      or non-consumptive rate is negative
+                      
+        Note:
+            The demand_rates are adjusted by efficiency factors to represent gross
+            water requirements. When efficiencies < 1, more water is required to 
+            satisfy the same net demand.
         """
         super().__init__(id, easting, northing)
 
@@ -445,15 +524,22 @@ class DemandNode(Node, TimeSeriesImport):
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the DemandNode's state for the given time step.
-
-        This method calculates the satisfied demand and excess flow, and distributes
-        excess water to outflow edges.
+        
+        This method:
+        1. Calculates total inflow from all incoming edges
+        2. Satisfies consumptive demand first (water that leaves the system)
+        3. Satisfies non-consumptive demand (water that returns to the system)
+        4. Routes any remaining water to outflow edges
 
         Args:
-            time_step (int): The current time step of the simulation.
-            dt (float): The duration of the time step in seconds.
+            time_step (int): The current time step index of the simulation
+            dt (float): The duration of the time step in seconds
+            
+        Raises:
+            ValueError: If there's an error in updating the demand node
         """
         try:
+            # Calculate total inflow from all incoming edges
             total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
             current_demand = self.demand_rates[time_step] # Total demand for this timestep (consumptive + non-consumptive)
             non_consumptive_rate = self.non_consumptive_rate # Non-consumptive demand
@@ -478,16 +564,36 @@ class DemandNode(Node, TimeSeriesImport):
             total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
             
             if total_outflow_capacity > 0:
+                # Distribute proportionally based on edge capacities
                 for edge in self.outflow_edges.values():
                     edge_flow = (edge.capacity / total_outflow_capacity) * total_forward_flow
                     edge.update(time_step, edge_flow)
             else:
+                # If no outflow capacity, set flow to zero
                 for edge in self.outflow_edges.values():
                     edge.update(time_step, 0)
         except Exception as e:
             raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
 
 class StorageNode(Node, TimeSeriesImport):  
+    """
+    Represents a reservoir or storage facility in the water system.
+    
+    A StorageNode models water storage and controlled release, such as a reservoir or a lake.
+    It tracks water volumes, surface elevations, and manages releases based on operating rules.
+    It also accounts for evaporation losses and spillway flows when capacity is exceeded.
+
+    Attributes:
+        capacity (float): Maximum storage volume [m³]
+        dead_storage (float): Minimum operational storage volume [m³]
+        storage (list): Record of storage volumes [m³] for each time step
+        water_level (list): Record of water surface elevations [m.a.s.l.] for each time step
+        evaporation_rates (list): Monthly evaporation rates [mm/month]
+        evaporation_losses (list): Record of evaporation volume losses [m³]
+        spillway_register (list): Record of excess water volumes [m³] spilled
+        release_params (dict): Parameters controlling reservoir release policy
+        buffer_coef (float): Coefficient for controlling releases at low storage levels
+    """
 
     def __init__(
         self,
@@ -508,15 +614,25 @@ class StorageNode(Node, TimeSeriesImport):
 
         Args:
             id (str): Unique identifier for the node
-            hv_file (str): Path to CSV file containing height-volume-area relationships
-            initial_storage (float, optional): Initial storage volume. Defaults to 0.
-            easting (float, optional): Easting coordinate
-            northing (float, optional): Northing coordinate
-            evaporation_file (str, optional): Path to CSV file containing monthly evaporation rates [mm/month]
+            easting (float): Easting coordinate in UTM system
+            northing (float): Northing coordinate in UTM system
+            hv_file (str): Path to CSV file containing height-volume relationship
+            evaporation_file (str, optional): Path to CSV file with monthly evaporation rates [mm/month]
             start_year (int, optional): Starting year for evaporation data
             start_month (int, optional): Starting month (1-12) for evaporation data
-            num_time_steps (int, optional): Number of time steps to import from evaporation data
-            dead_storage (float): Dead storage volume (V0) [m³]
+            num_time_steps (int): Number of time steps to simulate
+            initial_storage (float): Initial storage volume [m³]
+            dead_storage (float): Minimum operational storage volume [m³]
+            buffer_coef (float): Coefficient for controlling releases at low storage (0-1)
+            
+        Raises:
+            ValueError: If buffer_coef is outside the valid range [0,1],
+                      or hv_file cannot be loaded properly
+                      
+        Note:
+            The StorageNode imports height-volume-area relationships from a CSV file.
+            The relationship is used to calculate water levels from volumes and vice versa.
+            Evaporation losses are calculated based on water surface area and evaporation rates.
         """
         # Call parent class (Node) initialization
         super().__init__(id, easting, northing)
@@ -558,13 +674,30 @@ class StorageNode(Node, TimeSeriesImport):
 
     def set_release_params(self, params: Dict[str, Union[float, List[float]]]) -> None:
         """
-        Set and validate release function parameters.
-        Now supports both monthly and annual parameters.
+        Set and validate reservoir release policy parameters.
+        
+        The release policy uses a rule-curve approach with three key parameters:
+        - Vr: Target monthly release volume [m³]
+        - V1: Top of buffer zone [m³]
+        - V2: Top of conservation zone [m³]
+        
+        These parameters define different operational zones in the reservoir:
+        - Below dead_storage: No release
+        - Between dead_storage and V1: Buffer zone (reduced releases)
+        - Between V1 and V2: Conservation zone (normal operations)
+        - Above V2: Flood control zone (increased releases)
         
         Args:
             params (dict): Monthly release parameters with each parameter being either:
                          - a single float (used for all months)
                          - a list of 12 floats (one per month)
+                         
+        Raises:
+            ValueError: If parameters are missing or invalid (e.g., V1 >= V2)
+            
+        Note:
+            This implementation supports both monthly-varying and constant parameters.
+            Volume relationships must be maintained: dead_storage < V1 < V2 <= capacity
         """
         # Validate parameters
         required_params = ['Vr', 'V1', 'V2']
@@ -610,14 +743,27 @@ class StorageNode(Node, TimeSeriesImport):
 
     def calculate_release(self, volume: float, time_step: int, dt: float) -> float:
         """
-        Calculate the reservoir release based on current water level.
+        Calculate the reservoir release volume based on current storage and operating rules.
+        
+        This method implements the reservoir release policy using rule curves.
+        The release is determined by which zone the current storage falls into:
+        
+        1. Below dead storage: No release
+        2. In buffer zone (V0 to V1): Reduced release based on buffer_coef
+        3. In conservation zone (V1 to V2): Normal target release
+        4. Above conservation zone (>V2): Increased release to prevent flooding
         
         Args:
-            water_level (float): Current water level [m]
-            time_step (int): Current time step
+            volume (float): Current storage volume [m³]
+            time_step (int): Current time step index
+            dt (float): Time step duration in seconds
             
         Returns:
-            float: Calculated release rate [m³/s]
+            float: Calculated release volume [m³] for the current time step
+            
+        Note:
+            This method returns volumes (not flow rates) to be released during
+            the current time step.
         """
         current_month = time_step % 12
         Vr = self.release_params['Vr'][current_month]  # Target release volume
@@ -653,7 +799,23 @@ class StorageNode(Node, TimeSeriesImport):
             return flood_release      
     
     def _load_hv_data(self, csv_path: str) -> None:
-        """Load and validate height-volume-area relationship data."""
+        """
+        Load and validate height-volume-area relationship data from CSV file.
+        
+        This method loads the relationship between water level (elevation),
+        storage volume, and potentially surface area from a CSV file. It creates
+        interpolation functions for converting between height and volume.
+        
+        Args:
+            csv_path (str): Path to the CSV file with height-volume-area data
+            
+        Raises:
+            ValueError: If the CSV file cannot be read or has invalid format
+            
+        Note:
+            The CSV must contain at least 'h' (height) and 'v' (volume) columns.
+            An optional 'a' (area) column can be included for surface area data.
+        """
         try:
             # Read and validate CSV
             df = pd.read_csv(csv_path, sep=';')
@@ -690,7 +852,20 @@ class StorageNode(Node, TimeSeriesImport):
             raise ValueError(f"Error loading hv data from CSV file: {str(e)}")
 
     def _initialize_hv_interpolators(self):
-        """Initialize interpolation functions for height-volume-area relationships."""
+        """
+        Initialize interpolation functions for height-volume-area relationships.
+        
+        Creates two interpolation functions:
+        1. level_to_volume: Converts elevation [m.a.s.l.] to volume [m³]
+        2. volume_to_level: Converts volume [m³] to elevation [m.a.s.l.]
+        
+        Raises:
+            Exception: If interpolation functions cannot be created
+            
+        Note:
+            These interpolation functions enable converting between water level
+            and storage volume in both directions during the simulation.
+        """
         try:
             if self.hv_data is None:
                 raise ValueError("Height-volume data not loaded")
@@ -717,13 +892,22 @@ class StorageNode(Node, TimeSeriesImport):
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the StorageNode's state for the given time step.
-
-        This method calculates the new storage level based on inflows, outflows,
-        and evaporation losses, and distributes available water to outflow edges.
-
+        
+        This method implements the reservoir water balance:
+        1. Calculates total inflow from all incoming edges
+        2. Accounts for evaporation losses based on water surface
+        3. Determines release volume based on operating rules
+        4. Handles excess water (spillway flow) if capacity is exceeded
+        5. Updates storage volume and water level
+        
         Args:
-            time_step (int): The current time step of the simulation.
-            dt (float): The length of the time step in seconds.
+            time_step (int): The current time step index of the simulation
+            dt (float): The duration of the time step in seconds
+            
+        Note:
+            The update sequence prioritizes evaporation losses before releases.
+            Spillway flows occur when the storage exceeds capacity after all
+            other gains and losses are accounted for.
         """
         try:
             inflow = np.sum([edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values()])
@@ -781,23 +965,34 @@ class StorageNode(Node, TimeSeriesImport):
 
 class HydroWorks(Node):
     """
-    Represents a point where water can be redistributed using fixed distribution parameters.
-    Each outflow edge has a distribution parameter for each timestep.
-    All distribution parameters for a timestep must sum to 1.
+    Represents a water distribution point that splits flow according to predefined ratios.
+    
+    A HydroWorks node models hydraulic structures or operational decisions that distribute
+    water to multiple destinations according to specified ratios. Examples include canal
+    bifurcations, distribution structures, or operational water allocation policies. 
+    
+    Each outflow edge has a distribution parameter (ratio) that can vary monthly.
+    The distribution parameters for all outflows in a given month must sum to 1.
+    Capacity constraints are respected, with overflow redistributed or spilled.
 
     Attributes:
         id (str): Unique identifier for the node
-        distribution_params (dict): Maps edge IDs to their distribution parameters for each timestep
+        distribution_params (dict): Maps target node IDs to their distribution parameters
+        spill_register (list): Record of spill volumes that couldn't be accommodated
     """
 
     def __init__(self, id: str, easting: float, northing: float) -> None:
         """
-        Initialize a HydroWorks node with default distribution parameters.
+        Initialize a HydroWorks node with empty distribution parameters.
 
         Args:
             id (str): Unique identifier for the node
-            easting (float, optional): Easting coordinate
-            northing (float, optional): Northing coordinate
+            easting (float): Easting coordinate in UTM system
+            northing (float): Northing coordinate in UTM system
+            
+        Note:
+            After initialization, the set_distribution_parameters method must be called
+            to define how water should be distributed among outflow edges.
         """
         super().__init__(id, easting, northing)
         self.distribution_params = {}
@@ -805,16 +1000,23 @@ class HydroWorks(Node):
 
     def set_distribution_parameters(self, parameters: Dict[str, Union[float, List[float]]]) -> None:
         """
-        Set distribution parameters for multiple edges.
-
+        Set distribution parameters for multiple outflow edges.
+        
+        The distribution parameters define how incoming water is allocated among
+        the outflow edges. For each month, the parameters across all edges must sum to 1.
+        
         Args:
             parameters (dict): Dictionary mapping edge IDs to either:
-                             - a list of 12 monthly values
+                             - a list of 12 monthly values (distribution ratios)
                              - a single float (will be used for all months)
 
         Raises:
             ValueError: If parameters are invalid or don't sum to 1 for any month
             KeyError: If any edge ID is not found in outflow edges
+            
+        Note:
+            The distribution parameters must be between 0 and 1, and the sum of
+            parameters for all edges in a given month must equal 1.
         """
         # Verify all edges exist
         for node_id in parameters:
@@ -861,7 +1063,28 @@ class HydroWorks(Node):
         self.distribution_params.update(new_params)
 
     def update(self, time_step: int, dt: float) -> None:
-
+        """
+        Update the HydroWorks node state for the given time step.
+        
+        This method:
+        1. Calculates total inflow from all incoming edges
+        2. Distributes water to outflow edges based on distribution parameters
+        3. Respects capacity constraints of outflow edges
+        4. Redistributes overflow to edges with remaining capacity if possible
+        5. Records spills when overflow cannot be fully redistributed
+        
+        Args:
+            time_step (int): The current time step index of the simulation
+            dt (float): The duration of the time step in seconds
+            
+        Raises:
+            ValueError: If distribution parameters are not set or other errors occur
+            
+        Note:
+            The distribution occurs in two passes:
+            1. Initial distribution according to parameters
+            2. Redistribution of overflow to remaining capacity where possible
+        """
         try:
             # Calculate total inflow
             total_inflow = np.sum([edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values()])
@@ -937,14 +1160,19 @@ class HydroWorks(Node):
         
 class RunoffNode(Node, TimeSeriesImport):
     """
-    Represents a runoff generation area in the water system using a simple runoff coefficient approach.
+    Represents a runoff generation area in the water system.
     
+    A RunoffNode models a catchment area that generates surface runoff based on
+    precipitation and catchment characteristics. It uses a simple coefficient-based
+    approach to convert rainfall to runoff, accounting for catchment area and
+    runoff efficiency.
+
     Attributes:
-        id (str): A unique identifier for the node.
-        area (float): The catchment area in square kilometers.
-        runoff_coefficient (float): Proportion of rainfall that becomes runoff (0-1).
-        rainfall_data (list): A list of rainfall depths for each time step in mm.
-        runoff_history (list): A record of generated runoff for each time step in m³/s.
+        id (str): Unique identifier for the node
+        area (float): Catchment area [km²]
+        runoff_coefficient (float): Fraction of rainfall that becomes runoff (0-1)
+        rainfall_data (list): Precipitation depths [mm] for each time step
+        runoff_history (list): Record of generated runoff [m³/s] for each time step
     """
 
     def __init__(
@@ -963,15 +1191,24 @@ class RunoffNode(Node, TimeSeriesImport):
         Initialize a RunoffNode object.
 
         Args:
-            id (str): A unique identifier for the node.
-            area (float): The catchment area in square kilometers.
-            runoff_coefficient (float): Proportion of rainfall that becomes runoff (0-1).
-            easting (float, optional): The easting coordinate of the node.
-            northing (float, optional): The northing coordinate of the node.
-            rainfall_csv (str, optional): Path to CSV file containing rainfall data.
-            start_year (int, optional): Starting year for CSV data import.
-            start_month (int, optional): Starting month (1-12) for CSV data import.
-            num_time_steps (int, optional): Number of time steps to import from CSV.
+            id (str): Unique identifier for the node
+            area (float): Catchment area [km²]
+            runoff_coefficient (float): Fraction of rainfall that becomes runoff (0-1)
+            easting (float): Easting coordinate in UTM system
+            northing (float): Northing coordinate in UTM system
+            rainfall_csv (str): Path to CSV file containing rainfall data [mm]
+            start_year (int): Starting year for data extraction
+            start_month (int): Starting month (1-12) for data extraction
+            num_time_steps (int): Number of time steps to simulate
+            
+        Raises:
+            ValueError: If area is non-positive or runoff_coefficient is outside [0,1]
+            
+        Note:
+            The runoff calculation uses a simple coefficient method where:
+            Runoff = Rainfall * Area * Runoff_coefficient
+            This is a simplified approach that does not account for infiltration,
+            evapotranspiration, or other complex hydrological processes.
         """
         super().__init__(id, easting, northing)
         
@@ -999,12 +1236,21 @@ class RunoffNode(Node, TimeSeriesImport):
         """
         Calculate runoff using a simple runoff coefficient approach.
         
+        This method applies the rational formula to convert rainfall depth to runoff.
+        
         Args:
-            rainfall (float): Rainfall depth in mm for the current time step
-            dt (float): Time step duration in seconds
+            rainfall (float): Rainfall depth [mm] for the current time step
+            dt (float): Time step duration [seconds]
             
         Returns:
-            float: Runoff rate in m³/s
+            float: Runoff rate [m³/s]
+            
+        Note:
+            The conversion follows these steps:
+            1. Convert rainfall from mm to m
+            2. Multiply by area in km² (converted to m²)
+            3. Apply runoff coefficient
+            4. Divide by time step duration to get flow rate
         """
         if rainfall <= 0:
             return 0
@@ -1023,9 +1269,18 @@ class RunoffNode(Node, TimeSeriesImport):
         """
         Update the RunoffNode's state for the given time step.
         
+        This method:
+        1. Gets rainfall for the current time step
+        2. Calculates runoff using the coefficient method
+        3. Distributes runoff to outflow edges proportionally
+        
         Args:
-            time_step (int): The current time step of the simulation
+            time_step (int): The current time step index of the simulation
             dt (float): The duration of the time step in seconds
+            
+        Note:
+            Runoff is distributed to outflow edges proportionally based on their
+            capacities, subject to capacity constraints.
         """
         try:
             # Get rainfall for current time step
@@ -1055,4 +1310,3 @@ class RunoffNode(Node, TimeSeriesImport):
             self.runoff_history.append(0)
             for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
-    

@@ -4,6 +4,7 @@ import numpy as np
 import os
 import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
+from datetime import datetime
 import ctypes
 import cProfile
 import pstats
@@ -639,6 +640,8 @@ if __name__ == "__main__":
     simulation = False
     multiobjective = False
 
+    start = datetime.now()
+
     if optimization: 
         # Example of running the optimization for a baseline system
         results = run_optimization(
@@ -750,6 +753,9 @@ if __name__ == "__main__":
         
         print(f"Dashboard created at {dashboard.output_dir}/index.html")
    
+    end = datetime.now()
+    print(f"Execution time: {end - start}")
+    
 
     ##################################
     ### Options for Code Profiling ###
