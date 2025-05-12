@@ -13,6 +13,7 @@ Each node type has its own behavior for handling water inflows and outflows.
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
+from typing import Dict, List, Optional, Union
 
 class TimeSeriesImport:
     """
@@ -20,8 +21,15 @@ class TimeSeriesImport:
     Provides common functionality for nodes that need to import time-based data.
     """
     
-    def _initialize_time_series(self, id, csv_file, start_year, start_month, 
-                              num_time_steps, column_name):
+    def _initialize_time_series(
+        self,
+        id: str,
+        csv_file: str,
+        start_year: int,
+        start_month: int,
+        num_time_steps: int,
+        column_name: str
+    ) -> List[float]:
         """
         Initialize time series data from CSV file.
         
@@ -53,17 +61,22 @@ class TimeSeriesImport:
                 print(f"Requested period: {start_year}-{start_month:02d} to "
                     f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
                 if not ts_data.empty:
-                    print(f"Available data range: {ts_data['Date'].min():%Y-%m} to {ts_data['Date'].max():%Y-%m}")
-                
-                return None
+                    print(f"Available data range: {ts_data['Date'].min():%Y-%m} to {ts_data['Date'].max():%Y-%m}")   
                 
             except Exception as e:
-                print(f"Warning: Time series data import failed for node '{id}': {str(e)}")
-                return None
-        
-        return None
+                raise ValueError(f"Warning: Time series data import failed for node '{id}': {str(e)}")
+            
+        return [0.0] * num_time_steps  # Default to zero if import fails or is invalid
 
-    def import_time_series(self, csv_file, start_year, start_month, num_time_steps, column_name):
+
+    def import_time_series(
+        self,
+        csv_file: str,
+        start_year: int,
+        start_month: int,
+        num_time_steps: int,
+        column_name: str
+    ) -> pd.DataFrame:
         """
         Import time series data from a CSV file for a specified time period.
         
@@ -107,7 +120,7 @@ class Node:
         northing (float): The northing coordinate of the node.
     """
 
-    def __init__(self, id, easting=None, northing=None):
+    def __init__(self, id: str, easting: Optional[float] = None, northing: Optional[float] = None) -> None:
         """
         Initialize a Node object.
 
@@ -152,7 +165,7 @@ class Node:
         """
         self.outflow_edges[edge.target.id] = edge
 
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float):
         """
         Update the node's state for the given time step.
 
@@ -175,8 +188,17 @@ class SupplyNode(Node, TimeSeriesImport):
         supply_history (list): A record of actual supply amounts for each time step.
     """
 
-    def __init__(self, id, constant_supply_rate=None, easting=None, northing=None,
-                 csv_file=None, start_year=None, start_month=None, num_time_steps=None):
+    def __init__(
+        self,
+        id: str,
+        constant_supply_rate: Optional[float] = None,
+        easting: Optional[float] = None,
+        northing: Optional[float] = None,
+        csv_file: Optional[str] = None,
+        start_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        num_time_steps: int = 0
+    ) -> None:
         """
         Initialize a SupplyNode object.
 
@@ -209,7 +231,7 @@ class SupplyNode(Node, TimeSeriesImport):
         else:
             self.supply_rates = [0]*num_time_steps
       
-    def get_supply_rate(self, time_step):
+    def get_supply_rate(self, time_step: int) -> float:
         """
         Get the supply rate for a specific time step.
 
@@ -217,13 +239,13 @@ class SupplyNode(Node, TimeSeriesImport):
             time_step (int): The time step for which to retrieve the supply rate.
 
         Returns:
-            float: The supply rate for the specified time step, or the default rate if not specified.
+            float: The supply rate for the specified time step, or the last known rate if out of range.
         """
         if time_step < len(self.supply_rates):
             return self.supply_rates[time_step]
-        return self.default_supply_rate
+        return self.supply_rates[-1]
 
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float) -> None:
         """
         Update the SupplyNode's state for the given time step.
 
@@ -261,8 +283,18 @@ class SinkNode(Node, TimeSeriesImport):
         weight (float): Weight factor for minimum flow violations in optimization
     """
 
-    def __init__(self, id, constant_min_flow=None, easting=None, northing=None, weight=1.0,
-                 csv_file=None, start_year=None, start_month=None, num_time_steps=None):
+    def __init__(
+        self,
+        id: str,
+        constant_min_flow: Optional[float] = None,
+        easting: Optional[float] = None,
+        northing: Optional[float] = None,
+        weight: float = 1.0,
+        csv_file: Optional[str] = None,
+        start_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        num_time_steps: int = 0
+    ) -> None:
         """
         Initialize a SinkNode object.
 
@@ -302,7 +334,7 @@ class SinkNode(Node, TimeSeriesImport):
         else:
             self.min_flows = [0]*num_time_steps
             
-    def get_min_flow(self, time_step):
+    def get_min_flow(self, time_step: int) -> float:
         """
         Get the minimum flow requirement for a specific time step.
 
@@ -317,7 +349,7 @@ class SinkNode(Node, TimeSeriesImport):
             return self.min_flows[time_step]
         return self.min_flows[-1]
 
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float) -> None:
         """
         Update the SinkNode's state for the given time step.
         Calculates actual flow and deficit relative to minimum requirement.
@@ -337,7 +369,7 @@ class SinkNode(Node, TimeSeriesImport):
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
             
-    def get_flow_deficit(self, time_step):
+    def get_flow_deficit(self, time_step: int) -> float:
         """
         Get the flow deficit for a specific time step.
 
@@ -349,9 +381,9 @@ class SinkNode(Node, TimeSeriesImport):
         """
         if time_step < len(self.flow_deficits):
             return self.flow_deficits[time_step]
-        return 0
+        return 0.0
         
-    def get_total_deficit_volume(self, dt):
+    def get_total_deficit_volume(self, dt: int) -> float:
         """
         Calculate the total deficit volume across all time steps.
 
@@ -373,9 +405,21 @@ class DemandNode(Node, TimeSeriesImport):
         excess_flow (list): A record of excess flow for each time step.
     """
 
-    def __init__(self, id, constant_demand_rate=None, easting=None, northing=None,
-                 csv_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 field_efficiency=1, conveyance_efficiency=1, weight=1.0, non_consumptive_rate=0):
+    def __init__(
+        self,
+        id: str,
+        constant_demand_rate: Optional[float] = None,
+        easting: Optional[float] = None,
+        northing: Optional[float] = None,
+        csv_file: Optional[str] = None,
+        start_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        num_time_steps: int = 0,
+        field_efficiency: float = 1.0,
+        conveyance_efficiency: float = 1.0,
+        weight: int = 1,
+        non_consumptive_rate: float = 0.0
+    ) -> None:
         """
         Initialize a DemandNode object.
 
@@ -454,7 +498,7 @@ class DemandNode(Node, TimeSeriesImport):
             # Default to zero demand if no other information provided
             self.demand_rates = [0] * num_time_steps
     
-    def get_demand_rate(self, time_step):
+    def get_demand_rate(self, time_step: int) -> float:
         """
         Get the demand rate for a specific time step.
 
@@ -468,7 +512,7 @@ class DemandNode(Node, TimeSeriesImport):
             return self.demand_rates[time_step]
         return self.demand_rates[-1]
 
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float) -> None:
         """
         Update the DemandNode's state for the given time step.
 
@@ -516,7 +560,7 @@ class DemandNode(Node, TimeSeriesImport):
         except Exception as e:
             raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
 
-    def get_satisfied_demand(self, time_step):
+    '''def get_satisfied_demand(self, time_step:int) -> float:
         """
         Get the satisfied demand for a specific time step.
 
@@ -528,13 +572,24 @@ class DemandNode(Node, TimeSeriesImport):
         """
         if time_step < len(self.satisfied_demand):
             return self.satisfied_demand[time_step]
-        return 0
+        return 0'''
 
 class StorageNode(Node, TimeSeriesImport):  
 
-    def __init__(self, id, easting=None, northing=None, hv_file=None, 
-                 evaporation_file=None, start_year=None, start_month=None, num_time_steps=None, 
-                 initial_storage=0, dead_storage=0, buffer_coef=0):
+    def __init__(
+        self,
+        id: str,
+        easting: float,
+        northing: float,
+        hv_file: str,
+        evaporation_file: Optional[str] = None,
+        start_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        num_time_steps: int = 0,
+        initial_storage: float = 0.0,
+        dead_storage: float = 0.0,
+        buffer_coef: float = 0.0
+    ) -> None:
         """
         Initialize a StorageNode object.
 
@@ -554,10 +609,8 @@ class StorageNode(Node, TimeSeriesImport):
         super().__init__(id, easting, northing)
         
         # Initialize StorageNode specific attributes
-        self.hv_data = None
         self._level_to_volume = None
         self._volume_to_level = None
-        self._level_to_area = None
         self.evaporation_losses = []
         # Load height-volume-area data
         self._load_hv_data(hv_file)
@@ -590,7 +643,7 @@ class StorageNode(Node, TimeSeriesImport):
         self.spillway_register = []
         self.water_level = [self.get_level_from_volume(initial_storage)]
 
-    def set_release_params(self, params):
+    def set_release_params(self, params: Dict[str, Union[float, List[float]]]) -> None:
         """
         Set and validate release function parameters.
         Now supports both monthly and annual parameters.
@@ -642,7 +695,7 @@ class StorageNode(Node, TimeSeriesImport):
         # Store parameters
         self.release_params = monthly_params
 
-    def calculate_release(self, volume, time_step, dt):
+    def calculate_release(self, volume: float, time_step: int, dt: float) -> float:
         """
         Calculate the reservoir release based on current water level.
         
@@ -688,7 +741,7 @@ class StorageNode(Node, TimeSeriesImport):
         
         return release
     
-    def _load_hv_data(self, csv_path):
+    def _load_hv_data(self, csv_path: str) -> None:
         """Load and validate height-volume-area relationship data."""
         try:
             # Read and validate CSV
@@ -728,13 +781,15 @@ class StorageNode(Node, TimeSeriesImport):
     def _initialize_interpolators(self):
         """Initialize interpolation functions for height-volume-area relationships."""
         try:
+            if self.hv_data is None:
+                raise ValueError("Height-volume data not loaded")
+
             # Create height to volume interpolator
             self._level_to_volume = interp1d(
                 self.hv_data['waterlevels'],
                 self.hv_data['volumes'],
                 kind='linear',
                 bounds_error=False,  # Allow extrapolation
-                fill_value=(self.hv_data['volumes'][0], self.hv_data['volumes'][-1])
             )
             
             # Create volume to height interpolator
@@ -743,13 +798,12 @@ class StorageNode(Node, TimeSeriesImport):
                 self.hv_data['waterlevels'],
                 kind='linear',
                 bounds_error=False,
-                fill_value=(self.hv_data['waterlevels'][0], self.hv_data['waterlevels'][-1])
             )
             
         except Exception as e:
             raise Exception(f"Error creating interpolation functions: {str(e)}")
 
-    def get_volume_from_level(self, waterlevel):
+    def get_volume_from_level(self, waterlevel: float) -> float:
         """
         Get storage volume for a given water level.
         
@@ -761,13 +815,13 @@ class StorageNode(Node, TimeSeriesImport):
         """
         if not self.hv_data:
             print(f'{self.id} volume can not be determined from water level: Height-Volume relation is missing!')
-            return
+            return 0.0
 
         if self._level_to_volume is None:
             raise ValueError("No level-volume relationship available")
         return float(self._level_to_volume(waterlevel))
         
-    def get_level_from_volume(self, volume):
+    def get_level_from_volume(self, volume: float) -> float:
         """
         Get water level for a given storage volume.
         
@@ -779,13 +833,13 @@ class StorageNode(Node, TimeSeriesImport):
         """
         if not self.hv_data:
             print(f'{self.id} water level can not be determined from volume: Height-Volume relation is missing!')
-            return
+            return 0.0
 
         if self._volume_to_level is None:
             raise ValueError("No volume-level relationship available")
         return float(self._volume_to_level(volume))
 
-    def get_evaporation_loss(self, time_step):
+    def get_evaporation_loss(self, time_step: int) -> float:
         """
         Get the evaporation loss for a specific time step.
 
@@ -797,9 +851,9 @@ class StorageNode(Node, TimeSeriesImport):
         """
         if time_step < len(self.evaporation_losses):
             return self.evaporation_losses[time_step]
-        return 0
+        return 0.0
 
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float) -> None:
         """
         Update the StorageNode's state for the given time step.
 
@@ -889,7 +943,7 @@ class HydroWorks(Node):
         distribution_params (dict): Maps edge IDs to their distribution parameters for each timestep
     """
 
-    def __init__(self, id, easting=None, northing=None):
+    def __init__(self, id: str, easting: float, northing: float) -> None:
         """
         Initialize a HydroWorks node with default distribution parameters.
 
@@ -902,7 +956,7 @@ class HydroWorks(Node):
         self.distribution_params = {}
         self.spill_register = []
 
-    def set_distribution_parameters(self, parameters):
+    def set_distribution_parameters(self, parameters: Dict[str, Union[float, List[float]]]) -> None:
         """
         Set distribution parameters for multiple edges.
 
@@ -959,7 +1013,7 @@ class HydroWorks(Node):
         # Update parameters
         self.distribution_params.update(new_params)
 
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float) -> None:
 
         try:
             # Calculate total inflow
@@ -1046,8 +1100,18 @@ class RunoffNode(Node, TimeSeriesImport):
         runoff_history (list): A record of generated runoff for each time step in m³/s.
     """
 
-    def __init__(self, id, area, runoff_coefficient, easting=None, northing=None, 
-                 rainfall_csv=None, start_year=None, start_month=None, num_time_steps=None):
+    def __init__(
+        self,
+        id: str,
+        area: float,
+        runoff_coefficient: float,
+        easting: float,
+        northing: float,
+        rainfall_csv: str,
+        start_year: int,
+        start_month: int,
+        num_time_steps: int = 0
+    ) -> None:
         """
         Initialize a RunoffNode object.
 
@@ -1084,7 +1148,7 @@ class RunoffNode(Node, TimeSeriesImport):
             self.rainfall_data = [0] * num_time_steps
             print(f"Warning: No rainfall data provided for RunoffNode '{id}'. Initializing with zeros.")
     
-    def calculate_runoff(self, rainfall, dt):
+    def calculate_runoff(self, rainfall: float, dt: float) -> float:
         """
         Calculate runoff using a simple runoff coefficient approach.
         
@@ -1108,7 +1172,7 @@ class RunoffNode(Node, TimeSeriesImport):
         
         return runoff_rate
     
-    def get_rainfall(self, time_step):
+    def get_rainfall(self, time_step: int) -> float:
         """
         Get the rainfall for a specific time step.
         
@@ -1122,7 +1186,7 @@ class RunoffNode(Node, TimeSeriesImport):
             return self.rainfall_data[time_step]
         return 0
     
-    def update(self, time_step, dt):
+    def update(self, time_step: int, dt: float) -> None:
         """
         Update the RunoffNode's state for the given time step.
         
@@ -1159,7 +1223,7 @@ class RunoffNode(Node, TimeSeriesImport):
             for edge in self.outflow_edges.values():
                 edge.update(time_step, 0)
     
-    def get_runoff(self, time_step):
+    def get_runoff(self, time_step: int) -> float:  
         """
         Get the runoff rate for a specific time step.
         
@@ -1173,7 +1237,7 @@ class RunoffNode(Node, TimeSeriesImport):
             return self.runoff_history[time_step]
         return 0
     
-    def get_total_runoff_volume(self, dt):
+    def get_total_runoff_volume(self, dt: float) -> float:
         """
         Calculate the total runoff volume across all time steps.
         
