@@ -133,9 +133,9 @@ class WaterSystemVisualizer:
                             row_data[f"{node_id}_StorageChange"] = storage_change
                             row_data[f"{node_id}_ExcessVolume"] = node.spillway_register[time_step]
                         elif isinstance(node, DemandNode):
-                            row_data[f"{node_id}_Demand"] = node.get_demand_rate(time_step)
+                            row_data[f"{node_id}_Demand"] = node.demand_rates[time_step]
                             row_data[f"{node_id}_SatisfiedDemand"] = node.satisfied_consumptive_demand[time_step]
-                            row_data[f"{node_id}_Deficit"] = (node.get_demand_rate(time_step) - 
+                            row_data[f"{node_id}_Deficit"] = (node.demand_rates[time_step] - 
                                                             node.satisfied_consumptive_demand[time_step])
                     except Exception as e:
                         print(f"Warning: Error processing node {node_id} at time step {time_step}: {str(e)}")
@@ -928,7 +928,7 @@ class WaterSystemVisualizer:
             ax = axes[idx]
             
             # Get demand data
-            target_demands = [node.get_demand_rate(t) for t in time_steps]
+            target_demands = [node.demand_rates[t] for t in time_steps]
             satisfied_demands = node.satisfied_demand_total[:len(time_steps)]
             unmet_demands = [target - satisfied for target, satisfied in 
                             zip(target_demands, satisfied_demands)]
@@ -1178,7 +1178,7 @@ class WaterSystemVisualizer:
                         if isinstance(data['node'], SinkNode)]
             
             for t in time_steps:
-                demand = sum(node.get_demand_rate(t) for _, node in demand_nodes)
+                demand = sum(node.demand_rates[t] for _, node in demand_nodes)
                 non_consumptive_demand = sum(node.non_consumptive_rate for _, node in demand_nodes)
                 total_demands.append(demand-non_consumptive_demand)
             
@@ -1246,7 +1246,7 @@ class WaterSystemVisualizer:
             colors = plt.cm.tab20(np.linspace(0, 1, len(demand_nodes)))
             for (node_id, node), color in zip(demand_nodes, colors):
                 demands = [
-                    node.get_demand_rate(t) - node.non_consumptive_rate
+                    node.demand_rates[t] - node.non_consumptive_rate
                     for t in time_steps
                 ]
                 ax2.bar(time_steps, demands, bottom=bottom, label=node_id, color=color)
@@ -1311,7 +1311,7 @@ class WaterSystemVisualizer:
                         if isinstance(data['node'], SinkNode)]
             
             for t in time_steps:
-                demand = sum(node.get_demand_rate(t) for _, node in demand_nodes)
+                demand = sum(node.demand_rates[t] for _, node in demand_nodes)
                 total_demands.append(demand)
             
             # Create figure
@@ -1381,7 +1381,7 @@ class WaterSystemVisualizer:
             # Plot demand nodes
             colors = plt.cm.tab20(np.linspace(0, 1, len(demand_nodes)))
             for (node_id, node), color in zip(demand_nodes, colors):
-                demands = [node.get_demand_rate(t) for t in time_steps]
+                demands = [node.demand_rates[t] for t in time_steps]
                 ax2.bar(time_steps, demands, bottom=bottom, label=node_id, color=color)
                 bottom += np.array(demands)
             
@@ -1475,7 +1475,7 @@ class WaterSystemVisualizer:
                             if isinstance(data['node'], StorageNode)]
             
             for t in time_steps:
-                demand = sum(node.get_demand_rate(t) for _, node in demand_nodes)
+                demand = sum(node.demand_rates[t] for _, node in demand_nodes)
                 total_demands.append(demand)
             
             # Create figure with one subplot
@@ -2195,11 +2195,11 @@ class WaterSystemVisualizer:
             node_percentages = []
             
             for t in range(self.system.time_steps):
-                total_deficit = (node.get_demand_rate(t) - node.satisfied_demand_total[t])
+                total_deficit = (node.demand_rates[t] - node.satisfied_demand_total[t])
                 node_total_deficits.append(total_deficit)
                 
                 # Calculate percentage based on total required flow
-                total_required = node.get_demand_rate(t)
+                total_required = node.demand_rates[t]
                 if total_required > 0:
                     percentage = (total_deficit / total_required) * 100
                 else:
@@ -2365,7 +2365,7 @@ class WaterSystemVisualizer:
             
             # Calculate demand deficit penalties
             if isinstance(node, DemandNode):
-                demand = np.array([node.get_demand_rate(t) for t in range(self.system.time_steps)])
+                demand = np.array([node.demand_rates[t] for t in range(self.system.time_steps)])
                 satisfied = np.array(node.satisfied_demand_total)
                 deficit = (demand - satisfied) * self.system.dt
                 weighted_deficit = deficit * node.weight

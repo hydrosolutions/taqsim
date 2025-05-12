@@ -497,20 +497,6 @@ class DemandNode(Node, TimeSeriesImport):
         else:
             # Default to zero demand if no other information provided
             self.demand_rates = [0] * num_time_steps
-    
-    def get_demand_rate(self, time_step: int) -> float:
-        """
-        Get the demand rate for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the demand rate.
-
-        Returns:
-            float: The demand rate for the specified time step, or the last known rate if out of range.
-        """
-        if time_step < len(self.demand_rates):
-            return self.demand_rates[time_step]
-        return self.demand_rates[-1]
 
     def update(self, time_step: int, dt: float) -> None:
         """
@@ -525,7 +511,7 @@ class DemandNode(Node, TimeSeriesImport):
         """
         try:
             total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
-            current_demand = self.get_demand_rate(time_step)
+            current_demand = self.demand_rates[time_step]
             non_consumptive_rate = self.non_consumptive_rate
             
             # Satisfy consumptive demand first
@@ -559,20 +545,6 @@ class DemandNode(Node, TimeSeriesImport):
                     edge.update(time_step, 0)
         except Exception as e:
             raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
-
-    '''def get_satisfied_demand(self, time_step:int) -> float:
-        """
-        Get the satisfied demand for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the satisfied demand.
-
-        Returns:
-            float: The satisfied demand for the specified time step, or 0 if not available.
-        """
-        if time_step < len(self.satisfied_demand):
-            return self.satisfied_demand[time_step]
-        return 0'''
 
 class StorageNode(Node, TimeSeriesImport):  
 

@@ -276,7 +276,7 @@ class WaterSystem:
                 surfacerunoff += runoff_rates * self.dt
                 
             elif isinstance(node, DemandNode):
-                demand_rates = np.array([node.get_demand_rate(t) for t in time_steps])
+                demand_rates = np.array([node.demand_rates[t] for t in time_steps])
                 satisfied_rates = np.array([node.satisfied_consumptive_demand[t] if t < len(node.satisfied_consumptive_demand) else 0 for t in time_steps])
                 
                 demands += demand_rates * self.dt

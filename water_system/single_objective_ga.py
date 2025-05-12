@@ -249,7 +249,7 @@ class SingleObjectiveOptimizer:
                 node = node_data['node']
                 
                 if isinstance(node, DemandNode):
-                    demand = np.array([node.get_demand_rate(t) for t in range(self.num_time_steps)])
+                    demand = np.array([node.demand_rates[t] for t in range(self.num_time_steps)])
                     satisfied = np.array(node.satisfied_demand_total)
                     deficit = (demand - satisfied) * system.dt
                     weighted_deficit = deficit * node.weight
