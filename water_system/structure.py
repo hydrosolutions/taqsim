@@ -24,11 +24,11 @@ class TimeSeriesImport:
     def _initialize_time_series(
         self,
         id: str,
-        csv_file: str,
-        start_year: int,
-        start_month: int,
-        num_time_steps: int,
-        column_name: str
+        csv_file: Optional[str] = None,
+        start_year: Optional[int] = None,
+        start_month: Optional[int] = None,
+        num_time_steps: int = 0,
+        column_name: str = 'Q'
     ) -> List[float]:
         """
         Initialize time series data from CSV file.
@@ -383,7 +383,7 @@ class SinkNode(Node, TimeSeriesImport):
             return self.flow_deficits[time_step]
         return 0.0
         
-    def get_total_deficit_volume(self, dt: int) -> float:
+    def get_total_deficit_volume(self, dt: float) -> float:
         """
         Calculate the total deficit volume across all time steps.
 

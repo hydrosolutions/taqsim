@@ -2,16 +2,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
 import random
-from water_system import StorageNode, DemandNode, HydroWorks, SinkNode
+from water_system import StorageNode, DemandNode, HydroWorks, SinkNode, WaterSystem
 import copy
 import os
+from typing import List, Dict, Tuple, Union, Optional
 
 class SingleObjectiveOptimizer:
     """
     Enhanced genetic algorithm optimizer for water systems with multiple reservoirs
     and hydroworks nodes.
     """
-    def __init__(self, base_system, start_year, start_month, num_time_steps, ngen=50, population_size=50, cxpb=0.9, mutpb=0.5):
+    def __init__(
+        self,
+        base_system: WaterSystem,
+        start_year: int,
+        start_month: int,
+        num_time_steps: int,
+        ngen: int = 50,
+        population_size: int = 50,
+        cxpb: float = 0.9,
+        mutpb: float = 0.5
+    ) -> None:
         self.base_system = base_system 
         self.start_year = start_year
         self.start_month = start_month
@@ -65,7 +76,7 @@ class SingleObjectiveOptimizer:
         # Store convergence history
         self.history = {'min': [], 'avg': [], 'std': []}
         
-    def _normalize_distribution(self, values):
+    def _normalize_distribution(self, values: np.ndarray) -> np.ndarray:
         """
         Normalize a list of values to sum to 1.0.
         
@@ -75,14 +86,14 @@ class SingleObjectiveOptimizer:
         Returns:
             list: Normalized values that sum to 1.0
         """
-        values = np.array(values)
-        total = np.sum(values)
+        npvalue = np.array(values)
+        total = np.sum(npvalue)
         if total == 0:
             # If all values are 0, return equal distribution
-            return np.full_like(values, 1.0 / len(values))
-        return values / total
+            return np.full_like(npvalue, 1.0 / len(npvalue))
+        return npvalue / total
     
-    def _setup_genetic_operators(self):
+    def _setup_genetic_operators(self) -> None:
         """Configure genetic algorithm operators for multiple structures with dynamic bounds"""
 
         # Create individual and population
@@ -95,11 +106,11 @@ class SingleObjectiveOptimizer:
         self.toolbox.register("mutate", self._mutate_individual)
         self.toolbox.register("select", tools.selTournament, tournsize=5)
 
-    def _mutate_individual(self, individual, indpb=0.5):
+    def _mutate_individual(self, individuals: List[float], indpb: float=0.5):
         """Custom mutation operator with enforced parameter bounds for monthly parameters"""
         genes_per_reservoir_month = 3
         
-        individual = np.array(individual)
+        individual = np.array(individuals)
         # Track which months need renormalization for each hydroworks
         hw_updates = set()
         
@@ -155,13 +166,13 @@ class SingleObjectiveOptimizer:
 
         return creator.Individual(individual.tolist()),
 
-    def _crossover(self, ind1, ind2):
+    def _crossover(self, ind_one:List[float], ind_two:List[float]):
         """
         Custom crossover that treats monthly parameters as packages.
         For each month, all parameters of a reservoir or hydrowork for that specific month
         are swapped as a complete unit between parents.
         """
-        ind1, ind2 = np.array(ind1), np.array(ind2)
+        ind1, ind2 = np.array(ind_one), np.array(ind_two)
         
         # Handle reservoirs month by month
         genes_per_month = 3 
@@ -209,7 +220,7 @@ class SingleObjectiveOptimizer:
         
         return creator.Individual(ind1.tolist()), creator.Individual(ind2.tolist())
 
-    def _evaluate_individual(self, individual):
+    def _evaluate_individual(self, individual: List[float]) -> Tuple[float]:
         """Evaluate fitness of an individual with bound checking"""        
         try:
             # Decode parameters and continue with evaluation
@@ -254,20 +265,22 @@ class SingleObjectiveOptimizer:
                 elif hasattr(node, 'spill_register'):
                     total_penalty += 10.0 * np.sum(node.spill_register)
             
+            total_penalty = float(total_penalty)
             return (total_penalty,)
         
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
             return (float('inf'),)
 
-    def _decode_individual(self, individual):
+    def _decode_individual(self, indiv: List[float]) -> Tuple[Dict[str, Dict[str, List[float]]], Dict[str, Dict[str, np.ndarray]]]:
+
         """Decode individual genes into monthly reservoir and hydroworks parameters"""
         genes_per_reservoir_month = 3
         reservoir_params = {}
         hydroworks_params = {}
         
         # Convert individual to numpy array for efficient slicing
-        individual = np.array(individual)
+        individual = np.array(indiv)
         
         # Decode reservoir parameters
         current_idx = 0
@@ -343,7 +356,7 @@ class SingleObjectiveOptimizer:
 
         return creator.Individual(genes)
 
-    def optimize(self):
+    def optimize(self) -> Dict[str, Union[bool, str, int, float, Dict[str, Dict[str, List[float]]]]]:
         """Run genetic algorithm optimization with parameter validation"""
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
@@ -381,7 +394,7 @@ class SingleObjectiveOptimizer:
             'optimal_hydroworks_parameters': hydroworks_params
         }
 
-    def plot_convergence(self):
+    def plot_convergence(self)-> None:
         """Plot convergence history"""
         directory = './model_output/optimisation'
         if not os.path.exists(directory):
