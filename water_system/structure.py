@@ -752,20 +752,6 @@ class StorageNode(Node, TimeSeriesImport):
             raise ValueError("No volume-level relationship available")
         return float(self._volume_to_level(volume))
 
-    def get_evaporation_loss(self, time_step: int) -> float:
-        """
-        Get the evaporation loss for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the evaporation loss.
-
-        Returns:
-            float: The evaporation loss in m³ for the specified time step, or 0 if not available.
-        """
-        if time_step < len(self.evaporation_losses):
-            return self.evaporation_losses[time_step]
-        return 0.0
-
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the StorageNode's state for the given time step.
@@ -830,20 +816,6 @@ class StorageNode(Node, TimeSeriesImport):
         except Exception as e:
             # Log the error and attempt to maintain last known state
             print(f"Error updating storage node {self.id}: {str(e)}")
-
-    def get_storage(self, time_step):
-        """
-        Get the storage level for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the storage level.
-
-        Returns:
-            float: The storage level in cubic meters for the specified time step, or the last known storage level if out of range.
-        """
-        if time_step < len(self.storage):
-            return self.storage[time_step]
-        return self.storage[-1]
 
 class HydroWorks(Node):
     """
