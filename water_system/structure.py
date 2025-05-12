@@ -230,20 +230,6 @@ class SupplyNode(Node, TimeSeriesImport):
             self.supply_rates = [constant_supply_rate]*num_time_steps    
         else:
             self.supply_rates = [0]*num_time_steps
-      
-    def get_supply_rate(self, time_step: int) -> float:
-        """
-        Get the supply rate for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the supply rate.
-
-        Returns:
-            float: The supply rate for the specified time step, or the last known rate if out of range.
-        """
-        if time_step < len(self.supply_rates):
-            return self.supply_rates[time_step]
-        return self.supply_rates[-1]
 
     def update(self, time_step: int, dt: float) -> None:
         """
@@ -256,7 +242,7 @@ class SupplyNode(Node, TimeSeriesImport):
             dt (float): The duration of the time step in seconds.
         """
         try:
-            current_supply_rate = self.get_supply_rate(time_step)
+            current_supply_rate = self.supply_rates[time_step]
             self.supply_history.append(current_supply_rate)
 
             total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
@@ -463,7 +449,6 @@ class DemandNode(Node, TimeSeriesImport):
         self.satisfied_consumptive_demand = []
         self.satisfied_non_consumptive_demand = []
         self.satisfied_demand_total = []
-        #self.excess_flow = []
 
         # Try to import time series data first
         imported_data = None

@@ -125,7 +125,7 @@ class WaterSystemVisualizer:
                         row_data[f"{node_id}_Outflow"] = outflow
 
                         if isinstance(node, SupplyNode):
-                            row_data[f"{node_id}_SupplyRate"] = node.get_supply_rate(time_step)
+                            row_data[f"{node_id}_SupplyRate"] = node.supply_rates[time_step]
                         elif isinstance(node, StorageNode):
                             row_data[f"{node_id}_Storage"] = node.storage[time_step]
                             storage_change = (node.storage[time_step+1] - node.storage[time_step] 
@@ -1007,7 +1007,7 @@ class WaterSystemVisualizer:
         total_inflows = np.zeros(len(time_steps))
         for idx, (node_id, node) in enumerate(supply_nodes):
             # Get supply rates for each timestep
-            inflows = [node.get_supply_rate(t) for t in time_steps]
+            inflows = [node.supply_rates[t] for t in time_steps]
             total_inflows += np.array(inflows)
             
             # Plot inflow time series
@@ -1163,7 +1163,7 @@ class WaterSystemVisualizer:
                         if isinstance(data['node'], SupplyNode)]
             
             for t in time_steps:
-                inflow = sum(node.get_supply_rate(t) for _, node in supply_nodes)
+                inflow = sum(node.supply_rates[t] for _, node in supply_nodes)
                 total_inflows.append(inflow)
             
             # Calculate total demands and minimum flows
@@ -1296,7 +1296,7 @@ class WaterSystemVisualizer:
                         if isinstance(data['node'], SupplyNode)]
             
             for t in time_steps:
-                inflow = sum(node.get_supply_rate(t) for _, node in supply_nodes)
+                inflow = sum(node.supply_rates[t] for _, node in supply_nodes)
                 total_inflows.append(inflow)
             
             # Calculate total demands and minimum flows
@@ -1455,7 +1455,7 @@ class WaterSystemVisualizer:
                 date_labels = list(range(self.system.time_steps))
             
             for t in time_steps:
-                inflow = sum(node.get_supply_rate(t) for _, node in supply_nodes)
+                inflow = sum(node.supply_rates[t] for _, node in supply_nodes)
                 total_inflows.append(inflow)
             
             # Calculate total demands and minimum flows

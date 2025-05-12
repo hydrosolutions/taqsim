@@ -267,7 +267,7 @@ class WaterSystem:
             node = node_data['node']
             
             if isinstance(node, SupplyNode):
-                supply_rates = np.array([node.get_supply_rate(t) for t in time_steps])
+                supply_rates = np.array([node.supply_rates[t] for t in time_steps])
                 source += supply_rates * self.dt
             
             # Add runoff contribution 
