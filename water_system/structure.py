@@ -408,17 +408,17 @@ class DemandNode(Node, TimeSeriesImport):
     def __init__(
         self,
         id: str,
-        constant_demand_rate: Optional[float] = None,
         easting: Optional[float] = None,
         northing: Optional[float] = None,
+        constant_demand_rate: Optional[float] = None,
+        non_consumptive_rate: float = 0.0,
         csv_file: Optional[str] = None,
         start_year: Optional[int] = None,
         start_month: Optional[int] = None,
         num_time_steps: int = 0,
         field_efficiency: float = 1.0,
         conveyance_efficiency: float = 1.0,
-        weight: int = 1,
-        non_consumptive_rate: float = 0.0
+        weight: int = 1
     ) -> None:
         """
         Initialize a DemandNode object.
@@ -463,7 +463,7 @@ class DemandNode(Node, TimeSeriesImport):
         self.satisfied_consumptive_demand = []
         self.satisfied_non_consumptive_demand = []
         self.satisfied_demand_total = []
-        self.excess_flow = []
+        #self.excess_flow = []
 
         # Try to import time series data first
         imported_data = None
@@ -511,29 +511,26 @@ class DemandNode(Node, TimeSeriesImport):
         """
         try:
             total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
-            current_demand = self.demand_rates[time_step]
-            non_consumptive_rate = self.non_consumptive_rate
+            current_demand = self.demand_rates[time_step] # Total demand for this timestep (consumptive + non-consumptive)
+            non_consumptive_rate = self.non_consumptive_rate # Non-consumptive demand
             
             # Satisfy consumptive demand first
             consumptive_demand = current_demand - non_consumptive_rate
-            satisfied = min(total_inflow, consumptive_demand)
-            satisfied = max(0, satisfied)  # Ensure non-negative
-            self.satisfied_consumptive_demand.append(satisfied)
+            satisfied_consumptive = min(total_inflow, consumptive_demand)
+            satisfied_consumptive = max(0, satisfied_consumptive)  # Ensure non-negative
+            self.satisfied_consumptive_demand.append(satisfied_consumptive)
             
             # Then handle non-consumptive demand from remaining flow
-            remaining_flow = max(0, total_inflow - satisfied)
-            non_consumptive_satisfied = min(remaining_flow, non_consumptive_rate)
-            self.satisfied_non_consumptive_demand.append(non_consumptive_satisfied)
+            remaining_flow = max(0, total_inflow - satisfied_consumptive)
+            satisfied_non_consumptive = min(remaining_flow, non_consumptive_rate)
+            self.satisfied_non_consumptive_demand.append(satisfied_non_consumptive)
             
             # Calculate excess after satisfying both demands
-            excess = max(0, remaining_flow - non_consumptive_satisfied)
-            
-            total_satisfied = satisfied + non_consumptive_satisfied
+            total_satisfied = satisfied_consumptive + satisfied_non_consumptive
             self.satisfied_demand_total.append(total_satisfied)
-            self.excess_flow.append(excess)
 
             # Forward flow to outflow edges (excess + satisfied non-consumptive)
-            total_forward_flow = excess + non_consumptive_satisfied
+            total_forward_flow = remaining_flow
             total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
             
             if total_outflow_capacity > 0:

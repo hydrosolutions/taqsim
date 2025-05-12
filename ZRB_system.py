@@ -120,11 +120,11 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
     
     # Add Industrial Demand Node
     Powerplant = DemandNode("Powerplant", 
+                           easting=186146.3,
+                           northing=4454459.3, 
                            constant_demand_rate=25, 
                            non_consumptive_rate=17, 
                            num_time_steps=num_time_steps,
-                           easting=186146.3,
-                           northing=4454459.3, 
                            weight=10)
     system.add_node(Powerplant)
     
