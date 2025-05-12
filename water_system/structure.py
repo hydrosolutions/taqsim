@@ -535,7 +535,7 @@ class StorageNode(Node, TimeSeriesImport):
 
  
         self.dead_storage = dead_storage  # Dead storage volume [m³]
-        self.dead_storage_level = self.get_level_from_volume(dead_storage)
+        self.dead_storage_level = self._volume_to_level(dead_storage)
         
         # Initialize evaporation rates using TimeSeriesImport
         imported_data = None
@@ -554,7 +554,7 @@ class StorageNode(Node, TimeSeriesImport):
         # Initialize storage attributes
         self.storage = [initial_storage]
         self.spillway_register = []
-        self.water_level = [self.get_level_from_volume(initial_storage)]
+        self.water_level = [self._volume_to_level(initial_storage)]
 
     def set_release_params(self, params: Dict[str, Union[float, List[float]]]) -> None:
         """
@@ -650,9 +650,7 @@ class StorageNode(Node, TimeSeriesImport):
             # Release at least target volume, plus any excess above V2, limited by capacity
             flood_release = min(max(Vr, volume - V2), sum(edge.capacity for edge in self.outflow_edges.values()) * dt)
             # Convert from volume to rate
-            return flood_release
-        
-        return release
+            return flood_release      
     
     def _load_hv_data(self, csv_path: str) -> None:
         """Load and validate height-volume-area relationship data."""
@@ -686,12 +684,12 @@ class StorageNode(Node, TimeSeriesImport):
             }
             
             # Initialize interpolation functions
-            self._initialize_interpolators()
+            self._initialize_hv_interpolators()
             
         except Exception as e:
             raise ValueError(f"Error loading hv data from CSV file: {str(e)}")
 
-    def _initialize_interpolators(self):
+    def _initialize_hv_interpolators(self):
         """Initialize interpolation functions for height-volume-area relationships."""
         try:
             if self.hv_data is None:
@@ -702,7 +700,7 @@ class StorageNode(Node, TimeSeriesImport):
                 self.hv_data['waterlevels'],
                 self.hv_data['volumes'],
                 kind='linear',
-                bounds_error=False,  # Allow extrapolation
+                bounds_error=True,  # Allow extrapolation
             )
             
             # Create volume to height interpolator
@@ -710,47 +708,11 @@ class StorageNode(Node, TimeSeriesImport):
                 self.hv_data['volumes'],
                 self.hv_data['waterlevels'],
                 kind='linear',
-                bounds_error=False,
+                bounds_error=True,
             )
             
         except Exception as e:
             raise Exception(f"Error creating interpolation functions: {str(e)}")
-
-    def get_volume_from_level(self, waterlevel: float) -> float:
-        """
-        Get storage volume for a given water level.
-        
-        Args:
-            water_level (float): Water level in m asl.
-            
-        Returns:
-            float: Corresponding storage volume [m³]
-        """
-        if not self.hv_data:
-            print(f'{self.id} volume can not be determined from water level: Height-Volume relation is missing!')
-            return 0.0
-
-        if self._level_to_volume is None:
-            raise ValueError("No level-volume relationship available")
-        return float(self._level_to_volume(waterlevel))
-        
-    def get_level_from_volume(self, volume: float) -> float:
-        """
-        Get water level for a given storage volume.
-        
-        Args:
-            volume (float): Storage volume [m³]
-            
-        Returns:
-            float: Corresponding water level above ground [m]
-        """
-        if not self.hv_data:
-            print(f'{self.id} water level can not be determined from volume: Height-Volume relation is missing!')
-            return 0.0
-
-        if self._volume_to_level is None:
-            raise ValueError("No volume-level relationship available")
-        return float(self._volume_to_level(volume))
 
     def update(self, time_step: int, dt: float) -> None:
         """
@@ -771,10 +733,10 @@ class StorageNode(Node, TimeSeriesImport):
             inflow_volume = inflow * dt
             
             # Calculate evaporation loss
-            previous_water_level = self.get_level_from_volume(previous_storage)
+            previous_water_level = self._volume_to_level(previous_storage)
             new_water_level = max((previous_water_level - (self.evaporation_rates[time_step] / 1000)),self.hv_data['min_waterlevel'] )  # Convert mm to m
 
-            evap_loss = previous_storage-self.get_volume_from_level(new_water_level)
+            evap_loss = previous_storage-self._level_to_volume(new_water_level)
             self.evaporation_losses.append(evap_loss)
             
              # Calculate available water after evaporation
@@ -812,7 +774,7 @@ class StorageNode(Node, TimeSeriesImport):
             
             self.storage.append(new_storage)
             if self.hv_data:
-                self.water_level.append(self.get_level_from_volume(new_storage))
+                self.water_level.append(self._volume_to_level(new_storage))
         except Exception as e:
             # Log the error and attempt to maintain last known state
             print(f"Error updating storage node {self.id}: {str(e)}")
