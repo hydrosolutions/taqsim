@@ -46,7 +46,7 @@ class SingleObjectiveOptimizer:
                 reservoir = node_data['node']
                 
                 # Calculate total outflow capacity using numpy
-                total_capacity = np.sum([edge.capacity for edge in reservoir.outflow_edges.values()])
+                total_capacity = reservoir.outflow_edge.capacity
                 
                 # Set volume-based bounds for the new parameterization
                 dead_storage = reservoir.dead_storage

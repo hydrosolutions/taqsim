@@ -3,30 +3,41 @@ import math
 This module defines the Edge class, which represents a connection between two nodes in a water system.
 
 The Edge class is responsible for managing the flow of water between nodes and enforcing capacity constraints.
+It supports specialized node types: SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, and RunoffNode.
 """
 
-from .structure import Node, SupplyNode
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, Any
+from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
+
+# Forward references for type hints - these are imported in the Edge class
+# but need to be referenced in type annotations
+SupplyNodeType = Any
+StorageNodeType = Any
+DemandNodeType = Any
+SinkNodeType = Any
+HydroWorksType = Any
+RunoffNodeType = Any
+NodeType = Union[SupplyNodeType, StorageNodeType, DemandNodeType, SinkNodeType, HydroWorksType, RunoffNodeType]
 
 class Edge:
     """
     Represents a connection between two nodes in a water system.
 
     Attributes:
-        source (Node): The source node of the edge.
-        target (Node): The target node of the edge.
-        capacity (float): The maximum flow capacity of the edge.
+        source: The source node of the edge.
+        target: The target node of the edge.
+        capacity (float): The maximum flow capacity of the edge in m³/s.
         flow_after_losses (list): A list of outflow values for each time step of the simulation.
+        flow_before_losses (list): A list of inflow values before losses.
         length (float): The length of the canals in the irrigation/demand system [km]
         loss_factor (float): The loss factor per unit distance [fraction/km].
-        inflow (list): A list of inflow values before losses.
         losses (list): A list of total losses for each time step.
     """
 
     def __init__(
         self,
-        source: Node,
-        target: Node,
+        source: NodeType,
+        target: NodeType,
         capacity: float,
         length: Optional[float] = None,
         loss_factor: float = 0
@@ -35,9 +46,9 @@ class Edge:
         Initialize an Edge object.
 
         Args:
-            source (Node): The source node of the edge.
-            target (Node): The target node of the edge.
-            capacity (float): The maximum flow capacity of the edge.
+            source: The source node of the edge.
+            target: The target node of the edge.
+            capacity (float): The maximum flow capacity of the edge in m³/s.
             length (float, optional): The length of the edge in km. If None, calculated from coordinates.
             loss_factor (float, optional): The loss factor per unit distance [fraction/km]. Defaults to 0 (0% per km)
         
@@ -45,10 +56,11 @@ class Edge:
             ValueError: If invalid parameters are provided (negative capacity, loss_factor, or length).
             AttributeError: If nodes cannot be connected or lack required attributes.
         """
+        
         # Validate inputs
         if capacity <= 0:
-            raise ValueError("Edge capacity can not be negative")
-        if loss_factor < 0 or loss_factor>1:
+            raise ValueError("Edge capacity cannot be negative")
+        if loss_factor < 0 or loss_factor > 1:
             raise ValueError("Edge loss factor must be between 0 and 1")
          
         self.source = source
@@ -61,8 +73,25 @@ class Edge:
 
         # Try to connect nodes
         try:
-            self.source.add_outflow_edge(self)
-            self.target.add_inflow_edge(self)
+            # Define valid node type connections
+            if isinstance(source, (SupplyNode, RunoffNode)):
+                # Supply and RunoffNodes should only have add_outflow_edge
+                source.add_outflow_edge(self)
+            elif isinstance(source, (StorageNode, DemandNode, HydroWorks)):
+                # These nodes have both inflow and outflow
+                source.add_outflow_edge(self)
+            else:
+                raise AttributeError(f"Invalid source node type: {type(source).__name__}")
+            
+            if isinstance(target, SinkNode):
+                # SinkNodes should only have add_inflow_edge
+                target.add_inflow_edge(self)
+            elif isinstance(target, (StorageNode, DemandNode, HydroWorks)):
+                # These nodes have both inflow and outflow
+                target.add_inflow_edge(self)
+            else:
+                raise AttributeError(f"Invalid target node type: {type(target).__name__}")
+                
         except AttributeError as e:
             raise AttributeError(f"Failed to connect nodes: {str(e)}")
 
@@ -96,7 +125,7 @@ class Edge:
             elif isinstance(self.source, SupplyNode):
                 # Special case for SupplyNodes which don't pre-calculate their outflows
                 try:
-                    supply_rate = self.source.get_supply_rate(time_step)
+                    supply_rate = self.source.supply_rates[time_step]
                     input_flow = min(supply_rate, self.capacity)
                 except Exception as e:
                     print(f"Warning: Failed to get supply rate: {str(e)}. Setting input flow to 0.")

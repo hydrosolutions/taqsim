@@ -1,8 +1,7 @@
 """
 This module defines the various types of nodes that can exist in a water system simulation.
 
-The module provides a hierarchical structure of node classes for water system modeling:
-- Base Node: The fundamental building block for all system components.
+The module provides specialized node classes for water system modeling:
 - SupplyNode: Water sources (rivers, intakes) that provide inflow to the system.
 - SinkNode: Terminal points where water exits the system with minimum flow requirements.
 - DemandNode: Consumption points (agriculture, domestic, industrial) with specific water demands.
@@ -16,7 +15,7 @@ maintaining compatibility with the overall water system architecture.
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 
 class TimeSeriesImport:
     """
@@ -78,7 +77,6 @@ class TimeSeriesImport:
             
         return [0.0] * num_time_steps  # Default to zero if import fails or is invalid
 
-
     def import_time_series(
         self,
         csv_file: str,
@@ -121,85 +119,7 @@ class TimeSeriesImport:
         except Exception as e:
             raise ValueError(f"Failed to import time series data: {str(e)}")
 
-class Node:
-    """
-    Base class for all types of nodes in the water system.
-    
-    The Node class provides the fundamental structure for water system components,
-    defining the core attributes and methods that are common to all node types. 
-    Specialized node types inherit from this class and extend its functionality.
-
-    Attributes:
-        id (str): A unique identifier for the node.
-        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
-        outflow_edges (dict): A dictionary of outflow edges, keyed by the target node's id.
-        easting (float): The easting coordinate of the node (UTM coordinate system).
-        northing (float): The northing coordinate of the node (UTM coordinate system).
-    """
-
-    def __init__(self, id: str, easting: Optional[float] = None, northing: Optional[float] = None) -> None:
-        """
-        Initialize a Node object.
-
-        Args:
-            id (str): A unique identifier for the node.
-            easting (float): The easting coordinate of the node in UTM system.
-            northing (float): The northing coordinate of the node in UTM system.
-
-        Raises:
-            ValueError: If id is empty or coordinates are invalid/missing.
-        """
-        if not id or not isinstance(id, str):
-            raise ValueError(f"Invalid node ID: {id}")
-        
-        if easting is None or northing is None:
-            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
-        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
-            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
-
-
-        self.id = id
-        self.inflow_edges = {}  # Dictionary of inflow edges
-        self.outflow_edges = {}  # Dictionary of outflow edges
-        self.easting = easting # easting coordinate of the node in UTM system
-        self.northing = northing # northing coordinate of the node in UTM system
-
-    def add_inflow_edge(self, edge):
-        """
-        Add an inflow edge to the node.
-        
-        This method registers an incoming connection from another node.
-
-        Args:
-            edge (Edge): The edge to be added as an inflow.
-        """
-        self.inflow_edges[edge.source.id] = edge
-
-    def add_outflow_edge(self, edge):
-        """
-        Add an outflow edge to the node.
-        
-        This method registers an outgoing connection to another node.
-
-        Args:
-            edge (Edge): The edge to be added as an outflow.
-        """
-        self.outflow_edges[edge.target.id] = edge
-
-    def update(self, time_step: int, dt: float):
-        """
-        Update the node's state for the given time step.
-        
-        This is a base method that should be overridden by subclasses to implement
-        node-specific behavior for each time step of the simulation.
-
-        Args:
-            time_step (int): The current time step index of the simulation.
-            dt (float): Duration of the time step in seconds.
-        """
-        pass
-
-class SupplyNode(Node, TimeSeriesImport):
+class SupplyNode(TimeSeriesImport):
     """
     Represents a water supply source in the system.
     
@@ -208,8 +128,12 @@ class SupplyNode(Node, TimeSeriesImport):
     a time-varying rate loaded from a CSV file.
 
     Attributes:
+        id (str): A unique identifier for the node.
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
         supply_rates (list): A list of water supply rates [m³/s] for each time step.
         supply_history (list): A record of actual supply amounts [m³/s] for each time step.
+        outflow_edge: The single outflow edge from this node.
     """
 
     def __init__(
@@ -240,7 +164,19 @@ class SupplyNode(Node, TimeSeriesImport):
             Supply data priority: CSV file (if valid) > constant_supply_rate > zeros.
             This allows flexible specification of supply rates based on available data.
         """
-        super().__init__(id, easting, northing)
+        # Validate inputs
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+
+        self.id = id
+        self.easting = easting  # easting coordinate of the node in UTM system
+        self.northing = northing  # northing coordinate of the node in UTM system
+        self.outflow_edge = None  # Single outflow edge
         self.supply_history = []
 
         # Try to import time series data first
@@ -258,12 +194,25 @@ class SupplyNode(Node, TimeSeriesImport):
         else:
             self.supply_rates = [0]*num_time_steps
 
+    def add_outflow_edge(self, edge):
+        """
+        Set the outflow edge from this node.
+        
+        Args:
+            edge (Edge): The edge to be set as the outflow.
+            
+        Raises:
+            ValueError: If an outflow edge is already set.
+        """
+        if self.outflow_edge is not None:
+            raise ValueError(f"SupplyNode {self.id} already has an outflow edge. Only one outflow edge is allowed.")
+        self.outflow_edge = edge
+
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the SupplyNode's state for the given time step.
         
-        This method calculates the current supply rate and distributes it proportionally
-        among outflow edges based on their capacities.
+        This method calculates the current supply rate and sends it to the outflow edge.
 
         Args:
             time_step (int): The current time step index of the simulation.
@@ -277,21 +226,19 @@ class SupplyNode(Node, TimeSeriesImport):
             current_supply_rate = self.supply_rates[time_step]
             self.supply_history.append(current_supply_rate)
 
-            # Calculate total outflow capacity and distribute water proportionally
-            total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
-            if total_capacity > 0:
-                # Distribute water proportionally to capacity
-                edge_flow = current_supply_rate / total_capacity
-                for edge in self.outflow_edges.values():
-                    edge.update(time_step, edge.capacity * edge_flow)
+            # Update the outflow edge
+            if self.outflow_edge is not None:
+                # The flow is limited by the edge capacity
+                flow = min(current_supply_rate, self.outflow_edge.capacity)
+                self.outflow_edge.update(time_step, flow)
             else:
-                # If no capacity, no flow
-                for edge in self.outflow_edges.values():
-                    edge.update(time_step, 0)
+                # No outflow edge
+                pass
+                
         except Exception as e:
             raise ValueError(f"Failed to update supply node {self.id}: {str(e)}")
 
-class SinkNode(Node, TimeSeriesImport):
+class SinkNode(TimeSeriesImport):
     """
     Represents a point where water exits the system with minimum flow requirements.
     
@@ -302,10 +249,13 @@ class SinkNode(Node, TimeSeriesImport):
     
     Attributes:
         id (str): Unique identifier for the node
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
         min_flows (list): List of minimum required flow rates [m³/s] for each timestep
         flow_history (list): Record of actual flows [m³/s] for each timestep
         flow_deficits (list): Record of flow requirement deficits [m³/s] for each timestep
         weight (float): Weight factor for minimum flow violations in optimization
+        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
     """
 
     def __init__(
@@ -341,7 +291,19 @@ class SinkNode(Node, TimeSeriesImport):
             Minimum flow data priority: CSV file (if valid) > constant_min_flow > zeros.
             This allows flexible specification of minimum flows based on available data.
         """
-        super().__init__(id, easting, northing)
+        # Validate inputs
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+        
+        self.id = id
+        self.easting = easting
+        self.northing = northing
+        self.inflow_edges = {}  # Dictionary of inflow edges
         
         if weight <= 0:
             raise ValueError("Weight must be positive")
@@ -365,6 +327,15 @@ class SinkNode(Node, TimeSeriesImport):
             self.min_flows = [constant_min_flow]*num_time_steps    
         else:
             self.min_flows = [0]*num_time_steps
+    
+    def add_inflow_edge(self, edge):
+        """
+        Add an inflow edge to the node.
+        
+        Args:
+            edge (Edge): The edge to be added as an inflow.
+        """
+        self.inflow_edges[edge.source.id] = edge
             
     def update(self, time_step: int, dt: float) -> None:
         """
@@ -390,8 +361,8 @@ class SinkNode(Node, TimeSeriesImport):
             
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
-    
-class DemandNode(Node, TimeSeriesImport):
+
+class DemandNode(TimeSeriesImport):
     """
     Represents a point of water demand in the system.
     
@@ -401,11 +372,16 @@ class DemandNode(Node, TimeSeriesImport):
     Efficiency factors can be applied to model system losses.
 
     Attributes:
+        id (str): A unique identifier for the node.
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
         demand_rates (list): List of total demand rates [m³/s] for each time step
         field_efficiency (float): Efficiency of water use at the field/end-use level (0-1)
         conveyance_efficiency (float): Efficiency of the water delivery system (0-1)
         non_consumptive_rate (float): Flow rate [m³/s] that returns to the system
         weight (float): Weight factor for demand shortfalls in optimization
+        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
+        outflow_edge: The single outflow edge from this node.
         satisfied_consumptive_demand (list): Record of met consumptive demand [m³/s]
         satisfied_non_consumptive_demand (list): Record of met non-consumptive demand [m³/s]
         satisfied_demand_total (list): Record of total satisfied demand [m³/s]
@@ -452,7 +428,20 @@ class DemandNode(Node, TimeSeriesImport):
             water requirements. When efficiencies < 1, more water is required to 
             satisfy the same net demand.
         """
-        super().__init__(id, easting, northing)
+        # Validate inputs
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+
+        self.id = id
+        self.easting = easting
+        self.northing = northing
+        self.inflow_edges = {}  # Dictionary of inflow edges
+        self.outflow_edge = None  # Single outflow edge
 
         # Validate field efficiency
         if not isinstance(field_efficiency, (int, float)):
@@ -521,6 +510,29 @@ class DemandNode(Node, TimeSeriesImport):
             # Default to zero demand if no other information provided
             self.demand_rates = [0] * num_time_steps
 
+    def add_inflow_edge(self, edge):
+        """
+        Add an inflow edge to the node.
+        
+        Args:
+            edge (Edge): The edge to be added as an inflow.
+        """
+        self.inflow_edges[edge.source.id] = edge
+
+    def add_outflow_edge(self, edge):
+        """
+        Set the outflow edge from this node.
+        
+        Args:
+            edge (Edge): The edge to be set as the outflow.
+            
+        Raises:
+            ValueError: If an outflow edge is already set.
+        """
+        if self.outflow_edge is not None:
+            raise ValueError(f"DemandNode {self.id} already has an outflow edge. Only one outflow edge is allowed.")
+        self.outflow_edge = edge
+
     def update(self, time_step: int, dt: float) -> None:
         """
         Update the DemandNode's state for the given time step.
@@ -529,7 +541,7 @@ class DemandNode(Node, TimeSeriesImport):
         1. Calculates total inflow from all incoming edges
         2. Satisfies consumptive demand first (water that leaves the system)
         3. Satisfies non-consumptive demand (water that returns to the system)
-        4. Routes any remaining water to outflow edges
+        4. Routes any remaining water to outflow edge
 
         Args:
             time_step (int): The current time step index of the simulation
@@ -559,23 +571,17 @@ class DemandNode(Node, TimeSeriesImport):
             total_satisfied = satisfied_consumptive + satisfied_non_consumptive
             self.satisfied_demand_total.append(total_satisfied)
 
-            # Forward flow to outflow edges (excess + satisfied non-consumptive)
+            # Forward flow to outflow edge (excess + satisfied non-consumptive)
             total_forward_flow = remaining_flow
-            total_outflow_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
             
-            if total_outflow_capacity > 0:
-                # Distribute proportionally based on edge capacities
-                for edge in self.outflow_edges.values():
-                    edge_flow = (edge.capacity / total_outflow_capacity) * total_forward_flow
-                    edge.update(time_step, edge_flow)
-            else:
-                # If no outflow capacity, set flow to zero
-                for edge in self.outflow_edges.values():
-                    edge.update(time_step, 0)
+            # Update the outflow edge with the forwarded flow
+            if self.outflow_edge is not None:
+                self.outflow_edge.update(time_step, min(total_forward_flow, self.outflow_edge.capacity))
+                
         except Exception as e:
             raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
 
-class StorageNode(Node, TimeSeriesImport):  
+class StorageNode(TimeSeriesImport):  
     """
     Represents a reservoir or storage facility in the water system.
     
@@ -584,6 +590,9 @@ class StorageNode(Node, TimeSeriesImport):
     It also accounts for evaporation losses and spillway flows when capacity is exceeded.
 
     Attributes:
+        id (str): Unique identifier for the node
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
         capacity (float): Maximum storage volume [m³]
         dead_storage (float): Minimum operational storage volume [m³]
         storage (list): Record of storage volumes [m³] for each time step
@@ -593,6 +602,8 @@ class StorageNode(Node, TimeSeriesImport):
         spillway_register (list): Record of excess water volumes [m³] spilled
         release_params (dict): Parameters controlling reservoir release policy
         buffer_coef (float): Coefficient for controlling releases at low storage levels
+        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
+        outflow_edge: The single outflow edge from this node.
     """
 
     def __init__(
@@ -634,13 +645,26 @@ class StorageNode(Node, TimeSeriesImport):
             The relationship is used to calculate water levels from volumes and vice versa.
             Evaporation losses are calculated based on water surface area and evaporation rates.
         """
-        # Call parent class (Node) initialization
-        super().__init__(id, easting, northing)
+        # Validate inputs
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+
+        self.id = id
+        self.easting = easting
+        self.northing = northing
+        self.inflow_edges = {}  # Dictionary of inflow edges
+        self.outflow_edge = None  # Single outflow edge
         
         # Initialize StorageNode specific attributes
         self._level_to_volume = None
         self._volume_to_level = None
         self.evaporation_losses = []
+        
         # Load height-volume-area data
         self._load_hv_data(hv_file)
         
@@ -648,8 +672,6 @@ class StorageNode(Node, TimeSeriesImport):
             raise ValueError(f"buffer_coef ({buffer_coef}) must be between 0 and 1")
 
         self.buffer_coef = buffer_coef  # Buffer coefficient for low storage
-
- 
         self.dead_storage = dead_storage  # Dead storage volume [m³]
         self.dead_storage_level = self._volume_to_level(dead_storage)
         
@@ -662,7 +684,6 @@ class StorageNode(Node, TimeSeriesImport):
         
         self.evaporation_rates = imported_data if imported_data is not None else [0] * num_time_steps
 
-
         # Validate initial storage against capacity
         if initial_storage > self.capacity:
             raise ValueError(f"Initial storage ({initial_storage} m³) exceeds maximum capacity ({self.capacity} m³)")
@@ -671,6 +692,29 @@ class StorageNode(Node, TimeSeriesImport):
         self.storage = [initial_storage]
         self.spillway_register = []
         self.water_level = [self._volume_to_level(initial_storage)]
+
+    def add_inflow_edge(self, edge):
+        """
+        Add an inflow edge to the node.
+        
+        Args:
+            edge (Edge): The edge to be added as an inflow.
+        """
+        self.inflow_edges[edge.source.id] = edge
+
+    def add_outflow_edge(self, edge):
+        """
+        Set the outflow edge from this node.
+        
+        Args:
+            edge (Edge): The edge to be set as the outflow.
+            
+        Raises:
+            ValueError: If an outflow edge is already set.
+        """
+        if self.outflow_edge is not None:
+            raise ValueError(f"StorageNode {self.id} already has an outflow edge. Only one outflow edge is allowed.")
+        self.outflow_edge = edge
 
     def set_release_params(self, params: Dict[str, Union[float, List[float]]]) -> None:
         """
@@ -794,7 +838,7 @@ class StorageNode(Node, TimeSeriesImport):
         # Case 4: Above conservation zone
         else:
             # Release at least target volume, plus any excess above V2, limited by capacity
-            flood_release = min(max(Vr, volume - V2), sum(edge.capacity for edge in self.outflow_edges.values()) * dt)
+            flood_release = min(max(Vr, volume - V2), self.outflow_edge.capacity * dt if self.outflow_edge else 0)
             # Convert from volume to rate
             return flood_release      
     
@@ -933,16 +977,12 @@ class StorageNode(Node, TimeSeriesImport):
             # Limit actual outflow to available water
             actual_outflow_volume = min(available_water, requested_outflow_volume)
             
-             # Calculate total outflow capacity
-            #total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
-            # Distribute actual outflow among edges proportionally
-            if actual_outflow_volume > 0:
-                for edge in self.outflow_edges.values():
-                    edge_flow_rate = actual_outflow_volume / dt
-                    edge.update(time_step, edge_flow_rate)
-            else:
-                for edge in self.outflow_edges.values():
-                    edge.update(time_step, 0)
+            # Update the outflow edge with the calculated outflow
+            if self.outflow_edge is not None and actual_outflow_volume > 0:
+                edge_flow_rate = actual_outflow_volume / dt
+                self.outflow_edge.update(time_step, edge_flow_rate)
+            elif self.outflow_edge is not None:
+                self.outflow_edge.update(time_step, 0)
             
             # Calculate new storage
             new_storage = available_water - actual_outflow_volume
@@ -963,7 +1003,7 @@ class StorageNode(Node, TimeSeriesImport):
             # Log the error and attempt to maintain last known state
             print(f"Error updating storage node {self.id}: {str(e)}")
 
-class HydroWorks(Node):
+class HydroWorks():
     """
     Represents a water distribution point that splits flow according to predefined ratios.
     
@@ -977,8 +1017,12 @@ class HydroWorks(Node):
 
     Attributes:
         id (str): Unique identifier for the node
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
         distribution_params (dict): Maps target node IDs to their distribution parameters
         spill_register (list): Record of spill volumes that couldn't be accommodated
+        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
+        outflow_edges (dict): A dictionary of outflow edges, keyed by the target node's id.
     """
 
     def __init__(self, id: str, easting: float, northing: float) -> None:
@@ -994,9 +1038,40 @@ class HydroWorks(Node):
             After initialization, the set_distribution_parameters method must be called
             to define how water should be distributed among outflow edges.
         """
-        super().__init__(id, easting, northing)
+        # Validate inputs
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+
+        self.id = id
+        self.easting = easting
+        self.northing = northing
+        self.inflow_edges = {}  # Dictionary of inflow edges
+        self.outflow_edges = {}  # Dictionary of outflow edges - HydroWorks can have multiple outflows
         self.distribution_params = {}
         self.spill_register = []
+
+    def add_inflow_edge(self, edge):
+        """
+        Add an inflow edge to the node.
+        
+        Args:
+            edge (Edge): The edge to be added as an inflow.
+        """
+        self.inflow_edges[edge.source.id] = edge
+
+    def add_outflow_edge(self, edge):
+        """
+        Add an outflow edge to the node.
+        
+        Args:
+            edge (Edge): The edge to be added as an outflow.
+        """
+        self.outflow_edges[edge.target.id] = edge
 
     def set_distribution_parameters(self, parameters: Dict[str, Union[float, List[float]]]) -> None:
         """
@@ -1158,7 +1233,7 @@ class HydroWorks(Node):
         except Exception as e:
             raise ValueError(f"Failed to update hydroworks node {self.id}: {str(e)}")
         
-class RunoffNode(Node, TimeSeriesImport):
+class RunoffNode(TimeSeriesImport):
     """
     Represents a runoff generation area in the water system.
     
@@ -1169,10 +1244,13 @@ class RunoffNode(Node, TimeSeriesImport):
 
     Attributes:
         id (str): Unique identifier for the node
+        easting (float): The easting coordinate of the node (UTM coordinate system).
+        northing (float): The northing coordinate of the node (UTM coordinate system).
         area (float): Catchment area [km²]
         runoff_coefficient (float): Fraction of rainfall that becomes runoff (0-1)
         rainfall_data (list): Precipitation depths [mm] for each time step
         runoff_history (list): Record of generated runoff [m³/s] for each time step
+        outflow_edge: The single outflow edge from this node.
     """
 
     def __init__(
@@ -1210,7 +1288,19 @@ class RunoffNode(Node, TimeSeriesImport):
             This is a simplified approach that does not account for infiltration,
             evapotranspiration, or other complex hydrological processes.
         """
-        super().__init__(id, easting, northing)
+        # Validate inputs
+        if not id or not isinstance(id, str):
+            raise ValueError(f"Invalid node ID: {id}")
+        
+        if easting is None or northing is None:
+            raise ValueError(f"Missing coordinate value for node {id}: easting={easting}, northing={northing}")
+        if not isinstance(easting, (int, float)) or not isinstance(northing, (int, float)):
+            raise ValueError(f"Invalid coordinate type for node {id}: easting={easting}, northing={northing}")
+        
+        self.id = id
+        self.easting = easting
+        self.northing = northing
+        self.outflow_edge = None  # Single outflow edge
         
         # Validate inputs
         if area <= 0:
@@ -1231,7 +1321,21 @@ class RunoffNode(Node, TimeSeriesImport):
         if not self.rainfall_data and num_time_steps:
             self.rainfall_data = [0] * num_time_steps
             print(f"Warning: No rainfall data provided for RunoffNode '{id}'. Initializing with zeros.")
-    
+
+    def add_outflow_edge(self, edge):
+        """
+        Set the outflow edge from this node.
+        
+        Args:
+            edge (Edge): The edge to be set as the outflow.
+            
+        Raises:
+            ValueError: If an outflow edge is already set.
+        """
+        if self.outflow_edge is not None:
+            raise ValueError(f"RunoffNode {self.id} already has an outflow edge. Only one outflow edge is allowed.")
+        self.outflow_edge = edge
+
     def calculate_runoff(self, rainfall: float, dt: float) -> float:
         """
         Calculate runoff using a simple runoff coefficient approach.
@@ -1291,22 +1395,16 @@ class RunoffNode(Node, TimeSeriesImport):
             
             # Store runoff in history
             self.runoff_history.append(runoff)
+
+            # Update the outflow edge
+            if self.outflow_edge is not None:
+                # The flow is limited by the edge capacity
+                flow = min(runoff, self.outflow_edge.capacity)
+                self.outflow_edge.update(time_step, flow)
             
-            # Update outflow edges
-            total_capacity = sum(edge.capacity for edge in self.outflow_edges.values())
-            
-            if total_capacity > 0:
-                # Distribute runoff proportionally based on edge capacities
-                for edge in self.outflow_edges.values():
-                    edge_flow = (edge.capacity / total_capacity) * runoff
-                    edge.update(time_step, min(edge_flow, edge.capacity))
             else:
-                # If no capacity, set flow to zero
-                for edge in self.outflow_edges.values():
-                    edge.update(time_step, 0)
+                pass
                     
         except Exception as e:
             print(f"Error updating RunoffNode {self.id}: {str(e)}")
             self.runoff_history.append(0)
-            for edge in self.outflow_edges.values():
-                edge.update(time_step, 0)

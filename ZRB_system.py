@@ -474,12 +474,10 @@ def run_optimization(
     ZRB_system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(ZRB_system, name=f'ZRB_optimization_{system_type}')
-    vis.plot_storage_dynamics()
     vis.plot_reservoir_dynamics()
     vis.plot_spills()
     vis.plot_reservoir_volumes()
     vis.plot_system_demands_vs_inflow()
-    vis.plot_objective_function_breakdown()
     vis.print_water_balance_summary()
     vis.plot_demand_deficit_heatmap()
     vis.plot_network_overview()
@@ -617,9 +615,10 @@ def run_simulation(
     
     # Load optimized parameters
     system = load_optimized_parameters(system, optimization_results)
-    
+    print("Optimized parameters loaded successfully")
     # Run simulation
     system.simulate(num_time_steps)
+    print("Simulation complete")
 
     vis=WaterSystemVisualizer(system, name=f'ZRB_simulation_{system_type}')
     vis.plot_network_layout()
@@ -636,9 +635,9 @@ def run_simulation(
 # Run the sample tests
 if __name__ == "__main__":
 
-    optimization = True
+    optimization = False
     simulation = False
-    multiobjective = False
+    multiobjective = True
 
     start = datetime.now()
 
