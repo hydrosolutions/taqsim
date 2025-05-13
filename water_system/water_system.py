@@ -314,7 +314,7 @@ class WaterSystem:
                 # Calculate inflows to SinkNode from edges
                 for source_id in node.inflow_edges:
                     edge = node.inflow_edges[source_id]
-                    outflow_rates = np.array([edge.get_edge_flow_after_losses(t) for t in time_steps])
+                    outflow_rates = np.array([edge.flow_after_losses[t] for t in time_steps])
                     sink += outflow_rates * self.dt
         
         # Calculate edge losses across the entire network

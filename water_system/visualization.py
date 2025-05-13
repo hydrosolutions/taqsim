@@ -38,17 +38,17 @@ def get_node_outflow(node, time_step):
     if isinstance(node, (SupplyNode, StorageNode, DemandNode, RunoffNode)):
         # New structure with single outflow_edge
         if hasattr(node, 'outflow_edge') and node.outflow_edge is not None:
-            return node.outflow_edge.get_edge_flow_before_losses(time_step)
+            return node.outflow_edge.flow_before_losses[time_step]
         return 0
     elif isinstance(node, HydroWorks):
         # HydroWorks still has outflow_edges dictionary
-        return sum(edge.get_edge_flow_before_losses(time_step) for edge in node.outflow_edges.values())
+        return sum(edge.flow_before_losses[time_step] for edge in node.outflow_edges.values())
     else:
         # Fallback for unknown node types
         if hasattr(node, 'outflow_edges') and node.outflow_edges:
-            return sum(edge.get_edge_flow_before_losses(time_step) for edge in node.outflow_edges.values())
+            return sum(edge.flow_before_losses[time_step] for edge in node.outflow_edges.values())
         elif hasattr(node, 'outflow_edge') and node.outflow_edge is not None:
-            return node.outflow_edge.get_edge_flow_before_losses(time_step)
+            return node.outflow_edge.flow_before_losses[time_step]
         return 0
 
 # Helper function for getting node outflow capacity
@@ -178,7 +178,7 @@ class WaterSystemVisualizer:
                 node = node_data['node']
                 try:
                     # Use inflow_edges directly - should work with all node types
-                    inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in node.inflow_edges.values()) \
+                    inflow = sum(edge.flow_after_losses[time_step] for edge in node.inflow_edges.values()) \
                             if hasattr(node, 'inflow_edges') else 0
                     
                     # Use helper function for outflow
@@ -288,7 +288,7 @@ class WaterSystemVisualizer:
             ax2 = ax1.twinx()  # Create second y-axis for waterlevel
             
             # Calculate total inflow for each timestep
-            inflows = [sum(edge.get_edge_flow_after_losses(t) for edge in node.inflow_edges.values())
+            inflows = [sum(edge.flow_after_losses[t] for edge in node.inflow_edges.values())
                     for t in time_steps]
             
             # Calculate total outflow for each timestep using helper function

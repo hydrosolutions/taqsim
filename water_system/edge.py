@@ -1,4 +1,3 @@
-import math
 """
 This module defines the Edge class, which represents a connection between two nodes in a water system.
 
@@ -6,8 +5,10 @@ The Edge class is responsible for managing the flow of water between nodes and e
 It supports specialized node types: SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, and RunoffNode.
 """
 
+import math
 from typing import Optional, Tuple, Union, Any
 from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
+from .validation_functions import validate_nonnegativity_int_or_float, validate_probability
 
 # Forward references for type hints - these are imported in the Edge class
 # but need to be referenced in type annotations
@@ -56,13 +57,11 @@ class Edge:
             ValueError: If invalid parameters are provided (negative capacity, loss_factor, or length).
             AttributeError: If nodes cannot be connected or lack required attributes.
         """
-        
-        # Validate inputs
-        if capacity <= 0:
-            raise ValueError("Edge capacity cannot be negative")
-        if loss_factor < 0 or loss_factor > 1:
-            raise ValueError("Edge loss factor must be between 0 and 1")
-         
+        # Validate capacity
+        validate_nonnegativity_int_or_float(capacity, "Edge capacity")
+        # Validate loss factor
+        validate_probability(loss_factor, "Edge loss factor")
+
         self.source = source
         self.target = target
         self.capacity = capacity
@@ -70,6 +69,17 @@ class Edge:
         self.flow_after_losses = []
         self.flow_before_losses = []
         self.losses = []
+
+        # Set or calculate length
+        if length is not None:
+            validate_nonnegativity_int_or_float(length, "Edge length")
+            self.length = length
+        else:
+            try:
+                self.length = self.get_edge_length()
+            except AttributeError:
+                print(f"Warning: Could not calculate edge length from coordinates. Using length = 0.")
+                self.length = 0
 
         # Try to connect nodes
         try:
@@ -95,19 +105,7 @@ class Edge:
         except AttributeError as e:
             raise AttributeError(f"Failed to connect nodes: {str(e)}")
 
-        # Set or calculate length
-        if length is not None:
-            if length < 0:
-                raise ValueError("Edge length cannot be negative")
-            self.length = length
-        else:
-            try:
-                self.length = self.get_edge_length()
-            except AttributeError:
-                print(f"Warning: Could not calculate edge length from coordinates. Using length = 0.")
-                self.length = 0
-
-    def update(self, time_step: int, flow: Optional[float] = None) -> None:
+    def update(self, flow: Optional[float] = None) -> None:
         """
         Update the flow of the edge for the given time step, accounting for losses.
 
@@ -116,22 +114,10 @@ class Edge:
             flow (float, optional): The flow value to set for this time step
         """
         try:
-            if flow is not None:
-                # Use provided flow (already calculated by source node)
-                if flow < 0:
-                    print(f"Warning: Negative flow value ({flow}) provided, setting to 0")
-                    flow = 0
-                input_flow = min(flow, self.capacity)
-            elif isinstance(self.source, SupplyNode):
-                # Special case for SupplyNodes which don't pre-calculate their outflows
-                try:
-                    supply_rate = self.source.supply_rates[time_step]
-                    input_flow = min(supply_rate, self.capacity)
-                except Exception as e:
-                    print(f"Warning: Failed to get supply rate: {str(e)}. Setting input flow to 0.")
-                    input_flow = 0
-            else:
+            if flow is None or flow < 0:
                 input_flow = 0
+            else:
+                input_flow = min(flow, self.capacity)
             
             # Record the inflow before losses
             self.flow_before_losses.append(input_flow)
@@ -146,38 +132,6 @@ class Edge:
             self.flow_before_losses.append(0)
             self.flow_after_losses.append(0)
             self.losses.append(0)
-
-    def get_edge_flow_before_losses(self, time_step: int) -> float:
-        """
-        Get the inflow value for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the inflow value.
-
-        Returns:
-            float: The inflow value for the specified time step, or 0 if the time step is out of range.
-        """
-        try:
-            return self.flow_before_losses[time_step] if time_step < len(self.flow_before_losses) else 0
-        except Exception as e:
-            print(f"Error retrieving edge inflow for time step {time_step}: {str(e)}")
-            return 0
-
-    def get_edge_flow_after_losses(self, time_step: int) -> float:
-        """
-        Get the outflow value for a specific time step.
-
-        Args:
-            time_step (int): The time step for which to retrieve the outflow value.
-
-        Returns:
-            float: The outflow value for the specified time step, or 0 if the time step is out of range.
-        """
-        try:
-            return self.flow_after_losses[time_step] if time_step < len(self.flow_after_losses) else 0
-        except Exception as e:
-            print(f"Error retrieving edge outflow for time step {time_step}: {str(e)}")
-            return 0
     
     def get_edge_length(self) -> float:
         """

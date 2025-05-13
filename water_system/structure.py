@@ -176,7 +176,7 @@ class SupplyNode:
             if self.outflow_edge is not None:
                 # The flow is limited by the edge capacity
                 flow = min(current_supply_rate, self.outflow_edge.capacity)
-                self.outflow_edge.update(time_step, flow)
+                self.outflow_edge.update(flow)
             else:
                 # No outflow edge
                 pass
@@ -294,7 +294,7 @@ class SinkNode:
         """
         try:
             # Calculate total inflow for this timestep from all incoming edges
-            total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
+            total_inflow = sum(edge.flow_after_losses[time_step] for edge in self.inflow_edges.values())
             
             # Record the actual flow and deficit (if any)
             self.flow_history.append(total_inflow)
@@ -473,7 +473,7 @@ class DemandNode:
         """
         try:
             # Calculate total inflow from all incoming edges
-            total_inflow = sum(edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values())
+            total_inflow = sum(edge.flow_after_losses[time_step] for edge in self.inflow_edges.values())
             current_demand = self.demand_rates[time_step] # Total demand for this timestep (consumptive + non-consumptive)
             non_consumptive_rate = self.non_consumptive_rate # Non-consumptive demand
             
@@ -497,7 +497,7 @@ class DemandNode:
             
             # Update the outflow edge with the forwarded flow
             if self.outflow_edge is not None:
-                self.outflow_edge.update(time_step, min(total_forward_flow, self.outflow_edge.capacity))
+                self.outflow_edge.update(min(total_forward_flow, self.outflow_edge.capacity))
                 
         except Exception as e:
             raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
@@ -870,7 +870,7 @@ class StorageNode:
             other gains and losses are accounted for.
         """
         try:
-            inflow = np.sum([edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values()])
+            inflow = np.sum([edge.flow_after_losses[time_step] for edge in self.inflow_edges.values()])
             previous_storage = self.storage[-1]
             
             # Convert flow rates (m³/s) to volumes (m³) for the time step
@@ -896,9 +896,9 @@ class StorageNode:
             # Update the outflow edge with the calculated outflow
             if self.outflow_edge is not None and actual_outflow_volume > 0:
                 edge_flow_rate = actual_outflow_volume / dt
-                self.outflow_edge.update(time_step, edge_flow_rate)
+                self.outflow_edge.update(edge_flow_rate)
             elif self.outflow_edge is not None:
-                self.outflow_edge.update(time_step, 0)
+                self.outflow_edge.update(0)
             
             # Calculate new storage
             new_storage = available_water - actual_outflow_volume
@@ -1074,7 +1074,7 @@ class HydroWorks:
         """
         try:
             # Calculate total inflow
-            total_inflow = np.sum([edge.get_edge_flow_after_losses(time_step) for edge in self.inflow_edges.values()])
+            total_inflow = np.sum([edge.flow_after_losses[time_step] for edge in self.inflow_edges.values()])
             
             # Verify distribution parameters are properly set
             if not self.distribution_params:
@@ -1135,7 +1135,7 @@ class HydroWorks:
             
             # Apply the final flows to edges
             for edge_id, flow in target_flows.items():
-                self.outflow_edges[edge_id].update(time_step, flow)
+                self.outflow_edges[edge_id].update(flow)
             
             if abs(total_spill) < 1e-5:  # Consider values less than 5e-10 m³ as zero
                 total_spill = 0
@@ -1295,7 +1295,7 @@ class RunoffNode:
             if self.outflow_edge is not None:
                 # The flow is limited by the edge capacity
                 flow = min(runoff, self.outflow_edge.capacity)
-                self.outflow_edge.update(time_step, flow)
+                self.outflow_edge.update(flow)
             
             else:
                 pass
