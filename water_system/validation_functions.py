@@ -139,6 +139,40 @@ def validate_nonnegativity_int_or_float(value: Any, name: str = "Value"):
     
     return value
 
+def validate_dataframe_period(df: pd.DataFrame, 
+                            start_year: int,
+                            start_month: int,
+                            num_time_steps: int, 
+                            column_name: str,) -> pd.DataFrame:
+    """
+    Validate that a DataFrame's dates match the requested simulation period.
+    
+    Args:
+        df: DataFrame containing the time series data
+        date_column: Name of the column containing dates
+        start_year: Starting year
+        start_month: Starting month (1-12)
+        num_time_steps: Expected number of time steps
+        
+    Returns:
+        pd.DataFrame: The validated DataFrame
+        
+    Raises:
+        ValueError: If the DataFrame doesn't match the requested period
+    """ 
+    expected_start = pd.Timestamp(year=start_year, month=start_month, day=1)
+    expected_dates = pd.date_range(expected_start, periods=num_time_steps, freq='MS')
+
+    if 'Date' not in df.columns or column_name not in df.columns:
+                raise ValueError(f"CSV file must contain 'Date' and '{column_name}' columns")
+    
+    if len(df) != num_time_steps:
+        raise ValueError(f"DataFrame has {len(df)} rows but expected {num_time_steps}")
+        
+    if not df['Date'].equals(pd.Series(expected_dates)):
+        raise ValueError(f"DataFrame dates do not match expected period starting {expected_start}")
+    
+    return df
 
 # TODO: Add more specific validation functions for different types of parameters
 def validate_file_exists(filepath: str, file_type: str = "File") -> str:
@@ -405,52 +439,6 @@ def validate_reservoir_parameters(params: Dict[str, List[float]],
             )
     
     return params
-
-def validate_efficiency(efficiency: Any, name: str = "Efficiency") -> float:
-    """
-    Validate that an efficiency value is between 0 and 1 (exclusive of 0).
-    
-    Args:
-        efficiency: The efficiency value to validate
-        name: Name of the efficiency parameter for error messages
-        
-    Returns:
-        float: The validated efficiency
-        
-    Raises:
-        ValueError: If the value is not a valid efficiency
-    """
-    if not isinstance(efficiency, (int, float, np.number)):
-        raise ValueError(f"{name} must be a number, got {type(efficiency).__name__}")
-    
-    efficiency = float(efficiency)
-    if efficiency <= 0 or efficiency > 1:
-        raise ValueError(f"{name} must be between 0 (exclusive) and 1 (inclusive), got {efficiency}")
-    
-    return efficiency
-
-def validate_weight(weight: Any, name: str = "Weight") -> float:
-    """
-    Validate that a weight value is positive.
-    
-    Args:
-        weight: The weight value to validate
-        name: Name of the weight parameter for error messages
-        
-    Returns:
-        float: The validated weight
-        
-    Raises:
-        ValueError: If the value is not a valid weight
-    """
-    if not isinstance(weight, (int, float, np.number)):
-        raise ValueError(f"{name} must be a number, got {type(weight).__name__}")
-    
-    weight = float(weight)
-    if weight <= 0:
-        raise ValueError(f"{name} must be positive, got {weight}")
-    
-    return weight
 
 def validate_csv_time_series(filepath: str, data_column: str, date_column: str = 'Date',
                           date_format: str = '%Y-%m-%d', min_value: float = None, 

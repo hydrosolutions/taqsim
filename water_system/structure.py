@@ -16,112 +16,60 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from typing import Dict, List, Optional, Union, Any
-from .validation_functions import validate_node_id, validate_coordinates, validate_positive_integer,validate_positive_float, validate_probability, validate_nonnegativity_int_or_float
+from .validation_functions import validate_node_id, validate_coordinates, validate_positive_integer,validate_positive_float, validate_probability, validate_nonnegativity_int_or_float, validate_dataframe_period
 
 
-class TimeSeriesImport:
+def initialize_time_series(
+    id: str,
+    csv_file: Optional[str] = None,
+    start_year: Optional[int] = None,
+    start_month: Optional[int] = None,
+    num_time_steps: int = 0,
+    column_name: str = 'Q'
+) -> List[float]:
     """
-    Base class for importing and managing time series data from CSV files.
+    Initialize time series data from a CSV file for a specified time period.
     
-    This class provides common functionality for nodes that need to import time-based data,
-    such as inflows, demands, evaporation rates, etc. It handles file reading, date filtering,
-    and error handling for time series operations.
+    Args:
+        id (str): Node identifier for error messages and logging
+        csv_file (str): Path to CSV file containing time series data
+        start_year (int): Starting year for the data extraction
+        start_month (int): Starting month (1-12) for the data extraction
+        num_time_steps (int): Number of time steps to import
+        column_name (str): Name of the column in CSV to import (default: 'Q' for flow)
+        
+    Returns:
+        list: Time series data extracted from the CSV, or zeros if import failed
+        
+    Note:
+        If CSV import fails or parameters are missing, returns an array of zeros
+        with length equal to num_time_steps to ensure simulation can continue.
     """
-    
-    def _initialize_time_series(
-        self,
-        id: str,
-        csv_file: Optional[str] = None,
-        start_year: Optional[int] = None,
-        start_month: Optional[int] = None,
-        num_time_steps: int = 0,
-        column_name: str = 'Q'
-    ) -> List[float]:
-        """
-        Initialize time series data from a CSV file for a specified time period.
-        
-        Args:
-            id (str): Node identifier for error messages and logging
-            csv_file (str): Path to CSV file containing time series data
-            start_year (int): Starting year for the data extraction
-            start_month (int): Starting month (1-12) for the data extraction
-            num_time_steps (int): Number of time steps to import
-            column_name (str): Name of the column in CSV to import (default: 'Q' for flow)
-            
-        Returns:
-            list: Time series data extracted from the CSV, or zeros if import failed
-            
-        Note:
-            If CSV import fails or parameters are missing, returns an array of zeros
-            with length equal to num_time_steps to ensure simulation can continue.
-        """
-        # If all CSV parameters are provided, try to import data
-        if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            try:
-                ts_data = self.import_time_series(csv_file, start_year, start_month, 
-                                                num_time_steps, column_name)
-                
-                # Check if data is valid (not empty and matches requested period)
-                if not (ts_data.empty or 
-                    ts_data['Date'].iloc[0] != pd.Timestamp(year=start_year, month=start_month, day=1) or 
-                    len(ts_data[column_name]) < num_time_steps):
-                    return ts_data[column_name].tolist()
-                
-                # Print warning for invalid data
-                print(f"Warning: Insufficient data in CSV file for node '{id}'")
-                print(f"Requested period: {start_year}-{start_month:02d} to "
-                    f"{pd.Timestamp(year=start_year, month=start_month, day=1) + pd.DateOffset(months=num_time_steps-1):%Y-%m}")
-                if not ts_data.empty:
-                    print(f"Available data range: {ts_data['Date'].min():%Y-%m} to {ts_data['Date'].max():%Y-%m}")   
-                
-            except Exception as e:
-                raise ValueError(f"Warning: Time series data import failed for node '{id}': {str(e)}")
-            
-        return [0.0] * num_time_steps  # Default to zero if import fails or is invalid
-
-    def import_time_series(
-        self,
-        csv_file: str,
-        start_year: int,
-        start_month: int,
-        num_time_steps: int,
-        column_name: str
-    ) -> pd.DataFrame:
-        """
-        Import time series data from a CSV file for a specified time period.
-        
-        Args:
-            csv_file (str): Path to the CSV file containing time series data
-            start_year (int): Starting year for the data extraction 
-            start_month (int): Starting month (1-12) for the data extraction
-            num_time_steps (int): Number of time steps (months) to import
-            column_name (str): Name of the column to import from the CSV
-            
-        Returns:
-            pd.DataFrame: Filtered DataFrame containing the requested data period
-            
-        Raises:
-            ValueError: If the CSV file is not found, has invalid format, or other import errors
-        """
+    # If all CSV parameters are provided, try to import data
+    if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
         try:
             # Read the CSV file into a pandas DataFrame
             time_series = pd.read_csv(csv_file, parse_dates=['Date'])
             
-            if 'Date' not in time_series.columns or column_name not in time_series.columns:
-                raise ValueError(f"CSV file must contain 'Date' and '{column_name}' columns")
+            # Validate the DataFrame structure
+            validate_dataframe_period(time_series, start_year, start_month, num_time_steps, column_name)
         
             # Filter the DataFrame to find the start point
             start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
             end_date = start_date + pd.DateOffset(months=num_time_steps)
             
-            return time_series[(time_series['Date'] >= start_date) & (time_series['Date'] < end_date)]
+            filtered_data = time_series[(time_series['Date'] >= start_date) & (time_series['Date'] < end_date)]
+            
+            return filtered_data[column_name].tolist()
             
         except FileNotFoundError:
             raise ValueError(f"Data file not found: {csv_file}")
         except Exception as e:
-            raise ValueError(f"Failed to import time series data: {str(e)}")
+            raise ValueError(f"Failed to import time series data for node '{id}': {str(e)}")
+            
+    return [0.0] * num_time_steps  # Default to zero if import fails or is invalid
 
-class SupplyNode(TimeSeriesImport):
+class SupplyNode:
     """
     Represents a water supply source in the system.
     
@@ -180,7 +128,7 @@ class SupplyNode(TimeSeriesImport):
         # Try to import time series data first
         imported_data = None
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            imported_data = self._initialize_time_series(
+            imported_data = initialize_time_series(
                 id, csv_file, start_year, start_month, num_time_steps, 'Q'
             )
         
@@ -236,7 +184,7 @@ class SupplyNode(TimeSeriesImport):
         except Exception as e:
             raise ValueError(f"Failed to update supply node {self.id}: {str(e)}")
 
-class SinkNode(TimeSeriesImport):
+class SinkNode:
     """
     Represents a point where water exits the system with minimum flow requirements.
     
@@ -309,7 +257,7 @@ class SinkNode(TimeSeriesImport):
         # Try to import time series data first
         imported_data = None
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            imported_data = self._initialize_time_series(
+            imported_data = initialize_time_series(
                 id, csv_file, start_year, start_month, num_time_steps, 'Q'
             )
         
@@ -355,7 +303,7 @@ class SinkNode(TimeSeriesImport):
         except Exception as e:
             raise ValueError(f"Failed to update sink node {self.id}: {str(e)}")
 
-class DemandNode(TimeSeriesImport):
+class DemandNode:
     """
     Represents a point of water demand in the system.
     
@@ -454,7 +402,7 @@ class DemandNode(TimeSeriesImport):
         # Try to import time series data first
         imported_data = None
         if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-            imported_data = self._initialize_time_series(
+            imported_data = initialize_time_series(
                 id, csv_file, start_year, start_month, num_time_steps, id
             )
         
@@ -554,7 +502,7 @@ class DemandNode(TimeSeriesImport):
         except Exception as e:
             raise ValueError(f"Failed to update demand node {self.id}: {str(e)}")
 
-class StorageNode(TimeSeriesImport):  
+class StorageNode:  
     """
     Represents a reservoir or storage facility in the water system.
     
@@ -646,7 +594,7 @@ class StorageNode(TimeSeriesImport):
         # Initialize evaporation rates using TimeSeriesImport
         imported_data = None
         if evaporation_file is not None and all(param is not None for param in [start_year, start_month, num_time_steps]):
-            imported_data = self._initialize_time_series(
+            imported_data = initialize_time_series(
                 id, evaporation_file, start_year, start_month, num_time_steps, 'Evaporation'
             )
         
@@ -971,7 +919,7 @@ class StorageNode(TimeSeriesImport):
             # Log the error and attempt to maintain last known state
             print(f"Error updating storage node {self.id}: {str(e)}")
 
-class HydroWorks():
+class HydroWorks:
     """
     Represents a water distribution point that splits flow according to predefined ratios.
     
@@ -1197,7 +1145,7 @@ class HydroWorks():
         except Exception as e:
             raise ValueError(f"Failed to update hydroworks node {self.id}: {str(e)}")
         
-class RunoffNode(TimeSeriesImport):
+class RunoffNode:
     """
     Represents a runoff generation area in the water system.
     
@@ -1217,18 +1165,8 @@ class RunoffNode(TimeSeriesImport):
         outflow_edge: The single outflow edge from this node.
     """
 
-    def __init__(
-        self,
-        id: str,
-        area: float,
-        runoff_coefficient: float,
-        easting: float,
-        northing: float,
-        rainfall_csv: str,
-        start_year: int,
-        start_month: int,
-        num_time_steps: int = 0
-    ) -> None:
+    def __init__(self, id: str, area: float, runoff_coefficient: float,
+                 easting: float, northing: float, rainfall_csv: str, start_year: int, start_month: int, num_time_steps: int = 0) -> None:
         """
         Initialize a RunoffNode object.
 
@@ -1270,7 +1208,7 @@ class RunoffNode(TimeSeriesImport):
         self.runoff_history = []
         
         # Import rainfall data from CSV if provided
-        self.rainfall_data = self._initialize_time_series(
+        self.rainfall_data = initialize_time_series(
             id, rainfall_csv, start_year, start_month, num_time_steps, 'Precipitation'
         ) if rainfall_csv else []
         
