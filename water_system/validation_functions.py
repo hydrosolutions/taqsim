@@ -186,3 +186,37 @@ def validate_file_exists(file_path: str):
     """
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"File not found: {file_path}") 
+
+def validate_month(month: int):
+    """
+    Validate that a month is between 1 and 12.
+    
+    Args:
+        month: The month to validate
+        
+    Raises:
+        ValueError: If the month is not valid
+    """
+    if not isinstance(month, int):
+        raise ValueError(f"Start month must be an integer, got {type(month).__name__}")
+    
+    if month < 1 or month > 12:
+        raise ValueError(f"Start month must be between 1 and 12, got {month}")
+    
+def validate_year(year: int):
+    """
+    Validate that a year is a positive integer.
+    
+    Args:
+        year: The year to validate
+    
+    Raises:
+        ValueError: If the year is not valid
+    """
+    if not isinstance(year, int):
+        raise ValueError(f"Start year must be an integer, got {type(year).__name__}")
+    
+    if year < 1900 and year >= 2100:
+        raise ValueError(f"start year should be between 1900 and 2100, got {year}")
+    
+

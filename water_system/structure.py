@@ -578,6 +578,10 @@ class StorageNode:
         validate_coordinates(easting, northing, id)
         # Validate buffer coefficient
         validate_probability(buffer_coef, "buffer_coef")
+        # Validate dead storage
+        validate_nonnegativity_int_or_float(dead_storage, "dead_storage")
+        # Validate initial storage
+        validate_nonnegativity_int_or_float(initial_storage, "initial_storage")
         
         self.id = id
         self.easting = easting

@@ -1170,14 +1170,14 @@ class WaterSystemVisualizer:
         total_sourcenode = df['source'].sum()
         total_surfacerunoff = df['surfacerunoff'].sum()
         total_source = total_sourcenode + total_surfacerunoff
-        print(f"Source Node: {total_sourcenode:,.0f} m³")
+        print(f"Source Node:    {total_sourcenode:,.0f} m³")
         print(f"Surface Runoff: {total_surfacerunoff:,.0f} m³")
-        print(f"Total Source: {total_source:,.0f} m³ (100%)")
+        print(f"Total Source:   {total_source:,.0f} m³ (100%)")
         
         # Component volumes and percentages
         print_section("Sink Volumes")
         components = {
-            'Supplied Demand': 'supplied demand',
+            'Supplied Consumptive Demand': 'supplied consumptive demand',
             'Sink Outflow': 'sink',
             'Edge Losses': 'edge losses',
             'Res Spills': 'reservoir spills',
@@ -1190,7 +1190,7 @@ class WaterSystemVisualizer:
             if comp in df.columns:
                 total = df[comp].sum()
                 percentage = (total / total_source * 100) if total_source > 0 else 0
-                print(f"{label:15s}: {total:15,.0f} m³ ({percentage:6.1f}%)")
+                print(f"{label:30s}: {total:15,.0f} m³ ({percentage:6.1f}%)")
         
         # Storage changes
         print_section("Storage")
@@ -1203,11 +1203,15 @@ class WaterSystemVisualizer:
         # Demand satisfaction
         print_section("Demand Satisfaction")
         total_demand = df['demands'].sum()
-        total_satisfied = df['supplied demand'].sum()
+        total_demand_non_consumptive = df['demands non consumptive'].sum()
+        total_consumptive_satisfied = df['supplied consumptive demand'].sum()
+        total_non_consumptive_satisfied = df['supplied non consumptive demand'].sum()
         unmet_demand = df['unmet demand'].sum()
-        print(f"Total demand:        {total_demand:15,.0f} m³")
-        print(f"Satisfied demand:    {total_satisfied:15,.0f} m³")
-        print(f"Unmet demand:        {unmet_demand:15,.0f} m³")
+        print(f"Total demand:                   {total_demand:15,.0f} m³")
+        print(f'Of which non consumptive:       {total_demand_non_consumptive:15,.0f} m³')
+        print(f"Satisfied consumptive demand:   {total_consumptive_satisfied:15,.0f} m³")
+        print(f"Satisfied non-consumptive:      {total_non_consumptive_satisfied:15,.0f} m³")
+        print(f"Unmet demand:                   {unmet_demand:15,.0f} m³")
         
         # Include flow deficit in demand section if available
         if 'deficit' in df.columns:
@@ -1217,7 +1221,7 @@ class WaterSystemVisualizer:
         # Conservation check
         print_section("Conservation Check")
         total_in = total_source
-        sink_components = ['supplied demand', 'sink', 'edge losses', 'reservoir spills', 
+        sink_components = ['supplied consumptive demand', 'sink', 'edge losses', 'reservoir spills', 
                           'reservoir ET losses', 'hydroworks spills']
         total_out = sum(df[comp].sum() for comp in sink_components if comp in df.columns)
         total_stored = total_storage_change

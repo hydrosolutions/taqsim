@@ -10,10 +10,15 @@ from typing import Dict, List, Union, Optional, Any, Tuple
 import networkx as nx
 import pandas as pd
 import numpy as np
-
-# Import all node types explicitly
 from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode
 from .edge import Edge
+from .validation_functions import (validate_positive_float, 
+                                   validate_month,
+                                   validate_probability, 
+                                   validate_nonnegativity_int_or_float, 
+                                   validate_dataframe_period, 
+                                   validate_file_exists, 
+                                   validate_year)
 
 # Define a type for any valid node type
 NodeType = Union[SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode]
@@ -40,6 +45,13 @@ class WaterSystem:
             start_year (int): The starting year for the simulation.
             start_month (int): The starting month (1-12) for the simulation.
         """
+        # Validate dt
+        validate_positive_float(dt, "dt")
+        # Validate start year and month
+        validate_year(start_year)
+        validate_month(start_month)
+
+
         self.graph = nx.DiGraph()
         self.time_steps = 0
         self.dt = dt
@@ -82,8 +94,6 @@ class WaterSystem:
         """
         self._check_network_structure()
         self._check_node_configuration()
-        self._check_edge_properties()
-        self._check_data_consistency()
         print("Network checking was successful.")
         self.has_been_checked = True  # Set the flag to indicate the network has been checked
 
@@ -114,18 +124,18 @@ class WaterSystem:
             
         if SupplyNode not in node_types and RunoffNode not in node_types:
             raise ValueError("Network must contain at least one SupplyNode or RunoffNode")
-        if not any(t in node_types for t in [DemandNode, SinkNode]):
-            raise ValueError("Network must contain at least one DemandNode or SinkNode")
+        if not SinkNode in node_types:
+            raise ValueError("Network must contain at least one SinkNode")
 
         # Check if all paths lead to demand or sink
         terminal_nodes = {n for n, data in self.graph.nodes(data=True) 
-                         if isinstance(data['node'], (DemandNode, SinkNode))}
+                         if isinstance(data['node'], (SinkNode))}
         for node in self.graph.nodes():
             if node not in terminal_nodes:
                 paths_exist = any(nx.has_path(self.graph, node, term) 
                                 for term in terminal_nodes)
                 if not paths_exist:
-                    raise ValueError(f"Node {node} has no path to any DemandNode or SinkNode")
+                    raise ValueError(f"Node {node} has no path to any SinkNode")
 
     def _check_node_configuration(self) -> None:
         """Check individual node configurations and connections."""
@@ -180,56 +190,6 @@ class WaterSystem:
                         f"This can lead to undefined water losses and errors in the water balance."
                     )
 
-    def _check_edge_properties(self) -> None:
-        """Check edge properties and connections."""
-        for source, target, edge_data in self.graph.edges(data=True):
-            edge = edge_data['edge']
-    
-            # Check edge capacity
-            if edge.capacity <= 0:
-                raise ValueError(f"Edge from {source} to {target} has invalid capacity: {edge.capacity}")
-
-            # Check loss factors
-            if edge.loss_factor < 0 or edge.loss_factor > 1:
-                raise ValueError(
-                    f"Edge from {source} to {target} has invalid loss factor: {edge.loss_factor}"
-                )
-            if edge.loss_factor > 0.5:
-                print(f"Warning: Edge from {source} to {target} has unusually high loss factor: {edge.loss_factor}")
-
-    def _check_data_consistency(self) -> None:
-        """Check consistency of node data and time series."""
-        for node_id, node_data in self.graph.nodes(data=True):
-            node = node_data['node']
-
-            # Check SupplyNode data
-            if isinstance(node, SupplyNode):
-                if not hasattr(node, 'supply_rates') or not node.supply_rates:
-                    raise ValueError(f"SupplyNode {node_id} has no supply rates defined")
-
-            # Check DemandNode data
-            elif isinstance(node, DemandNode):
-                if not hasattr(node, 'demand_rates') or not node.demand_rates:
-                    raise ValueError(f"DemandNode {node_id} has no demand rates defined")
-
-            # Check StorageNode data
-            elif isinstance(node, StorageNode):
-                # Check hv relationships
-                if not hasattr(node, 'hv_data') or not node.hv_data:
-                    raise ValueError(f"StorageNode {node_id} missing height-volume-area relationship")
-                
-                # Check evaporation data if node has evaporation rates
-                if hasattr(node, 'evaporation_rates') and node.evaporation_rates is not None:
-                    if not node.evaporation_rates:
-                        raise ValueError(f"StorageNode {node_id} has empty evaporation rates")
-
-                # Check initial storage
-                if hasattr(node, 'storage') and node.storage and node.storage[0] > node.capacity:
-                    raise ValueError(
-                        f"StorageNode {node_id} initial storage ({node.storage[0]}) "
-                        f"exceeds capacity ({node.capacity})"
-                    )
-      
     def simulate(self, time_steps: int) -> None:
         """
         Run the water system simulation for a specified number of time steps.
@@ -276,7 +236,8 @@ class WaterSystem:
         sink = np.zeros(self.time_steps)
         edge_losses = np.zeros(self.time_steps)
         demands = np.zeros(self.time_steps)
-        supplied_demand = np.zeros(self.time_steps)
+        supplied_consumptive_demand = np.zeros(self.time_steps)
+        supplied_non_consumptive_demand = np.zeros(self.time_steps)
         unmet_demand = np.zeros(self.time_steps)
         
         for node_id, node_data in self.graph.nodes(data=True):
@@ -286,18 +247,21 @@ class WaterSystem:
                 supply_rates = np.array([node.supply_rates[t] for t in time_steps])
                 source += supply_rates * self.dt
             
-            # Add runoff contribution 
             elif isinstance(node, RunoffNode):
                 runoff_rates = np.array([node.runoff_history[t] for t in time_steps])
                 surfacerunoff += runoff_rates * self.dt
                 
             elif isinstance(node, DemandNode):
                 demand_rates = np.array([node.demand_rates[t] for t in time_steps])
-                satisfied_rates = np.array([node.satisfied_consumptive_demand[t] if t < len(node.satisfied_consumptive_demand) else 0 for t in time_steps])
-                
+                non_consumptive_rate = np.array([node.non_consumptive_rate]*self.time_steps)
+                satisfied_consumptive_rates = np.array([node.satisfied_consumptive_demand[t] if t < len(node.satisfied_consumptive_demand) else 0 for t in time_steps])
+                satisfied_non_consumptive_rates = np.array([node.satisfied_non_consumptive_demand[t] if t < len(node.satisfied_non_consumptive_demand) else 0 for t in time_steps])
+
                 demands += demand_rates * self.dt
-                supplied_demand += satisfied_rates * self.dt
-                unmet_demand += (demand_rates - satisfied_rates) * self.dt
+                demands_non_consumptive = non_consumptive_rate * self.dt
+                supplied_consumptive_demand += satisfied_consumptive_rates * self.dt
+                supplied_non_consumptive_demand += satisfied_non_consumptive_rates * self.dt
+                unmet_demand += (demand_rates - satisfied_consumptive_rates-satisfied_non_consumptive_rates) * self.dt
                 
             elif isinstance(node, StorageNode):
                 storage = np.array(node.storage[:self.time_steps+1])
@@ -326,7 +290,7 @@ class WaterSystem:
         balance_error = (
             source 
             + surfacerunoff  # Add runoff to inputs
-            - supplied_demand
+            - supplied_consumptive_demand
             - sink
             - edge_losses
             - reservoir_spills
@@ -349,7 +313,9 @@ class WaterSystem:
             'sink': sink,
             'edge losses': edge_losses,
             'demands': demands,
-            'supplied demand': supplied_demand,
+            'demands non consumptive': demands_non_consumptive,
+            'supplied consumptive demand': supplied_consumptive_demand,
+            'supplied non consumptive demand': supplied_non_consumptive_demand,
             'unmet demand': unmet_demand,
             'balance_error': balance_error
         })
