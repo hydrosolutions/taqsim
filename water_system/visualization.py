@@ -1118,6 +1118,8 @@ class WaterSystemVisualizer:
         Includes volumes, relative contributions, storage changes and balance error statistics.
         """
         df = self.system.get_water_balance()
+        number_of_years = (self.system.time_steps)/12
+        print(f"Number of years: {number_of_years}")
         
         # Add deficit column based on flow deficits from sink nodes
         sink_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
@@ -1163,16 +1165,17 @@ class WaterSystemVisualizer:
         # Time information
         print_section("Simulation Period")
         print(f"Number of timesteps: {len(df)}")
-        print(f"Timestep duration: {self.system.dt:,.0f} seconds")
+        print(f'Number of years:     {number_of_years:,.0f}')
+        print(f"Timestep duration:   {self.system.dt:,.0f} seconds")
         
         # Source volumes
         print_section("Source Volumes")
         total_sourcenode = df['source'].sum()
         total_surfacerunoff = df['surfacerunoff'].sum()
         total_source = total_sourcenode + total_surfacerunoff
-        print(f"Source Node:    {total_sourcenode:,.0f} m³")
-        print(f"Surface Runoff: {total_surfacerunoff:,.0f} m³")
-        print(f"Total Source:   {total_source:,.0f} m³ (100%)")
+        print(f"Source Node:    {total_sourcenode/number_of_years:,.0f} m³/a")
+        print(f"Surface Runoff:   {total_surfacerunoff/number_of_years:,.0f} m³/a")
+        print(f"Total Source:   {total_source/number_of_years:,.0f} m³/a (100%)")
         
         # Component volumes and percentages
         print_section("Sink Volumes")
@@ -1182,15 +1185,14 @@ class WaterSystemVisualizer:
             'Edge Losses': 'edge losses',
             'Res Spills': 'reservoir spills',
             'Res ET Losses': 'reservoir ET losses',
-            'HW Spills': 'hydroworks spills',
-            'Flow Deficit': 'deficit'  # Add the new deficit component
+            'HW Spills': 'hydroworks spills'
         }
         
         for label, comp in components.items():
             if comp in df.columns:
                 total = df[comp].sum()
                 percentage = (total / total_source * 100) if total_source > 0 else 0
-                print(f"{label:30s}: {total:15,.0f} m³ ({percentage:6.1f}%)")
+                print(f"{label:30s}: {total/number_of_years:15,.0f} m³/a ({percentage:6.1f}%)")
         
         # Storage changes
         print_section("Storage")
@@ -1200,25 +1202,7 @@ class WaterSystemVisualizer:
         storage_percentage = (total_storage_change / total_source * 100) if total_source > 0 else 0
         print(f"Net storage change:  {total_storage_change:15,.0f} m³ ({storage_percentage:6.1f}%)")
         
-        # Demand satisfaction
-        print_section("Demand Satisfaction")
-        total_demand = df['demands'].sum()
-        total_demand_non_consumptive = df['demands non consumptive'].sum()
-        total_consumptive_satisfied = df['supplied consumptive demand'].sum()
-        total_non_consumptive_satisfied = df['supplied non consumptive demand'].sum()
-        unmet_demand = df['unmet demand'].sum()
-        print(f"Total demand:                   {total_demand:15,.0f} m³")
-        print(f'Of which non consumptive:       {total_demand_non_consumptive:15,.0f} m³')
-        print(f"Satisfied consumptive demand:   {total_consumptive_satisfied:15,.0f} m³")
-        print(f"Satisfied non-consumptive:      {total_non_consumptive_satisfied:15,.0f} m³")
-        print(f"Unmet demand:                   {unmet_demand:15,.0f} m³")
-        
-        # Include flow deficit in demand section if available
-        if 'deficit' in df.columns:
-            total_deficit = df['deficit'].sum()
-            print(f"Min flow deficit:        {total_deficit:15,.0f} m³")
-        
-        # Conservation check
+                # Conservation check
         print_section("Conservation Check")
         total_in = total_source
         sink_components = ['supplied consumptive demand', 'sink', 'edge losses', 'reservoir spills', 
@@ -1248,6 +1232,30 @@ class WaterSystemVisualizer:
         total_flux = df['source'].sum()
         for label, value in error_metrics.items():
             print(f"{label:8s}: {value:15,.2f} m³")
+
+        # Sink Nodes
+        print_section("Sink Nodes")
+        print(f'Total Min Flow Requirement: {df["sink min flow requirement"].sum()/number_of_years:15,.0f} m³/a')
+        print(f"Total Sink Outflow:         {df['sink'].sum()/number_of_years:15,.0f} m³/a")
+        print(f"Total Sink Deficit:         {df['sink min flow deficit'].sum()/number_of_years:15,.0f} m³/a")
+ 
+        # Demand satisfaction
+        print_section("Demand Nodes")
+        total_demand = df['demands'].sum()
+        total_demand_non_consumptive = df['demands non consumptive'].sum()
+        total_consumptive_satisfied = df['supplied consumptive demand'].sum()
+        total_non_consumptive_satisfied = df['supplied non consumptive demand'].sum()
+        unmet_demand = df['unmet demand'].sum()
+        print(f"Total demand:                   {total_demand/number_of_years:15,.0f} m³/a")
+        print(f'Of which non consumptive:       {total_demand_non_consumptive/number_of_years:15,.0f} m³/a')
+        print(f"Satisfied consumptive demand:   {total_consumptive_satisfied/number_of_years:15,.0f} m³/a")
+        print(f"Satisfied non-consumptive:      {total_non_consumptive_satisfied/number_of_years:15,.0f} m³/a")
+        print(f"Unmet demand:                   {unmet_demand/number_of_years:15,.0f} m³/a")
+        
+        # Include flow deficit in demand section if available
+        if 'deficit' in df.columns:
+            total_deficit = df['deficit'].sum()
+            print(f"Min flow deficit:        {total_deficit/number_of_years:15,.0f} m³/a")
 
         # Additional statistics
         print_section("Maximum Values")

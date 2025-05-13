@@ -234,6 +234,8 @@ class WaterSystem:
         source = np.zeros(self.time_steps)
         surfacerunoff = np.zeros(self.time_steps)  # Added for runoff
         sink = np.zeros(self.time_steps)
+        sink_min_flow = np.zeros(self.time_steps)
+        sink_min_flow_deficit = np.zeros(self.time_steps)
         edge_losses = np.zeros(self.time_steps)
         demands = np.zeros(self.time_steps)
         supplied_consumptive_demand = np.zeros(self.time_steps)
@@ -280,6 +282,11 @@ class WaterSystem:
                     edge = node.inflow_edges[source_id]
                     outflow_rates = np.array([edge.flow_after_losses[t] for t in time_steps])
                     sink += outflow_rates * self.dt
+
+                sink_min_fl = np.array([node.min_flows[t] for t in time_steps])
+                sink_min_flow += sink_min_fl * self.dt    
+                sink_deficit = np.array([node.flow_deficits[t] for t in time_steps])
+                sink_min_flow_deficit += sink_deficit * self.dt
         
         # Calculate edge losses across the entire network
         for _, _, edge_data in self.graph.edges(data=True):
@@ -311,6 +318,8 @@ class WaterSystem:
             'source': source,
             'surfacerunoff': surfacerunoff,  # Added runoff column
             'sink': sink,
+            'sink min flow requirement': sink_min_flow,
+            'sink min flow deficit': sink_min_flow_deficit,
             'edge losses': edge_losses,
             'demands': demands,
             'demands non consumptive': demands_non_consumptive,
