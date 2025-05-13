@@ -16,15 +16,22 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from typing import Dict, List, Optional, Union, Any
-from .validation_functions import validate_node_id, validate_coordinates, validate_positive_integer,validate_positive_float, validate_probability, validate_nonnegativity_int_or_float, validate_dataframe_period
+from .validation_functions import (validate_node_id, 
+                                   validate_coordinates, 
+                                   validate_positive_integer,
+                                   validate_positive_float, 
+                                   validate_probability, 
+                                   validate_nonnegativity_int_or_float, 
+                                   validate_dataframe_period, 
+                                   validate_file_exists)
 
 
 def initialize_time_series(
     id: str,
-    csv_file: Optional[str] = None,
-    start_year: Optional[int] = None,
-    start_month: Optional[int] = None,
-    num_time_steps: int = 0,
+    csv_file: str,
+    start_year: int,
+    start_month: int,
+    num_time_steps: int,
     column_name: str = 'Q'
 ) -> List[float]:
     """
@@ -46,28 +53,27 @@ def initialize_time_series(
         with length equal to num_time_steps to ensure simulation can continue.
     """
     # If all CSV parameters are provided, try to import data
-    if all(param is not None for param in [csv_file, start_year, start_month, num_time_steps]):
-        try:
-            # Read the CSV file into a pandas DataFrame
-            time_series = pd.read_csv(csv_file, parse_dates=['Date'])
-            
-            # Validate the DataFrame structure
-            validate_dataframe_period(time_series, start_year, start_month, num_time_steps, column_name)
+    try:
+        # Validate the CSV file exists
+        validate_file_exists(csv_file)
+        # Read the CSV file into a pandas DataFrame
+        time_series = pd.read_csv(csv_file, parse_dates=['Date'])
         
-            # Filter the DataFrame to find the start point
-            start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
-            end_date = start_date + pd.DateOffset(months=num_time_steps)
-            
-            filtered_data = time_series[(time_series['Date'] >= start_date) & (time_series['Date'] < end_date)]
-            
-            return filtered_data[column_name].tolist()
-            
-        except FileNotFoundError:
-            raise ValueError(f"Data file not found: {csv_file}")
-        except Exception as e:
-            raise ValueError(f"Failed to import time series data for node '{id}': {str(e)}")
-            
-    return [0.0] * num_time_steps  # Default to zero if import fails or is invalid
+        # Validate the DataFrame structure
+        validate_dataframe_period(time_series, start_year, start_month, num_time_steps, column_name)
+    
+        # Filter the DataFrame to find the start point
+        start_date = pd.Timestamp(year=start_year, month=start_month, day=1)
+        end_date = start_date + pd.DateOffset(months=num_time_steps)
+        
+        filtered_data = time_series[(time_series['Date'] >= start_date) & (time_series['Date'] < end_date)]
+        
+        return filtered_data[column_name].tolist()
+        
+    except FileNotFoundError:
+        raise ValueError(f"Data file not found: {csv_file}")
+    except Exception as e:
+        raise ValueError(f"Failed to import time series data for node '{id}': {str(e)}")
 
 class SupplyNode:
     """
