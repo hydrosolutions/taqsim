@@ -5,6 +5,8 @@ import os
 import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
 from datetime import datetime
+import optuna
+from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
 import ctypes
 import cProfile
 import pstats
@@ -470,7 +472,7 @@ def run_optimization(
     else:
         save_optimized_parameters(results, f"./model_output/optimisation/{system_type}/singleobjective_params_{system_type}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
         
-    ZRB_system = load_optimized_parameters(ZRB_system, results)
+    '''ZRB_system = load_optimized_parameters(ZRB_system, results)
     ZRB_system.simulate(num_time_steps)
 
     vis=WaterSystemVisualizer(ZRB_system, name=f'ZRB_optimization_{system_type}')
@@ -481,7 +483,7 @@ def run_optimization(
     vis.print_water_balance_summary()
     vis.plot_demand_deficit_heatmap()
     vis.plot_network_overview()
-    vis.plot_minimum_flow_compliance()
+    vis.plot_minimum_flow_compliance()'''
 
     return results
 
@@ -621,7 +623,7 @@ def run_simulation(
     print("Simulation complete")
 
     vis=WaterSystemVisualizer(system, name=f'ZRB_simulation_{system_type}')
-    vis.plot_network_layout()
+    vis.plot_network_overview()
     vis.plot_minimum_flow_compliance()
     vis.plot_spills()
     vis.plot_reservoir_volumes()
@@ -635,9 +637,10 @@ def run_simulation(
 # Run the sample tests
 if __name__ == "__main__":
 
-    optimization = True
+    optimization = False
     simulation = False
     multiobjective = False
+    optunastudy = True
 
     start = datetime.now()
 
@@ -677,7 +680,22 @@ if __name__ == "__main__":
         )''' 
 
     if simulation:
-        # Example of running the simulation with optimized parameters for a baseline system
+        # Example of running the simulation with optimized parameters for a simplified ZRB system
+        loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/euler_singleobjective_params_simplified_ZRB_100_3000_0.65_0.32.json")
+        system = run_simulation(
+            create_ZRB_system,
+            loaded_results,
+            start_year=2017,
+            start_month=1,
+            num_time_steps=12*6,
+            system_type = 'simplified_ZRB', 
+            scenario = '', 
+            period = '',
+            agr_scenario = '', 
+            efficiency = ''
+        )
+
+        """# Example of running the simulation with optimized parameters for a baseline system
         loaded_results = load_parameters_from_file(f"./data/baseline/parameter/2025-05-08_euler_multiobjective_params.json")
         
         system = run_simulation(
@@ -691,7 +709,7 @@ if __name__ == "__main__":
             period = '',
             agr_scenario = '', 
             efficiency = ''
-        )
+        )"""
         '''#Example of running the simulation with optimized parameters for a future scenario
         system = run_simulation(
             create_ZRB_system,
@@ -752,6 +770,59 @@ if __name__ == "__main__":
         
         print(f"Dashboard created at {dashboard.output_dir}/index.html")
    
+    if optunastudy:
+        # Making an Optuna study
+        def objective(trial):
+            # Define the hyperparameters to optimize
+            ngen = trial.suggest_int("ngen", 1, 10)
+            pop_size = trial.suggest_int("pop_size", 5, 30)
+            cxpb = trial.suggest_float("cxpb", 0.5, 1.0)
+            mutpb = trial.suggest_float("mutpb", 0.1, 0.5)
+
+            # Run the optimization
+            results = run_optimization(
+                create_ZRB_system,
+                start_year=2017, 
+                start_month=1, 
+                num_time_steps=12*6,
+                system_type = 'simplified_ZRB',
+                scenario = '', 
+                period = '', 
+                agr_scenario= '', 
+                efficiency = '', 
+                ngen=ngen, 
+                pop_size=pop_size, 
+                cxpb=cxpb, 
+                mutpb=mutpb
+            )
+
+            return results['objective_value']
+
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=2)
+
+        # Print the best parameters and fitness value
+        print("Best Parameters:", study.best_params)
+        print("Best Objective Value:", study.best_value)
+
+        # save the study
+        study_name = "ZRB_study"
+        study_file = f"{study_name}.pkl"
+        study.trials_dataframe().to_csv(f"{study_name}.csv")
+        study.trials_dataframe().to_pickle(study_file)
+
+        # create the study directory
+        if not os.path.exists("model_output/optuna"):
+            os.makedirs("model_output/optuna")
+        #save the plots
+        plot_optimization_history(study).write_html(f"model_output/optuna/{study_name}_history.html")
+        plot_param_importances(study).write_html(f"model_output/optuna/{study_name}_importances.html")
+        plot_contour(study).write_html(f"model_output/optuna/{study_name}_contour.html")
+        plot_timeline(study).write_html(f"model_output/optuna/{study_name}_timeline.html")
+        plot_slice(study).write_html(f"model_output/optuna/{study_name}_slice.html")
+        plot_edf(study).write_html(f"model_output/optuna/{study_name}_edf.html")
+
+
     end = datetime.now()
     print(f"Execution time: {end - start}")
     
