@@ -638,9 +638,9 @@ def run_simulation(
 if __name__ == "__main__":
 
     optimization = False
-    simulation = False
+    simulation = True
     multiobjective = False
-    optunastudy = True
+    optunastudy = False
 
     start = datetime.now()
 

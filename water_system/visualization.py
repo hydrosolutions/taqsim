@@ -403,11 +403,11 @@ class WaterSystemVisualizer:
                 max_spill_rate = np.max(spill_rates)
                 spill_frequency = sum(1 for s in spill_rates if s > 0) / len(time_steps) * 100
                 
-                print(f"\nSpill Statistics for {node_id}:")
+                '''print(f"\nSpill Statistics for {node_id}:")
                 print(f"Total Spill Volume: {total_spill_volume:,.0f} m³")
                 print(f"Mean Spill Rate: {mean_spill_rate:.2f} m³/s")
                 print(f"Maximum Spill Rate: {max_spill_rate:.2f} m³/s")
-                print(f"Spill Frequency: {spill_frequency:.1f}%")
+                print(f"Spill Frequency: {spill_frequency:.1f}%")'''
         
         # Calculate and display total hydroworks system statistics
         total_hydroworks_volume = np.sum(total_hydroworks_spills) * self.system.dt
@@ -462,11 +462,11 @@ class WaterSystemVisualizer:
                 max_spill_rate = np.max(spill_rates)
                 spill_frequency = sum(1 for s in spill_rates if s > 0) / len(time_steps) * 100
                 
-                print(f"\nSpillway Statistics for {node_id}:")
+                '''print(f"\nSpillway Statistics for {node_id}:")
                 print(f"Total Spillway Volume: {total_spill_volume:,.0f} m³")
                 print(f"Mean Spillway Rate: {mean_spill_rate:.2f} m³/s")
                 print(f"Maximum Spillway Rate: {max_spill_rate:.2f} m³/s")
-                print(f"Spillway Activation Frequency: {spill_frequency:.1f}%")
+                print(f"Spillway Activation Frequency: {spill_frequency:.1f}%")'''
         
         # Calculate and display total reservoir system statistics
         total_reservoir_volume = np.sum(total_reservoir_spills) * self.system.dt
