@@ -221,6 +221,8 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
     
     # Finalize and validate the system
     system._check_network()
+    print(StorageNode.all_ids)
+    print(HydroWorks.all_ids)
     
     return system
 
@@ -637,8 +639,11 @@ def run_simulation(
 # Run the sample tests
 if __name__ == "__main__":
 
-    optimization = False
-    simulation = True
+    create_ZRB_system(2017, 1, 12*6, system_type = 'baseline', scenario = '', period = '', agr_scenario= '', efficiency = '')
+    create_ZRB_system(2017, 1, 12*6, system_type = 'simplified_ZRB', scenario = '', period = '', agr_scenario= '', efficiency = '')
+
+    optimization = True
+    simulation = False
     multiobjective = False
     optunastudy = False
 
@@ -681,7 +686,7 @@ if __name__ == "__main__":
 
     if simulation:
         # Example of running the simulation with optimized parameters for a simplified ZRB system
-        loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/euler_singleobjective_params_simplified_ZRB_100_3000_0.65_0.32.json")
+        loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/euler_toqsim_2025-05-14B.json")
         system = run_simulation(
             create_ZRB_system,
             loaded_results,

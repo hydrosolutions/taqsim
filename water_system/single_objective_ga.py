@@ -20,8 +20,8 @@ class SingleObjectiveOptimizer:
         num_time_steps: int,
         ngen: int = 50,
         population_size: int = 50,
-        cxpb: float = 0.9,
-        mutpb: float = 0.5
+        cxpb: float = 0.65,
+        mutpb: float = 0.32
     ) -> None:
         self.base_system = base_system 
         self.start_year = start_year
@@ -32,37 +32,34 @@ class SingleObjectiveOptimizer:
         self.cxpb = cxpb
         self.mutpb = mutpb
         self.dt = base_system.dt  # Time step in seconds
-        self.reservoir_ids = []
-        self.hydroworks_ids = []
+        self.reservoir_ids = StorageNode.all_ids
+        self.hydroworks_ids = HydroWorks.all_ids
         self.hydroworks_targets = {}
 
         # Dictionary to store reservoir-specific bounds
         self.reservoir_bounds = {}
         
         # Identify reservoirs and hydroworks in system
-        for node_id, node_data in base_system.graph.nodes(data=True):
-            if isinstance(node_data['node'], StorageNode):
-                self.reservoir_ids.append(node_id)
-                reservoir = node_data['node']
-                
-                # Calculate total outflow capacity using numpy
-                total_capacity = reservoir.outflow_edge.capacity
-                
-                # Set volume-based bounds for the new parameterization
-                dead_storage = reservoir.dead_storage
-                capacity = reservoir.capacity
-                
-                # Set reservoir-specific bounds
-                self.reservoir_bounds[node_id] = {
-                    'Vr': (0, total_capacity*self.dt),              # Target monthly release volume
-                    'V1': (dead_storage, capacity),  # Top of buffer zone
-                    'V2': (dead_storage, capacity)  # Top of conservation zone
-                }
+        for node_id in self.reservoir_ids:
+            reservoir = self.base_system.graph.nodes[node_id]['node']
+            
+            # Calculate total outflow capacity using numpy
+            total_capacity = reservoir.outflow_edge.capacity
+            
+            # Set volume-based bounds for the new parameterization
+            dead_storage = reservoir.dead_storage
+            capacity = reservoir.capacity
+            
+            # Set reservoir-specific bounds
+            self.reservoir_bounds[node_id] = {
+                'Vr': (0, total_capacity*self.dt),              # Target monthly release volume
+                'V1': (dead_storage, capacity),  # Top of buffer zone
+                'V2': (dead_storage, capacity)  # Top of conservation zone
+            }
 
-            elif isinstance(node_data['node'], HydroWorks):
-                self.hydroworks_ids.append(node_id)
-                # Get target nodes for each hydroworks
-                self.hydroworks_targets[node_id] = list(node_data['node'].outflow_edges.keys())
+        for node_id in self.hydroworks_ids:
+            hydrowork = self.base_system.graph.nodes[node_id]['node']
+            self.hydroworks_targets[node_id] = list(hydrowork.outflow_edges.keys())
         
         # Set up DEAP genetic algorithm components
         creator.create("FitnessMulti", base.Fitness, weights=(-1.0,))  # Minimize objective

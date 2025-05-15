@@ -45,6 +45,8 @@ class WaterSystem:
             start_year (int): The starting year for the simulation.
             start_month (int): The starting month (1-12) for the simulation.
         """
+        WaterSystem.reset_node_registries()  # Reset node registries for new instance
+
         # Validate dt
         validate_positive_float(dt, "dt")
         # Validate start year and month
@@ -59,6 +61,12 @@ class WaterSystem:
         self.start_month = start_month
         self.has_been_checked = False  # Flag to indicate if the network has been checked
         
+    @staticmethod
+    def reset_node_registries():
+        """Reset all node class registries"""
+        StorageNode.all_ids.clear()
+        HydroWorks.all_ids.clear()
+
     def add_node(self, node: NodeType) -> None:
         """
         Add a node to the water system.

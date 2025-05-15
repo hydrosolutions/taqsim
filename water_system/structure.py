@@ -532,6 +532,8 @@ class StorageNode:
         inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
         outflow_edge: The single outflow edge from this node.
     """
+    # Class variable to track all instances of StorageNode
+    all_ids = []
 
     def __init__(
         self,
@@ -584,6 +586,7 @@ class StorageNode:
         validate_nonnegativity_int_or_float(initial_storage, "initial_storage")
         
         self.id = id
+        StorageNode.all_ids.append(id)  # Track all StorageNode instances
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
@@ -950,6 +953,8 @@ class HydroWorks:
         inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
         outflow_edges (dict): A dictionary of outflow edges, keyed by the target node's id.
     """
+    # Class variable to track all instances of HydroWorks
+    all_ids = []
 
     def __init__(self, id: str, easting: float, northing: float) -> None:
         """
@@ -970,6 +975,7 @@ class HydroWorks:
         validate_coordinates(easting, northing, id)
 
         self.id = id
+        HydroWorks.all_ids.append(id)  # Track all HydroWorks instances
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
