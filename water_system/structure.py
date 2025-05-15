@@ -209,6 +209,8 @@ class SinkNode:
         weight (float): Weight factor for minimum flow violations in optimization
         inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
     """
+    # Class variable to track all instances of SinkNode
+    all_ids = []
 
     def __init__(
         self,
@@ -251,6 +253,7 @@ class SinkNode:
         validate_positive_integer(weight, "SinkNode weight")
 
         self.id = id
+        SinkNode.all_ids.append(id)  # Track all SinkNode instances
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
@@ -333,6 +336,8 @@ class DemandNode:
         satisfied_non_consumptive_demand (list): Record of met non-consumptive demand [m³/s]
         satisfied_demand_total (list): Record of total satisfied demand [m³/s]
     """
+    # Class variable to track all instances of DemandNode
+    all_ids = []
 
     def __init__(
         self,
@@ -387,6 +392,7 @@ class DemandNode:
         validate_probability(conveyance_efficiency, "conveyance_efficiency")
         
         self.id = id
+        DemandNode.all_ids.append(id)  # Track all DemandNode instances
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges

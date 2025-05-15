@@ -32,7 +32,9 @@ class SingleObjectiveOptimizer:
         self.cxpb = cxpb
         self.mutpb = mutpb
         self.dt = base_system.dt  # Time step in seconds
-        self.reservoir_ids = StorageNode.all_ids
+        self.reservoir_ids = StorageNode.all_ids 
+        self.demand_ids = DemandNode.all_ids
+        self.sink_ids = SinkNode.all_ids
         self.hydroworks_ids = HydroWorks.all_ids
         self.hydroworks_targets = {}
 
@@ -52,7 +54,7 @@ class SingleObjectiveOptimizer:
             
             # Set reservoir-specific bounds
             self.reservoir_bounds[node_id] = {
-                'Vr': (0, total_capacity*self.dt),              # Target monthly release volume
+                'Vr': (0, total_capacity*self.dt),# Target monthly release volume
                 'V1': (dead_storage, capacity),  # Top of buffer zone
                 'V2': (dead_storage, capacity)  # Top of conservation zone
             }
@@ -148,17 +150,7 @@ class SingleObjectiveOptimizer:
                     end_idx = start_idx + n_targets
                     if end_idx <= len(individual):  # Check array bounds
                         individual[start_idx:end_idx] = np.random.random(n_targets)
-            current_idx += 12 * n_targets  # Update index for next hydroworks
-
-        # Normalize hydroworks distributions that were modified
-        current_idx = hw_genes_start
-        for hw_id in hw_updates:
-            n_targets = len(self.hydroworks_targets[hw_id])
-            for month in range(12):
-                start_idx = current_idx + (month * n_targets)
-                end_idx = start_idx + n_targets
-                if end_idx <= len(individual):  # Check array bounds
-                    individual[start_idx:end_idx] = self._normalize_distribution(individual[start_idx:end_idx])
+                        individual[start_idx:end_idx] = self._normalize_distribution(individual[start_idx:end_idx])
             current_idx += 12 * n_targets  # Update index for next hydroworks
 
         return creator.Individual(individual.tolist()),
@@ -240,8 +232,20 @@ class SingleObjectiveOptimizer:
             system.simulate(self.num_time_steps)
             
             total_penalty = 0
+
+            for node_id in self.demand_ids:
+                demand_node = system.graph.nodes[node_id]['node']
+                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
+                satisfied = np.array(demand_node.satisfied_demand_total)
+                deficit = (demand - satisfied) * system.dt
+                total_penalty += np.sum(deficit)
             
-            # Calculate weighted demand deficits
+            for node_id in self.sink_ids:
+                sink_node = system.graph.nodes[node_id]['node']
+                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
+                total_penalty += total_deficit_volume
+            
+            '''# Calculate weighted demand deficits
             for node_id, node_data in system.graph.nodes(data=True):
                 node = node_data['node']
                 
@@ -260,7 +264,7 @@ class SingleObjectiveOptimizer:
                     total_penalty += 10.0 * np.sum(node.spillway_register)
                 
                 elif hasattr(node, 'spill_register'):
-                    total_penalty += 10.0 * np.sum(node.spill_register)
+                    total_penalty += 10.0 * np.sum(node.spill_register)'''
             
             total_penalty = float(total_penalty)
             return (total_penalty,)

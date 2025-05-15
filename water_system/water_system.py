@@ -66,6 +66,8 @@ class WaterSystem:
         """Reset all node class registries"""
         StorageNode.all_ids.clear()
         HydroWorks.all_ids.clear()
+        DemandNode.all_ids.clear()
+        SinkNode.all_ids.clear()
 
     def add_node(self, node: NodeType) -> None:
         """

@@ -221,9 +221,6 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
     
     # Finalize and validate the system
     system._check_network()
-    print(StorageNode.all_ids)
-    print(HydroWorks.all_ids)
-    
     return system
 
 def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str, Union[Dict, List]]) -> WaterSystem:
@@ -638,9 +635,6 @@ def run_simulation(
 
 # Run the sample tests
 if __name__ == "__main__":
-
-    create_ZRB_system(2017, 1, 12*6, system_type = 'baseline', scenario = '', period = '', agr_scenario= '', efficiency = '')
-    create_ZRB_system(2017, 1, 12*6, system_type = 'simplified_ZRB', scenario = '', period = '', agr_scenario= '', efficiency = '')
 
     optimization = True
     simulation = False
