@@ -166,11 +166,8 @@ def validate_dataframe_period(df: pd.DataFrame,
     if 'Date' not in df.columns or column_name not in df.columns:
                 raise ValueError(f"CSV file must contain 'Date' and '{column_name}' columns")
     
-    if len(df) != num_time_steps:
+    if len(df) < num_time_steps:
         raise ValueError(f"DataFrame has {len(df)} rows but expected {num_time_steps}")
-        
-    if not df['Date'].equals(pd.Series(expected_dates)):
-        raise ValueError(f"DataFrame dates do not match expected period starting {expected_start}")
     
     return df
 

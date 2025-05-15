@@ -4,6 +4,7 @@ from deap import base, creator, tools, algorithms
 import random
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
 import copy
+import os
 
 class MultiObjectiveOptimizer:
     """
@@ -534,5 +535,10 @@ class MultiObjectiveOptimizer:
         plt.grid(True)
         
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/three_objective_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        # Ensure the directory exists
+        filename = './model_output/optimisation/deap/three_objective_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png'
+        directory = os.path.dirname(filename)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.savefig(filename)
         

@@ -238,33 +238,21 @@ class SingleObjectiveOptimizer:
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(deficit)
+                total_penalty += np.sum(deficit)*demand_node.weight
             
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
                 total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                total_penalty += total_deficit_volume
+                total_penalty += total_deficit_volume*sink_node.weight
             
-            '''# Calculate weighted demand deficits
-            for node_id, node_data in system.graph.nodes(data=True):
-                node = node_data['node']
-                
-                if isinstance(node, DemandNode):
-                    demand = np.array([node.demand_rates[t] for t in range(self.num_time_steps)])
-                    satisfied = np.array(node.satisfied_demand_total)
-                    deficit = (demand - satisfied) * system.dt
-                    weighted_deficit = deficit * node.weight
-                    total_penalty += np.sum(weighted_deficit)
-                
-                elif isinstance(node, SinkNode):
-                    total_deficit_volume = sum(deficit * system.dt for deficit in node.flow_deficits)
-                    total_penalty += total_deficit_volume * node.weight
-                    
-                elif hasattr(node, 'spillway_register'):
-                    total_penalty += 10.0 * np.sum(node.spillway_register)
-                
-                elif hasattr(node, 'spill_register'):
-                    total_penalty += 10.0 * np.sum(node.spill_register)'''
+            for node_id in self.hydroworks_ids:
+                hydroworks_node = system.graph.nodes[node_id]['node']
+                total_penalty += 10.0 * np.sum(hydroworks_node.spill_register)
+            
+            for node_id in self.reservoir_ids:
+                reservoir_node = system.graph.nodes[node_id]['node']
+                total_penalty += 10.0 * np.sum(reservoir_node.spillway_register)
+                #total_penalty += reservoir_node.capacity - np.sum(reservoir_node.storage)
             
             total_penalty = float(total_penalty)
             return (total_penalty,)
@@ -397,7 +385,7 @@ class SingleObjectiveOptimizer:
 
     def plot_convergence(self)-> None:
         """Plot convergence history"""
-        directory = './model_output/optimisation'
+        directory = './model_output/optimisation/deap'
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -417,5 +405,5 @@ class SingleObjectiveOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        plt.savefig(f'./model_output/optimisation/deap/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         plt.close()
