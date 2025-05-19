@@ -209,13 +209,14 @@ class WaterSystemProblem(Problem):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(deficit) * demand_node.weight
+                total_penalty += np.sum(demand)/np.sum(satisfied) * demand_node.weight
             
             # Calculate penalties for sink nodes
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                total_penalty += total_deficit_volume * sink_node.weight
+                deficit = np.array([sink_node.flow_deficits[t] for t in range(self.num_time_steps)])
+                required= np.array([sink_node.min_flows[t] for t in range(self.num_time_steps)])
+                total_penalty += np.sum(required)/(np.sum(required)-np.sum(deficit)) * sink_node.weight
             
             # Penalties for hydroworks spills
             for node_id in self.hydroworks_ids:

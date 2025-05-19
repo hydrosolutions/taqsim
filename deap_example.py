@@ -426,8 +426,8 @@ if __name__ == "__main__":
     start = datetime.now()
 
 
-    optimization = True
-    simulation = False
+    optimization = False
+    simulation = True
     multiobjective = False
     optunastudy = False
 
@@ -444,10 +444,10 @@ if __name__ == "__main__":
             period = '', 
             agr_scenario= ' ', 
             efficiency = ' ', 
-            ngen=20, 
+            ngen=5, 
             pop_size=100, 
-            cxpb=0.65, 
-            mutpb= 0.32
+            cxpb=0.98, 
+            mutpb= 0.22
         )
         
         # Example of running the optimization for a future scenario
@@ -469,13 +469,13 @@ if __name__ == "__main__":
 
     if simulation:
         # Example of running the simulation with optimized parameters for a simplified ZRB system
-        loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/euler_toqsim_2025-05-14B.json")
+        loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/euler_singleobjective_params_simplified_ZRB_100_2500_0.98_0.22.json")
         system = run_simulation(
             create_ZRB_system,
             loaded_results,
             start_year=2017,
             start_month=1,
-            num_time_steps=12*6,
+            num_time_steps=12,
             system_type = 'simplified_ZRB', 
             scenario = '', 
             period = '',

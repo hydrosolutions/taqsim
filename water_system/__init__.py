@@ -25,13 +25,12 @@ from .visualization import WaterSystemVisualizer
 from .single_objective_ga import SingleObjectiveOptimizer
 from .multi_objective_ga import MultiObjectiveOptimizer
 from .pareto_dashboard_3d import ParetoFrontDashboard
-from .lp_optimization import OptimizedWaterSystem
 from .pymoo_optimization import PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'SupplyNode', 'SinkNode', 'DemandNode', 
            'StorageNode', 'HydroWorks','RunoffNode', 'Edge', 'WaterSystemVisualizer', 
-           'SingleObjectiveOptimizer', 'MultiObjectiveOptimizer', 'ParetoFrontDashboard', 'OptimizedWaterSystem', 
+           'SingleObjectiveOptimizer', 'MultiObjectiveOptimizer', 'ParetoFrontDashboard', 
            'PymooSingleObjectiveOptimizer', 'PymooMultiObjectiveOptimizer']
 
 # Package version
