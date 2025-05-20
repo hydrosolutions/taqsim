@@ -2,7 +2,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
-import numpy as np
 import os
 
 class ParetoFrontDashboard:
@@ -706,3 +705,253 @@ class ParetoFrontDashboard:
             f.write(html_content)
         
         print(f"Index page created at {os.path.join(self.output_dir, 'index.html')}")
+
+class ParetoFrontDashboard4D:
+    """
+    Dashboard for 4-objective Pareto solutions (including spillage).
+    Shows parallel coordinates, radar chart, and solution table.
+    """
+
+    def __init__(self, pareto_solutions, output_dir="./model_output/dashboard"):
+        self.pareto_solutions = pareto_solutions
+        self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.df = self._extract_solution_data()
+
+    def _extract_solution_data(self):
+        if not self.pareto_solutions or not isinstance(self.pareto_solutions, list):
+            print("No valid Pareto solutions provided")
+            return pd.DataFrame()
+        data = []
+        for sol in self.pareto_solutions:
+            if isinstance(sol, dict):
+                solution_id = sol.get('id', 0)
+                obj_values = sol.get('objective_values', [0, 0, 0, 0])
+                regular_deficit = sol.get('demand_deficit', obj_values[0])
+                priority_deficit = sol.get('priority_demand_deficit', obj_values[1])
+                minflow_deficit = sol.get('minflow_deficit', obj_values[2])
+                spillage = sol.get('spillage', obj_values[3])
+            else:
+                solution_id = getattr(sol, 'id', 0)
+                obj_values = sol.fitness.values if hasattr(sol, 'fitness') else [0, 0, 0, 0]
+                regular_deficit = obj_values[0]
+                priority_deficit = obj_values[1]
+                minflow_deficit = obj_values[2]
+                spillage = obj_values[3]
+            data.append({
+                'Solution': solution_id,
+                'Regular Demand Deficit': regular_deficit,
+                'Priority Demand Deficit': priority_deficit,
+                'Minimum Flow Deficit': minflow_deficit,
+                'Spillage': spillage,
+            })
+        df = pd.DataFrame(data)
+        # Normalized columns for radar/parallel
+        for col in ['Regular Demand Deficit', 'Priority Demand Deficit', 'Minimum Flow Deficit', 'Spillage']:
+            max_val = df[col].max()
+            df[f'Normalized {col}'] = df[col] / max_val if max_val != 0 else 0
+        df['Composite Score'] = (
+            df['Normalized Regular Demand Deficit'] +
+            df['Normalized Priority Demand Deficit'] +
+            df['Normalized Minimum Flow Deficit'] +
+            df['Normalized Spillage']
+        ) / 4
+        return df
+
+    def create_parallel_coordinates(self, filename='parallel_coords_4d.html'):
+        if self.df.empty:
+            print("No data available to create parallel coordinates plot")
+            return None
+        fig = px.parallel_coordinates(
+            self.df,
+            color="Composite Score",
+            dimensions=[
+                'Regular Demand Deficit',
+                'Priority Demand Deficit',
+                'Minimum Flow Deficit',
+                'Spillage'
+            ],
+            color_continuous_scale=px.colors.diverging.Tealrose,
+            title='4D Pareto Solutions - Parallel Coordinates'
+        )
+        fig.update_layout(font=dict(size=12), height=600, width=1000)
+        output_path = os.path.join(self.output_dir, filename)
+        fig.write_html(output_path)
+        print(f"Parallel coordinates plot saved to {output_path}")
+        return fig
+
+    def create_radar_chart(self, solution_indices=None, filename='radar_chart_4d.html'):
+        if self.df.empty:
+            print("No data available to create radar chart")
+            return None
+        if solution_indices is None:
+            min_regular_idx = self.df['Regular Demand Deficit'].idxmin()
+            min_priority_idx = self.df['Priority Demand Deficit'].idxmin()
+            min_minflow_idx = self.df['Minimum Flow Deficit'].idxmin()
+            min_spillage_idx = self.df['Spillage'].idxmin()
+            balanced_idx = self.df['Composite Score'].idxmin()
+            solution_indices = [min_regular_idx, min_priority_idx, min_minflow_idx, min_spillage_idx, balanced_idx]
+        selected_solutions = self.df.loc[solution_indices]
+        radar_df = selected_solutions.copy()
+        max_vals = radar_df[['Regular Demand Deficit', 'Priority Demand Deficit', 'Minimum Flow Deficit', 'Spillage']].max()
+        for col in ['Regular Demand Deficit', 'Priority Demand Deficit', 'Minimum Flow Deficit', 'Spillage']:
+            radar_df[f'{col}_Radar'] = 1 - (radar_df[col] / max_vals[col])
+        categories = ['Regular Demand', 'Priority Demand', 'Minimum Flow', 'Spillage']
+        fig = go.Figure()
+        for _, row in radar_df.iterrows():
+            values = [
+                row['Regular Demand Deficit_Radar'],
+                row['Priority Demand Deficit_Radar'],
+                row['Minimum Flow Deficit_Radar'],
+                row['Spillage_Radar']
+            ]
+            values_closed = values + [values[0]]
+            categories_closed = categories + [categories[0]]
+            fig.add_trace(go.Scatterpolar(
+                r=values_closed,
+                theta=categories_closed,
+                fill='toself',
+                name=f'Solution {int(row["Solution"])}'
+            ))
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+            showlegend=True,
+            title="Solution Comparison (Higher is Better)"
+        )
+        output_path = os.path.join(self.output_dir, filename)
+        fig.write_html(output_path)
+        print(f"Radar chart saved to {output_path}")
+        return fig
+
+    def create_representative_table(self, filename='representative_solutions_4d.html'):
+        if self.df.empty:
+            print("No data available to create representative table")
+            return None
+        min_regular_idx = self.df['Regular Demand Deficit'].idxmin()
+        min_priority_idx = self.df['Priority Demand Deficit'].idxmin()
+        min_minflow_idx = self.df['Minimum Flow Deficit'].idxmin()
+        min_spillage_idx = self.df['Spillage'].idxmin()
+        balanced_idx = self.df['Composite Score'].idxmin()
+        representatives = pd.DataFrame({
+            'Solution': ['Best Regular', 'Best Priority', 'Best Min Flow', 'Best Spillage', 'Balanced'],
+            'Solution ID': [
+                self.df.loc[min_regular_idx, 'Solution'],
+                self.df.loc[min_priority_idx, 'Solution'],
+                self.df.loc[min_minflow_idx, 'Solution'],
+                self.df.loc[min_spillage_idx, 'Solution'],
+                self.df.loc[balanced_idx, 'Solution']
+            ],
+            'Regular Demand Deficit': [
+                self.df.loc[min_regular_idx, 'Regular Demand Deficit'],
+                self.df.loc[min_priority_idx, 'Regular Demand Deficit'],
+                self.df.loc[min_minflow_idx, 'Regular Demand Deficit'],
+                self.df.loc[min_spillage_idx, 'Regular Demand Deficit'],
+                self.df.loc[balanced_idx, 'Regular Demand Deficit']
+            ],
+            'Priority Demand Deficit': [
+                self.df.loc[min_regular_idx, 'Priority Demand Deficit'],
+                self.df.loc[min_priority_idx, 'Priority Demand Deficit'],
+                self.df.loc[min_minflow_idx, 'Priority Demand Deficit'],
+                self.df.loc[min_spillage_idx, 'Priority Demand Deficit'],
+                self.df.loc[balanced_idx, 'Priority Demand Deficit']
+            ],
+            'Minimum Flow Deficit': [
+                self.df.loc[min_regular_idx, 'Minimum Flow Deficit'],
+                self.df.loc[min_priority_idx, 'Minimum Flow Deficit'],
+                self.df.loc[min_minflow_idx, 'Minimum Flow Deficit'],
+                self.df.loc[min_spillage_idx, 'Minimum Flow Deficit'],
+                self.df.loc[balanced_idx, 'Minimum Flow Deficit']
+            ],
+            'Spillage': [
+                self.df.loc[min_regular_idx, 'Spillage'],
+                self.df.loc[min_priority_idx, 'Spillage'],
+                self.df.loc[min_minflow_idx, 'Spillage'],
+                self.df.loc[min_spillage_idx, 'Spillage'],
+                self.df.loc[balanced_idx, 'Spillage']
+            ]
+        })
+        # Create formatted versions for display
+        for col in ['Regular Demand Deficit', 'Priority Demand Deficit', 'Minimum Flow Deficit', 'Spillage']:
+            representatives[f'{col} (m³)'] = representatives[col].map('{:,.0f}'.format)
+        display_columns = [
+            'Solution', 'Solution ID',
+            'Regular Demand Deficit (m³)', 'Priority Demand Deficit (m³)',
+            'Minimum Flow Deficit (m³)', 'Spillage (m³)'
+        ]
+        fig = go.Figure(data=[go.Table(
+            header=dict(
+                values=display_columns,
+                fill_color='paleturquoise',
+                align='left',
+                font=dict(size=12)
+            ),
+            cells=dict(
+                values=[representatives[col] for col in display_columns],
+                fill_color='lavender',
+                align='right',
+                font=dict(size=11)
+            )
+        )])
+        fig.update_layout(
+            title="Representative Solutions (4 Objectives)",
+            height=350,
+            width=1200
+        )
+        output_path = os.path.join(self.output_dir, filename)
+        fig.write_html(output_path)
+        print(f"Representative solutions table saved to {output_path}")
+        # Also save as CSV
+        csv_path = os.path.join(self.output_dir, filename.replace('.html', '.csv'))
+        representatives.to_csv(csv_path, index=False)
+        return representatives
+
+    def generate_full_report(self):
+        figures = {}
+        figures['parallel'] = self.create_parallel_coordinates('parallel_coords_4d.html')
+        figures['radar'] = self.create_radar_chart(filename='radar_chart_4d.html')
+        figures['table'] = self.create_representative_table('representative_solutions_4d.html')
+        self._create_index_page()
+        return figures
+
+    def _create_index_page(self):
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>4D Multi-objective Optimization Results</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; line-height: 1.6; }
+                h1, h2 { color: #333; }
+                .container { max-width: 1200px; margin: 0 auto; }
+                .card { border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px; }
+                .card h2 { margin-top: 0; }
+                a { color: #0066cc; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+                .description { color: #666; margin-bottom: 15px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>4D Multi-objective Water System Optimization Results</h1>
+                <div class="card">
+                    <h2>Parallel Coordinates Plot</h2>
+                    <p class="description">Visualize all four objectives and their trade-offs.</p>
+                    <a href="parallel_coords_4d.html" target="_blank">Open Parallel Coordinates</a>
+                </div>
+                <div class="card">
+                    <h2>Representative Solutions Comparison</h2>
+                    <p class="description">View a radar chart comparing key representative solutions.</p>
+                    <a href="radar_chart_4d.html" target="_blank">Open Radar Chart</a>
+                </div>
+                <div class="card">
+                    <h2>Representative Solutions Table</h2>
+                    <p class="description">See a detailed table of representative solutions.</p>
+                    <a href="representative_solutions_4d.html" target="_blank">Open Solutions Table</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        with open(os.path.join(self.output_dir, 'index_4d.html'), 'w') as f:
+            f.write(html_content)
+        print(f"4D index page created at {os.path.join(self.output_dir, 'index_4d.html')}")

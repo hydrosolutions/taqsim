@@ -6,7 +6,10 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge, PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer
+from water_system import (WaterSystem, SupplyNode, StorageNode, DemandNode, 
+                          SinkNode, HydroWorks, RunoffNode, Edge, 
+                          PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer, 
+                          ParetoFrontDashboard, ParetoFrontDashboard4D)
 # Import from your original script to get the system creator
 from ZRB_system_creator import create_ZRB_system
 
@@ -319,7 +322,7 @@ def save_optimized_parameters(optimization_results, filename):
 if __name__ == "__main__":
     
     
-    # Example of running the pymoo single-objective optimization
+    '''# Example of running the pymoo single-objective optimization
     print("\n=== PYMOO SINGLE-OBJECTIVE OPTIMIZATION ===\n")
     start = datetime.now()
     
@@ -330,12 +333,12 @@ if __name__ == "__main__":
         num_time_steps=12*6,  # Reduced for faster runtime in example
         system_type='simplified_ZRB',
         n_gen=20,              # Reduced for faster runtime in example
-        pop_size=100,           # Reduced for faster runtime in example
+        pop_size=10,           # Reduced for faster runtime in example
         crossover_prob=0.65,
         mutation_prob=0.32
     )
     
-    print(f"\nSingle-objective optimization completed in {datetime.now() - start}")
+    print(f"\nSingle-objective optimization completed in {datetime.now() - start}")'''
     
     # Example of running pymoo multi-objective optimization
     print("\n=== PYMOO MULTI-OBJECTIVE OPTIMIZATION ===\n")
@@ -351,7 +354,23 @@ if __name__ == "__main__":
         pop_size=30,           # Reduced for faster runtime in example
         crossover_prob=0.65,
         mutation_prob=0.32,
-        num_objectives=2       # Using 2 objectives for simplicity
+        num_objectives=4       # Using 2 objectives for simplicity
     )
     
+    with open("./model_output/optimisation/pymoo/simplified_ZRB/pymoo_mo4_simplified_ZRB_10_30.json", "r") as f:
+        data = json.load(f)
+    
+    pareto_solutions = data.get('pareto_solutions', [])
+    
+    # Create dashboard
+    dashboard = ParetoFrontDashboard4D(
+        pareto_solutions=pareto_solutions,
+        output_dir="./model_output/dashboard/baseline"
+    )
+    
+    # Generate all visualizations
+    dashboard.generate_full_report()
+    
+    print(f"Dashboard created at {dashboard.output_dir}/index.html")
+
     print(f"\nMulti-objective optimization completed in {datetime.now() - start}")

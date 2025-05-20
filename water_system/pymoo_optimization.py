@@ -174,7 +174,7 @@ class WaterSystemProblem(Problem):
         for i in range(n_individuals):
             f[i] = self._evaluate_individual(x[i])
         
-        out["F"] = f
+        out["F"] = np.array(f)
     
     def _evaluate_individual(self, x):
         """
@@ -466,6 +466,93 @@ class PymooProblemThreeObjective(PymooProblemMultiObjective):
             print(f"Error evaluating individual: {str(e)}")
             return [float('inf'), float('inf'), float('inf')]
 
+class PymooProblemFourObjective(PymooProblemMultiObjective):
+    """
+    Four-objective extension focusing on different types of demands
+    (if needed for your specific application)
+    """
+    def __init__(self, 
+                 base_system: WaterSystem,
+                 start_year: int,
+                 start_month: int,
+                 num_time_steps: int):
+        
+        super().__init__(base_system, start_year, start_month, num_time_steps)
+        self.n_obj = 4  # Four objectives
+        
+        # Identify high priority demand nodes (those with weight > 1)
+        self.priority_demand_ids = [node_id for node_id in self.demand_ids 
+                                    if self.base_system.graph.nodes[node_id]['node'].weight > 1]
+        
+        # Regular priority demands
+        self.regular_demand_ids = [node_id for node_id in self.demand_ids 
+                                  if self.base_system.graph.nodes[node_id]['node'].weight == 1]
+    
+    def _evaluate_individual_multi(self, x):
+        """
+        Three-objective evaluation
+        """
+        # Decode parameters
+        reservoir_params, hydroworks_params = self._decode_individual(x)
+        
+        try:
+            # Create and configure water system
+            import copy
+            system = copy.deepcopy(self.base_system)
+            
+            # Set parameters for all reservoirs
+            for res_id, params in reservoir_params.items():
+                reservoir_node = system.graph.nodes[res_id]['node']
+                reservoir_node.set_release_params(params)
+            
+            # Set parameters for all hydroworks
+            for hw_id, params in hydroworks_params.items():
+                hydroworks_node = system.graph.nodes[hw_id]['node']
+                hydroworks_node.set_distribution_parameters(params)
+            
+            # Run simulation
+            system.simulate(self.num_time_steps)
+            
+            # Objective 1: Regular priority demand deficit
+            regular_demand_deficit = 0
+            for node_id in self.regular_demand_ids:
+                demand_node = system.graph.nodes[node_id]['node']
+                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
+                satisfied = np.array(demand_node.satisfied_demand_total)
+                deficit = (demand - satisfied) * system.dt
+                regular_demand_deficit += np.sum(deficit)
+            
+            # Objective 2: High priority demand deficit
+            priority_demand_deficit = 0
+            for node_id in self.priority_demand_ids:
+                demand_node = system.graph.nodes[node_id]['node']
+                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
+                satisfied = np.array(demand_node.satisfied_demand_total)
+                deficit = (demand - satisfied) * system.dt
+                priority_demand_deficit += np.sum(deficit) * demand_node.weight
+            
+            # Objective 3: Minimum flow deficit
+            min_flow_deficit = 0
+            for node_id in self.sink_ids:
+                sink_node = system.graph.nodes[node_id]['node']
+                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
+                min_flow_deficit += total_deficit_volume * sink_node.weight
+            
+            # Objective 4: Total hydrowork and reservoir spillage
+            total_spillage = 0
+            for node_id in self.hydroworks_ids:
+                hydroworks_node = system.graph.nodes[node_id]['node']
+                total_spillage += np.sum(hydroworks_node.spill_register)
+            for node_id in self.reservoir_ids:
+                reservoir_node = system.graph.nodes[node_id]['node']
+                total_spillage += np.sum(reservoir_node.spillway_register)
+            
+            return [float(regular_demand_deficit), float(priority_demand_deficit), float(min_flow_deficit), float(total_spillage)]
+            
+        except Exception as e:
+            print(f"Error evaluating individual: {str(e)}")
+            return [float('inf'), float('inf'), float('inf'), float('inf')]
+
 
 class PymooSingleObjectiveOptimizer:
     """
@@ -511,7 +598,6 @@ class PymooSingleObjectiveOptimizer:
             selection=TournamentSelection(pressure=2,func_comp=binary_tournament),
             eliminate_duplicates=True
         )
-
 
     def optimize(self) -> Dict[str, Union[bool, str, int, float, Dict[str, Dict[str, List[float]]]]]:
         """
@@ -637,6 +723,13 @@ class PymooMultiObjectiveOptimizer:
             )
         elif num_objectives == 3:
             self.problem = PymooProblemThreeObjective(
+                base_system=base_system,
+                start_year=start_year,
+                start_month=start_month,
+                num_time_steps=num_time_steps
+            )
+        elif num_objectives == 4:
+            self.problem = PymooProblemFourObjective(
                 base_system=base_system,
                 start_year=start_year,
                 start_month=start_month,
