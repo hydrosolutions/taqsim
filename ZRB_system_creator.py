@@ -138,7 +138,7 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
                                  start_year=start_year,
                                  start_month=start_month,
                                  num_time_steps=num_time_steps,
-                                 initial_storage=3e8,
+                                 initial_storage=32e5,#3e8,
                                  dead_storage=32e5,
                                  buffer_coef=0.2)
     
@@ -150,7 +150,7 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
                              start_year=start_year,
                              start_month=start_month,
                              num_time_steps=num_time_steps,
-                             initial_storage=4e7,
+                             initial_storage=14e5,#4e7,
                              dead_storage=14e5,
                              buffer_coef=0.2)
     

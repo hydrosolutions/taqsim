@@ -16,8 +16,9 @@ from pyomo.opt import SolverFactory
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
 from ZRB_system_creator import create_ZRB_system
 from deap_example import load_optimized_parameters, load_parameters_from_file
+from simple_system_creator import create_system
 
-class ZRBOptimizationModel:
+class LPOptimizationModel:
     """
     Represents the ZRB water system as a Pyomo optimization model.
     This class transforms the original simulation-based water system to a
@@ -85,6 +86,7 @@ class ZRBOptimizationModel:
         model = self.model
         # Define time steps set
         model.T = pyo.RangeSet(0, self.num_time_steps-1)
+        model.T_storage = pyo.RangeSet(0, self.num_time_steps)
         # Create reference to the original system for data import
         self._create_original_system()
         # Create node and edge structures for optimization
@@ -106,7 +108,7 @@ class ZRBOptimizationModel:
         This is used only for initializing data, not for simulation.
         """
         
-        self.original_system = create_ZRB_system(
+        self.original_system = create_system(
             start_year=self.start_year,
             start_month=self.start_month,
             num_time_steps=self.num_time_steps,
@@ -250,7 +252,7 @@ class ZRBOptimizationModel:
                                         domain=pyo.NonNegativeReals)
         
         # Storage variables
-        model.storage = pyo.Var(model.storage_nodes, model.T, 
+        model.storage = pyo.Var(model.storage_nodes, model.T_storage, 
                               domain=pyo.NonNegativeReals)
         model.release = pyo.Var(model.storage_nodes, model.T, 
                               domain=pyo.NonNegativeReals)
@@ -266,10 +268,12 @@ class ZRBOptimizationModel:
                               domain=pyo.NonNegativeReals)
         
         # Spill variables for reservoirs and hydroworks
-        model.reservoir_spill = pyo.Var(model.storage_nodes, model.T, 
+        model.reservoir_spill = pyo.Var(model.storage_nodes, model.T_storage, 
                                       domain=pyo.NonNegativeReals)
         model.hydroworks_spill = pyo.Var(model.hydroworks_nodes, model.T, 
                                        domain=pyo.NonNegativeReals)
+        
+        model.excess_storage = pyo.Var(model.storage_nodes, model.T_storage, domain=pyo.NonNegativeReals)
     
     def _create_constraints(self):
         """
@@ -353,33 +357,16 @@ class ZRBOptimizationModel:
 
         # 5. Mass Balance Constraints for StorageNodes
         def storage_mass_balance_rule(model, node, t):
-            # Get incoming and outgoing edges
-            incoming_edges = [(source, target) for source, target in model.edges if target == node]
-            outgoing_edges = [(source, target) for source, target in model.edges if source == node]
-            
-            # Calculate total inflow after losses
-            total_inflow = sum(model.flow_after_losses[source, target, t] for source, target in incoming_edges)
-            
-            
-            '''# Calculate evaporation losses
-            evaporation_rate = self.nodes[node]['evaporation_rates'][t]
-            # Simplified evaporation calculation - in a full model, this would depend on surface area
-            # which depends on storage volume, making it nonlinear
-            estimated_evaporation = evaporation_rate / 1000 * 1e6  # Convert mm to m³'''
-            
-            # Storage balance equation
             if t == 0:
-                previous_storage = self.nodes[node]['initial_storage']
+                return model.storage[node, t] == self.nodes[node]['initial_storage']
             else:
-                previous_storage = model.storage[node, t-1]
-            
-
-            return model.storage[node, t] == previous_storage + \
-                   (total_inflow - model.release[node,t]) * self.dt - \
-                   model.reservoir_spill[node, t]
-        
+                incoming_edges = [(source, target) for source, target in model.edges if target == node]
+                total_inflow = sum(model.flow_after_losses[source, target, t-1] for source, target in incoming_edges)
+                return model.storage[node, t] == model.storage[node, t-1] + \
+                    (total_inflow - model.release[node, t-1]) * self.dt - \
+                    model.reservoir_spill[node, t-1]
         model.storage_mass_balance_constraint = pyo.Constraint(
-            model.storage_nodes, model.T, rule=storage_mass_balance_rule
+            model.storage_nodes, model.T_storage, rule=storage_mass_balance_rule
         )
 
         # 6. Storage Capacity Constraints
@@ -390,6 +377,20 @@ class ZRBOptimizationModel:
         model.storage_capacity_constraint = pyo.Constraint(
             model.storage_nodes, model.T, rule=storage_capacity_rule
         )
+        # 6.1 Storage Release Constraints
+        def storage_release_rule(model, node, t):
+            # Find the first outgoing edge from this storage node
+            outgoing_edge = next((e for e in self.edges if e['source'] == node), None)
+            
+            if outgoing_edge is None:
+                return pyo.Constraint.Skip
+                
+            return model.release[node,t] <= outgoing_edge['capacity']
+        
+        model.storage_release_constraint = pyo.Constraint(
+            model.storage_nodes, model.T, rule=storage_release_rule
+        )
+            
         
         # 7. Dead Storage Constraints
         def dead_storage_rule(model, node, t):
@@ -400,16 +401,43 @@ class ZRBOptimizationModel:
             model.storage_nodes, model.T, rule=dead_storage_rule
         )
 
+        # 7.1 Spill constraints
+        def excess_storage_definition_rule(model, node, t):
+            capacity = self.nodes[node]['capacity']
+            # excess_storage = max(0, storage - capacity)
+            return model.excess_storage[node, t] >= model.storage[node, t] - capacity
+
+        model.excess_storage_definition = pyo.Constraint(
+            model.storage_nodes, model.T, rule=excess_storage_definition_rule
+        )
+
+        def excess_storage_nonneg_rule(model, node, t):
+            # excess_storage >= 0 (already enforced by domain, but explicit for clarity)
+            return model.excess_storage[node, t] >= 0
+
+        model.excess_storage_nonneg = pyo.Constraint(
+            model.storage_nodes, model.T, rule=excess_storage_nonneg_rule
+        )
+
+        def spill_equals_excess_rule(model, node, t):
+            # Spill is exactly the excess storage
+            return model.reservoir_spill[node, t] == model.excess_storage[node, t]
+
+        model.spill_equals_excess = pyo.Constraint(
+            model.storage_nodes, model.T, rule=spill_equals_excess_rule
+        )
+        
+
         # 8. Mass Balance Constraints for DemandNodes
         # (a) Consumptive demand can't exceed total inflow
-        def demand_consumptive_constraint_rule(model, node, t):
+        '''def demand_consumptive_constraint_rule(model, node, t):
             incoming_edges = [(source, target) for source, target in model.edges if target == node]
             total_inflow = sum(model.flow_after_losses[source, target, t] for source, target in incoming_edges)
             return model.supplied_consumptive_demand[node, t] <= total_inflow
 
         model.demand_consumptive_constraint = pyo.Constraint(
             model.demand_nodes, model.T, rule=demand_consumptive_constraint_rule
-        )
+        )'''
 
         # (b) Total demand satisfaction (consumptive + non-consumptive) can't exceed total inflow
         def demand_total_constraint_rule(model, node, t):
@@ -573,11 +601,11 @@ class ZRBOptimizationModel:
             )
             
             # 3. Storage benefit (reward higher storage levels)
-            storage_benefit = sum(
+            ''' = sum(
                 0.05 * model.storage[node, t] / self.nodes[node]['capacity']
                 for node in model.storage_nodes
                 for t in model.T
-            )
+            )'''
             
             # 4. Spill penalties
             spill_penalty = sum(
@@ -591,7 +619,7 @@ class ZRBOptimizationModel:
             )
             
             # Combined objective (maximize benefits, minimize penalties)
-            return demand_benefit + storage_benefit - flow_deficit_penalty - spill_penalty
+            return demand_benefit - flow_deficit_penalty - spill_penalty
         
         model.objective = pyo.Objective(rule=objective_rule, sense=pyo.maximize)
     
@@ -712,120 +740,6 @@ class ZRBOptimizationModel:
         }        
         return results
     
-    def compare_with_simulation(self):
-        """
-        Compare optimization results with simulation-based approach.
-        
-        This method creates and runs the original simulation model,
-        then compares key performance metrics with the optimization results.
-        
-        Returns:
-            dict: Comparison metrics between optimization and simulation
-        """
-        
-        sim_system = create_ZRB_system(
-            start_year=self.start_year,
-            start_month=self.start_month,
-            num_time_steps=self.num_time_steps,
-            system_type=self.system_type,
-            scenario=self.scenario,
-            period=self.period,
-            agr_scenario=self.agr_scenario,
-            efficiency=self.efficiency
-        )
-        loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/euler_singleobjective_params_simplified_ZRB_100_3000_0.65_0.32.json")
-        sim_system = load_optimized_parameters(sim_system, loaded_results)
-        # Run simulation
-        sim_system.simulate(self.num_time_steps)
-        
-        # Get optimization results
-        opt_results = self.get_results()
-        
-        # Initialize comparison metrics
-        comparison = {
-            'demand_satisfaction': {
-                'optimization': 0,
-                'simulation': 0
-            },
-            'min_flow_deficits': {
-                'optimization': 0,
-                'simulation': 0
-            },
-            'storage_utilization': {
-                'optimization': 0,
-                'simulation': 0
-            }
-        }
-        
-        # Compare demand satisfaction
-        opt_demand_satisfaction = 0
-        total_demand = 0
-        
-        for node in self.model.demand_nodes:
-            for t in self.model.T:
-                node_demand = self.nodes[node]['demand_rates'][t]
-                total_demand += node_demand
-                
-                opt_supplied = (opt_results['demand']['consumptive'].get((node, t), 0) + 
-                               opt_results['demand']['non_consumptive'].get((node, t), 0))
-                opt_demand_satisfaction += opt_supplied
-        
-        # Get simulation demand satisfaction
-        sim_demand_nodes = [n for n, data in sim_system.graph.nodes(data=True) 
-                          if isinstance(data['node'], DemandNode)]
-        
-        sim_demand_satisfaction = 0
-        for node_id in sim_demand_nodes:
-            node = sim_system.graph.nodes[node_id]['node']
-            sim_demand_satisfaction += sum(
-                node.satisfied_consumptive_demand[t] + node.satisfied_non_consumptive_demand[t]
-                for t in range(self.num_time_steps)
-            )
-        
-        # Calculate percentages
-        if total_demand > 0:
-            comparison['demand_satisfaction']['optimization'] = opt_demand_satisfaction / total_demand * 100
-            comparison['demand_satisfaction']['simulation'] = sim_demand_satisfaction / total_demand * 100
-        
-        # Compare minimum flow deficits
-        opt_deficits = sum(opt_results['deficits'].values())
-        
-        sim_sink_nodes = [n for n, data in sim_system.graph.nodes(data=True) 
-                        if isinstance(data['node'], SinkNode)]
-        
-        sim_deficits = 0
-        for node_id in sim_sink_nodes:
-            node = sim_system.graph.nodes[node_id]['node']
-            sim_deficits += sum(node.flow_deficits)
-        
-        comparison['min_flow_deficits']['optimization'] = opt_deficits
-        comparison['min_flow_deficits']['simulation'] = sim_deficits
-        
-        # Compare storage utilization
-        opt_storage = 0
-        total_capacity = 0
-        
-        for node in self.model.storage_nodes:
-            capacity = self.nodes[node]['capacity']
-            total_capacity += capacity * self.num_time_steps
-            
-            for t in self.model.T:
-                opt_storage += opt_results['storage'].get((node, t), 0)
-        
-        sim_storage_nodes = [n for n, data in sim_system.graph.nodes(data=True) 
-                           if isinstance(data['node'], StorageNode)]
-        
-        sim_storage = 0
-        for node_id in sim_storage_nodes:
-            node = sim_system.graph.nodes[node_id]['node']
-            sim_storage += sum(node.storage[1:])  # Skip initial storage
-        
-        if total_capacity > 0:
-            comparison['storage_utilization']['optimization'] = opt_storage / total_capacity * 100
-            comparison['storage_utilization']['simulation'] = sim_storage / total_capacity * 100
-        
-        return comparison
-    
     def print_optimization_water_balance(self):
         """
         Print a summary of the water balance based on optimization results only.
@@ -859,17 +773,20 @@ class ZRBOptimizationModel:
         total_demand = 0
         total_satisfied = 0
         total_unmet = 0
+        total_consumptive = 0
         for node in self.model.demand_nodes:
             for t in self.model.T:
                 demand = self.nodes[node]['demand_rates'][t]
                 cons = results['demand']['consumptive'].get((node, t), 0)
                 non_cons = results['demand']['non_consumptive'].get((node, t), 0)
                 satisfied = cons + non_cons
+                total_consumptive += cons*self.dt
                 total_demand += demand*self.dt
                 total_satisfied += satisfied*self.dt
                 total_unmet += max(0, demand - satisfied)*self.dt
         print(f"Total demand:         {total_demand/num_years:15,.0f} m³/a")
         print(f"Satisfied demand:     {total_satisfied/num_years:15,.0f} m³/a")
+        print(f'of which consumptive: {total_consumptive/num_years:15,.0f} m³/a')
         print(f"Unmet demand:         {total_unmet/num_years:15,.0f} m³/a")
 
         # Sink outflows and deficits
@@ -921,12 +838,12 @@ class ZRBOptimizationModel:
         # Water balance check
         print("\nWater Balance Check")
         print("-" * 20)
-        total_out = total_satisfied + total_sink_outflow + total_reservoir_spill + total_hw_spill
-        print(f"Total In:   {total_source/num_years:15,.0f} m³/a")
-        print(f"Total Out:  {total_out/num_years:15,.0f} m³/a")
-        print(f"ΔStorage:   {total_storage_change/num_years:15,.0f} m³/a")
+        total_out = total_consumptive + total_sink_outflow + total_reservoir_spill + total_hw_spill
+        print(f"Total In:         {total_source/num_years:25,.0f} m³/a")
+        print(f"Total Out:        {total_out/num_years:25,.0f} m³/a")
+        print(f"ΔStorage:         {total_storage_change/num_years:25,.0f} m³/a")
         balance = total_source - total_out - total_storage_change
-        print(f"Balance residual: {balance/num_years:15,.0f} m³/a")
+        print(f"Balance residual: {balance/num_years:25,.0f} m³/a")
         print("=" * 50)
 
     def visualize_results(self):
@@ -1042,52 +959,6 @@ class ZRBOptimizationModel:
         plt.tight_layout()
         plots['deficits'] = fig3
         
-        # Compare with simulation if available
-        try:
-            comparison = self.compare_with_simulation()
-            
-            fig4 = plt.figure(figsize=(10, 8))
-            gs = GridSpec(3, 1)
-            
-            ax1 = fig4.add_subplot(gs[0])
-            ax2 = fig4.add_subplot(gs[1])
-            ax3 = fig4.add_subplot(gs[2])
-            
-            # Plot demand satisfaction comparison
-            labels = ['Optimization', 'Simulation']
-            demand_vals = [comparison['demand_satisfaction']['optimization'],
-                        comparison['demand_satisfaction']['simulation']]
-            
-            ax1.bar(labels, demand_vals)
-            ax1.set_title('Demand Satisfaction (%)')
-            ax1.set_ylim(0, 100)
-            for i, v in enumerate(demand_vals):
-                ax1.text(i, v + 2, f"{v:.1f}%", ha='center')
-            
-            # Plot deficit comparison
-            deficit_vals = [comparison['min_flow_deficits']['optimization'],
-                          comparison['min_flow_deficits']['simulation']]
-            
-            ax2.bar(labels, deficit_vals)
-            ax2.set_title('Total Minimum Flow Deficits (m³/s)')
-            for i, v in enumerate(deficit_vals):
-                ax2.text(i, v + 2, f"{v:.1f}", ha='center')
-            
-            # Plot storage utilization comparison
-            storage_vals = [comparison['storage_utilization']['optimization'],
-                          comparison['storage_utilization']['simulation']]
-            
-            ax3.bar(labels, storage_vals)
-            ax3.set_title('Storage Utilization (%)')
-            ax3.set_ylim(0, 100)
-            for i, v in enumerate(storage_vals):
-                ax3.text(i, v + 2, f"{v:.1f}%", ha='center')
-            
-            plt.tight_layout()
-            plots['comparison'] = fig4
-            
-        except Exception as e:
-            print(f"Error creating comparison plot: {str(e)}")
         
         import seaborn as sns
 
@@ -1139,9 +1010,241 @@ class ZRBOptimizationModel:
         except Exception as e:
             print(f"Error printing water balance: {str(e)}")
 
+        # Add reservoir inflow and release plot
+        try:
+            # Get storage nodes we're interested in
+            filtered_nodes = [node for node in self.model.storage_nodes]
+            
+            if filtered_nodes:
+                # Create figure with subplots - one row per reservoir
+                fig, axes = plt.subplots(len(filtered_nodes), 1, figsize=(15, 6*len(filtered_nodes)), sharex=True)
+                if len(filtered_nodes) == 1:
+                    axes = [axes]  # Ensure axes is always a list
+                
+                time_steps = list(range(self.num_time_steps))
+                
+                for idx, node in enumerate(filtered_nodes):
+                    ax = axes[idx]
+                    
+                    # Calculate inflow for this node
+                    inflow_values = []
+                    for t in time_steps:
+                        # Sum all flows after losses from incoming edges to this node
+                        incoming_edges = [(source, target) for source, target in self.model.edges if target == node]
+                        inflow_t = sum(results['flows']['after_losses'].get((source, target, t), 0) 
+                                    for source, target in incoming_edges)
+                        inflow_values.append(inflow_t)
+                    
+                    # Get release values for this node
+                    release_values = [results['release'].get((node, t), 0) for t in time_steps]
+                    
+                    # Get storage values for this node
+                    storage_values = [results['storage'].get((node, t), 0) / 1e6 for t in time_steps]  # Convert to million m³
+                    
+                    # Create twin axis for dual y-axes
+                    ax2 = ax.twinx()
+                    
+                    # Plot inflow and release on the primary y-axis
+                    line1 = ax.plot(time_steps, inflow_values, 'b-', label='Inflow', linewidth=2)
+                    line2 = ax.plot(time_steps, release_values, 'g-', label='Release', linewidth=2)
+                    
+                    # Plot storage on secondary y-axis
+                    line3 = ax2.plot(time_steps, storage_values, 'r--', label='Storage', linewidth=2)
+                    
+                    # Calculate statistics
+                    if inflow_values:
+                        mean_inflow = sum(inflow_values)/len(inflow_values)
+                        mean_release = sum(release_values)/len(release_values)
+                        max_storage = max(storage_values) if storage_values else 0
+                        min_storage = min(storage_values) if storage_values else 0
+                        
+                        stats_text = (
+                            f"Statistics:\n"
+                            f"Mean Inflow: {mean_inflow:.2f} m³/s\n"
+                            f"Mean Release: {mean_release:.2f} m³/s\n"
+                            f"Max Storage: {max_storage:.2f} million m³\n"
+                            f"Min Storage: {min_storage:.2f} million m³"
+                        )
+                        
+                        # Add statistics text box
+                        ax.text(0.02, 0.98, stats_text,
+                            transform=ax.transAxes,
+                            verticalalignment='top',
+                            bbox=dict(boxstyle='round',
+                                    facecolor='white',
+                                    alpha=0.8))
+                    
+                    # Set labels and titles
+                    ax.set_ylabel('Flow Rate (m³/s)', fontsize=12)
+                    ax2.set_ylabel('Storage (million m³)', fontsize=12)
+                    ax.set_title(f'{node} - Inflow, Release, and Storage', fontsize=14)
+                    
+                    # Add a grid
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Add legend combining both axes
+                    lines = line1 + line2 + line3
+                    labels = [l.get_label() for l in lines]
+                    ax.legend(lines, labels, loc='upper right')
+                
+                # Add an x-label to the bottom plot
+                axes[-1].set_xlabel('Time Step', fontsize=12)
+                
+                # Adjust layout to prevent overlap
+                plt.tight_layout()
+                
+                plots['reservoir_operations'] = fig
+                
+        except Exception as e:
+            print(f"Error creating reservoir inflow/release plot: {str(e)}")
+
+        # Add hydroworks inflow and outflow visualization
+        try:
+            # Find hydroworks nodes
+            hydroworks_nodes = [node for node in self.model.hydroworks_nodes]
+            
+            if hydroworks_nodes:
+                # Create figure with subplots - one row per hydroworks node
+                fig, axes = plt.subplots(len(hydroworks_nodes), 1, figsize=(15, 6*len(hydroworks_nodes)), sharex=True)
+                if len(hydroworks_nodes) == 1:
+                    axes = [axes]  # Ensure axes is always a list
+                
+                time_steps = list(range(self.num_time_steps))
+                
+                for idx, node in enumerate(hydroworks_nodes):
+                    ax = axes[idx]
+                    
+                    # Calculate total inflow for this node
+                    inflow_values = []
+                    for t in time_steps:
+                        # Sum all flows after losses from incoming edges to this node
+                        incoming_edges = [(source, target) for source, target in self.model.edges if target == node]
+                        inflow_t = sum(results['flows']['after_losses'].get((source, target, t), 0) 
+                                    for source, target in incoming_edges)
+                        inflow_values.append(inflow_t)
+                    
+                    # Get all outflows by target
+                    outflow_by_target = {}
+                    outgoing_edges = [(source, target) for source, target in self.model.edges if source == node]
+                    
+                    for source, target in outgoing_edges:
+                        target_outflows = [results['flows']['before_losses'].get((source, target, t), 0) for t in time_steps]
+                        outflow_by_target[target] = target_outflows
+                    
+                    # Calculate total outflow for balance check
+                    total_outflow_values = []
+                    for t in time_steps:
+                        total_outflow_t = sum(results['flows']['before_losses'].get((node, target, t), 0) 
+                                            for _, target in outgoing_edges)
+                        total_outflow_values.append(total_outflow_t)
+                    
+                    # Plot inflow
+                    ax.plot(time_steps, inflow_values, 'b-', label='Total Inflow', linewidth=3)
+                    
+                    # Plot outflows with different colors for each target
+                    colors = plt.cm.tab10(np.linspace(0, 1, len(outflow_by_target)))
+                    for (_, target), outflows, color in zip(outgoing_edges, outflow_by_target.values(), colors):
+                        ax.plot(time_steps, outflows, '-', label=f'Outflow to {target}', linewidth=2, color=color)
+                        
+                    # Also plot total outflow for validation
+                    ax.plot(time_steps, total_outflow_values, 'k--', label='Total Outflow', linewidth=2)
+                    
+                    # Calculate spill if available
+                    spill_values = [0] * len(time_steps)
+                    for t in time_steps:
+                        # Spill is the difference between inflow and total outflow
+                        spill_values[t] = (inflow_values[t] - total_outflow_values[t]) * self.dt
+                    
+                    # Calculate statistics
+                    if inflow_values:
+                        mean_inflow = sum(inflow_values)/len(inflow_values)
+                        mean_total_outflow = sum(total_outflow_values)/len(total_outflow_values)
+                        total_spill = sum(spill_values)
+                        
+                        # Calculate distribution percentages for targets
+                        distribution_percentages = {}
+                        for target, outflows in outflow_by_target.items():
+                            total_outflow_to_target = sum(outflows)
+                            if sum(total_outflow_values) > 0:
+                                percentage = (total_outflow_to_target / sum(total_outflow_values)) * 100
+                                distribution_percentages[target] = percentage
+                        
+                        # Create statistics text
+                        stats_text = [
+                            f"Statistics:",
+                            f"Mean Inflow: {mean_inflow:.2f} m³/s",
+                            f"Mean Outflow: {mean_total_outflow:.2f} m³/s",
+                            f"Total Spill: {total_spill:.2f} m³",
+                            f"\nDistribution Percentages:"
+                        ]
+                        
+                        for target, percentage in distribution_percentages.items():
+                            stats_text.append(f"{target}: {percentage:.1f}%")
+                        
+                        # Add statistics text box
+                        ax.text(0.02, 0.98, "\n".join(stats_text),
+                            transform=ax.transAxes,
+                            verticalalignment='top',
+                            bbox=dict(boxstyle='round',
+                                    facecolor='white',
+                                    alpha=0.8))
+                    
+                    # Set labels and titles
+                    ax.set_ylabel('Flow Rate (m³/s)', fontsize=12)
+                    ax.set_title(f'{node} - Inflow and Outflows', fontsize=14)
+                    
+                    # Add a grid
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Add legend - use a smaller font size if there are many targets
+                    legend_fontsize = 10 if len(outflow_by_target) > 5 else 12
+                    ax.legend(loc='upper right', fontsize=legend_fontsize)
+                
+                # Add an x-label to the bottom plot
+                axes[-1].set_xlabel('Time Step', fontsize=12)
+                
+                # Adjust layout to prevent overlap
+                plt.tight_layout()
+                
+                plots['hydroworks_flows'] = fig
+                
+        except Exception as e:
+            print(f"Error creating hydroworks flow plot: {str(e)}")
+
+        
+                # Plot reservoir spill and excess storage
+        try:
+            fig_spill = plt.figure(figsize=(12, 6))
+            ax = fig_spill.add_subplot(111)
+
+            for node in self.model.storage_nodes:
+                time_steps = list(range(self.num_time_steps))
+                # Get spill values (convert to m³/time step if needed)
+                spill_vals = [results['spills']['reservoir'].get((node, t), 0) * self.dt for t in time_steps]
+                # Get excess storage values
+                excess_vals = [pyo.value(self.model.excess_storage[node, t]) for t in time_steps]
+                # Get storage and capacity for context
+                storage_vals = [results['storage'].get((node, t), 0) for t in time_steps]
+                capacity = self.nodes[node]['capacity']
+
+                ax.bar(time_steps, spill_vals, width=0.8, alpha=0.5, label=f"{node} Spill (m³)", color='blue')
+                ax.plot(time_steps, excess_vals, 'r-', label=f"{node} Excess Storage (m³)", linewidth=2)
+                ax.plot(time_steps, storage_vals, 'g--', label=f"{node} Storage (m³)", linewidth=1)
+                ax.axhline(y=capacity, linestyle=':', color='gray', label=f"{node} Capacity")
+
+            ax.set_title('Reservoir Spill and Excess Storage Over Time')
+            ax.set_xlabel('Time Step')
+            ax.set_ylabel('Volume (m³)')
+            ax.legend()
+            ax.grid(True)
+            plt.tight_layout()
+            plots['reservoir_spill_excess'] = fig_spill
+        except Exception as e:
+            print(f"Error creating reservoir spill/excess plot: {str(e)}")
+
         return plots
 
-def create_and_solve_ZRB_optimization(start_year: int, start_month: int, num_time_steps: int, 
+def create_and_solve_lp_optimization(start_year: int, start_month: int, num_time_steps: int, 
                                      system_type: str = "baseline", scenario: str = '',
                                      period: str = '', agr_scenario: str = '', 
                                      efficiency: str = '', solver: str = 'glpk'):
@@ -1164,7 +1267,7 @@ def create_and_solve_ZRB_optimization(start_year: int, start_month: int, num_tim
     """
     print('a')
     # Create the optimization model
-    model = ZRBOptimizationModel(
+    model = LPOptimizationModel(
         start_year=start_year,
         start_month=start_month,
         num_time_steps=num_time_steps,
@@ -1192,11 +1295,11 @@ if __name__ == "__main__":
     # Example parameters
     START_YEAR = 2017
     START_MONTH = 1
-    NUM_TIME_STEPS = 12  # Run for one year
+    NUM_TIME_STEPS = 12*6  # Run for one year
     SYSTEM_TYPE = "simplified_ZRB"
     
     # Create and solve the optimization model
-    opt_model, results = create_and_solve_ZRB_optimization(
+    opt_model, results = create_and_solve_lp_optimization(
         start_year=START_YEAR,
         start_month=START_MONTH,
         num_time_steps=NUM_TIME_STEPS,
@@ -1206,17 +1309,9 @@ if __name__ == "__main__":
     
     # Compare with simulation
     if results:
-        comparison = opt_model.compare_with_simulation()
-        print("\nComparison with Simulation:")
-        print(f"Demand Satisfaction: Optimization {comparison['demand_satisfaction']['optimization']:.2f}%, "
-              f"Simulation {comparison['demand_satisfaction']['simulation']:.2f}%")
-        print(f"Min Flow Deficits: Optimization {comparison['min_flow_deficits']['optimization']:.2f}, "
-              f"Simulation {comparison['min_flow_deficits']['simulation']:.2f}")
-        print(f"Storage Utilization: Optimization {comparison['storage_utilization']['optimization']:.2f}%, "
-              f"Simulation {comparison['storage_utilization']['simulation']:.2f}%")
         
         # Visualize results
         plots = opt_model.visualize_results()
         for name, fig in plots.items():
-            fig.savefig(f"ZRB_optimization_{name}.png")
+            fig.savefig(f"Simple_system_{name}.png")
             print(f"Saved plot to ZRB_optimization_{name}.png")
