@@ -7,6 +7,8 @@ import os
 from pymoo.core.problem import Problem
 from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.algorithms.moo.nsga3 import NSGA3
+from pymoo.util.ref_dirs import get_reference_directions
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
@@ -37,7 +39,7 @@ class WaterSystemCallback(Callback):
         self.data["avg_obj"].append(np.mean(fitness_values))
         self.data["std_obj"].append(np.std(fitness_values))
 
-class WaterSystemProblem(Problem):
+class PymooProblemSingleObjective(Problem):
     """
     Pymoo Problem formulation for water system optimization
     """
@@ -183,14 +185,14 @@ class WaterSystemProblem(Problem):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(demand)/np.sum(satisfied) * demand_node.weight
+                total_penalty += np.sum(deficit)* demand_node.weight
             
             # Calculate penalties for sink nodes
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
                 deficit = np.array([sink_node.flow_deficits[t] for t in range(self.num_time_steps)])
                 required= np.array([sink_node.min_flows[t] for t in range(self.num_time_steps)])
-                total_penalty += np.sum(required)/(np.sum(required)-np.sum(deficit)) * sink_node.weight
+                total_penalty += np.sum(deficit)*system.dt * sink_node.weight
             
             # Penalties for hydroworks spills
             for node_id in self.hydroworks_ids:
@@ -202,7 +204,7 @@ class WaterSystemProblem(Problem):
                 reservoir_node = system.graph.nodes[node_id]['node']
                 total_penalty += 10.0 * np.sum(reservoir_node.spillway_register)
             
-            return float(total_penalty)
+            return float(float(total_penalty)/(self.num_time_steps / 12) / 1e9)  # Convert to km3/year
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -284,9 +286,9 @@ class WaterSystemProblem(Problem):
         
         return reservoir_params, hydroworks_params
 
-class PymooProblemMultiObjective(WaterSystemProblem):
+class PymooProblemTwoObjective(PymooProblemSingleObjective):
     """
-    Multi-objective extension of the WaterSystemProblem
+    Multi-objective extension of the PymooProblemSingleObjective
     """
     def __init__(self, 
                  base_system: WaterSystem,
@@ -365,7 +367,7 @@ class PymooProblemMultiObjective(WaterSystemProblem):
             print(f"Error evaluating individual: {str(e)}")
             return [float('inf'), float('inf')]
 
-class PymooProblemThreeObjective(PymooProblemMultiObjective):
+class PymooProblemThreeObjective(PymooProblemTwoObjective):
     """
     Three-objective extension focusing on different types of demands
     (if needed for your specific application)
@@ -446,7 +448,7 @@ class PymooProblemThreeObjective(PymooProblemMultiObjective):
             print(f"Error evaluating individual: {str(e)}")
             return [float('inf'), float('inf'), float('inf')]
 
-class PymooProblemFourObjective(PymooProblemMultiObjective):
+class PymooProblemFourObjective(PymooProblemTwoObjective):
     """
     Four-objective extension focusing on different types of demands
     (if needed for your specific application)
@@ -558,7 +560,7 @@ class PymooSingleObjectiveOptimizer:
         self.pop_size = pop_size
         
         # Create problem instance
-        self.problem = WaterSystemProblem(
+        self.problem = PymooProblemSingleObjective(
             base_system=base_system,
             start_year=start_year,
             start_month=start_month,
@@ -685,7 +687,7 @@ class PymooMultiObjectiveOptimizer:
         
         # Create problem instance based on number of objectives
         if num_objectives == 2:
-            self.problem = PymooProblemMultiObjective(
+            self.problem = PymooProblemTwoObjective(
                 base_system=base_system,
                 start_year=start_year,
                 start_month=start_month,
@@ -711,14 +713,29 @@ class PymooMultiObjectiveOptimizer:
         # Create callback for tracking progress
         self.callback = WaterSystemCallback()
         
-        # Setup NSGA-II algorithm
-        self.algorithm = NSGA2(
-            pop_size=pop_size,
-            sampling=FloatRandomSampling(),
-            crossover=SBX(eta=15),
-            mutation=PM(eta=20),
-            eliminate_duplicates=True
-        )
+        if num_objectives ==0: 
+            # create the reference directions to be used for the optimization
+            ref_dirs = get_reference_directions("das-dennis", 4, n_partitions=12)
+
+            # Use NSGA3 for 4 objectives
+            self.algorithm = NSGA3(
+                ref_dirs=ref_dirs,
+                pop_size=pop_size,
+                sampling=FloatRandomSampling(),
+                crossover=SBX(eta=15),
+                mutation=PM(eta=20),
+                eliminate_duplicates=True
+            )
+        else:
+            # Use NSGA2 for 2 or 3 objectives
+            self.algorithm = NSGA2(
+                pop_size=pop_size,
+                sampling=FloatRandomSampling(),
+                crossover=SBX(eta=15),
+                mutation=PM(eta=20),
+                eliminate_duplicates=True
+            )
+
     
     def optimize(self) -> Dict[str, Union[bool, str, int, float, Dict[str, Dict[str, List[float]]]]]:
         """

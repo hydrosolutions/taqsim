@@ -4,7 +4,7 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import os
 
-class ParetoFrontDashboard:
+class ParetoFrontDashboard3D:
     """
     A class for creating interactive visualizations of Pareto-optimal solutions
     from multi-objective water system optimization.

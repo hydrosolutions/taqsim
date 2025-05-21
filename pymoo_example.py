@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from water_system import (PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer, 
-                          ParetoFrontDashboard, ParetoFrontDashboard4D)
+                          ParetoFrontDashboard3D, ParetoFrontDashboard4D)
 # Import from your original script to get the system creator
 from ZRB_system_creator import create_ZRB_system
 from simple_system_creator import create_simple_system

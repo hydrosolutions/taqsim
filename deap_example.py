@@ -2,7 +2,10 @@ from typing import Callable, Dict, List, Optional, Union
 import numpy as np
 import os
 import json
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
+from water_system import (WaterSystem, WaterSystemVisualizer, 
+                          DeapSingleObjectiveOptimizer, DeapThreeObjectiveOptimizer, 
+                          ParetoFrontDashboard3D)
+from water_system.deap_optimization import decode_individual
 from datetime import datetime
 import optuna
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
@@ -139,7 +142,7 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
             # Process each solution in the Pareto front
             for i, ind in enumerate(optimization_results['pareto_front']):
                 # Decode this individual's parameters
-                reservoir_params, hydroworks_params = MultiObjectiveOptimizer._decode_individual.__get__(None, MultiObjectiveOptimizer)(optimization_results['optimizer'], ind)
+                reservoir_params, hydroworks_params = decode_individual.__get__(None, DeapThreeObjectiveOptimizer)(optimization_results['optimizer'], ind)
                 
                 # Create a solution entry
                 solution = {
@@ -209,7 +212,7 @@ def run_optimization(
     ZRB_system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
 
     
-    optimizer = SingleObjectiveOptimizer(
+    optimizer = DeapSingleObjectiveOptimizer(
         base_system=ZRB_system,
         start_year=start_year,
         start_month=start_month,
@@ -314,7 +317,7 @@ def run_multi_objective_optimization(
     water_system = system_creator(start_year, start_month, num_time_steps, system_type, scenario, period, agr_scenario, efficiency)
     
     # Initialize the multi-objective optimizer
-    optimizer = MultiObjectiveOptimizer(
+    optimizer = DeapThreeObjectiveOptimizer(
         base_system=water_system,
         start_year=start_year,
         start_month=start_month,
@@ -426,8 +429,8 @@ if __name__ == "__main__":
     start = datetime.now()
 
 
-    optimization = False
-    simulation = True
+    optimization = True
+    simulation = False
     multiobjective = False
     optunastudy = False
 
@@ -534,7 +537,7 @@ if __name__ == "__main__":
         save_optimized_parameters(results, f"./model_output/optimisation/deap/multiobjective_params.json")
 
         # Create dashboard for the Pareto front
-        dashboard = ParetoFrontDashboard(
+        dashboard = ParetoFrontDashboard3D(
             pareto_solutions=results['pareto_front'],
             output_dir=f"./model_output/dashboard/baseline",
         )
@@ -548,7 +551,7 @@ if __name__ == "__main__":
         pareto_solutions = data.get('pareto_solutions', [])
         
         # Create dashboard
-        dashboard = ParetoFrontDashboard(
+        dashboard = ParetoFrontDashboard3D(
             pareto_solutions=pareto_solutions,
             output_dir="./model_output/dashboard/baseline"
         )
