@@ -10,7 +10,6 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.sampling.rnd import FloatRandomSampling
-from pymoo.operators.selection.tournament import TournamentSelection
 from pymoo.termination.default import DefaultSingleObjectiveTermination
 from pymoo.termination.default import DefaultMultiObjectiveTermination
 from pymoo.optimize import minimize
@@ -18,31 +17,6 @@ from pymoo.core.callback import Callback
 
 # Import your water system components
 from water_system import StorageNode, DemandNode, HydroWorks, SinkNode, WaterSystem, RunoffNode
-
-def binary_tournament(pop, P, **kwargs):
-    # The P input defines the tournaments and competitors
-    n_tournaments, n_competitors = P.shape
-
-    if n_competitors != 2:
-        raise Exception("Only pressure=2 allowed for binary tournament!")
-
-    # the result this function returns
-    import numpy as np
-    S = np.full(n_tournaments, -1, dtype=np.integer)
-
-    # now do all the tournaments
-    for i in range(n_tournaments):
-        a, b = P[i]
-
-        # if the first individual is better, choose it
-        if pop[a].F < pop[b].F:
-            S[i] = a
-
-        # otherwise take the other individual
-        else:
-            S[i] = b
-
-    return S   
 
 class WaterSystemCallback(Callback):
     """
@@ -385,7 +359,7 @@ class PymooProblemMultiObjective(WaterSystemProblem):
                 min_flow_deficit += total_deficit_volume #* sink_node.weight
             
             # Return both objectives
-            return [float(demand_deficit)/num_years, float(min_flow_deficit)/num_years]
+            return [float(demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9]
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -466,7 +440,7 @@ class PymooProblemThreeObjective(PymooProblemMultiObjective):
                 total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
                 min_flow_deficit += total_deficit_volume #* sink_node.weight
             
-            return [float(regular_demand_deficit)/num_years, float(priority_demand_deficit)/num_years, float(min_flow_deficit)/num_years]
+            return [float(regular_demand_deficit)/num_years/1e9, float(priority_demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9]
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -556,7 +530,7 @@ class PymooProblemFourObjective(PymooProblemMultiObjective):
                 reservoir_node = system.graph.nodes[node_id]['node']
                 total_spillage += np.sum(reservoir_node.spillway_register)
             
-            return [float(regular_demand_deficit)/num_years, float(priority_demand_deficit)/num_years, float(min_flow_deficit)/num_years, float(total_spillage)/num_years]
+            return [float(regular_demand_deficit)/num_years/1e9, float(priority_demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9, float(total_spillage)/num_years/1e9]
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -575,8 +549,6 @@ class PymooSingleObjectiveOptimizer:
         num_time_steps: int,
         n_gen: int = 50,
         pop_size: int = 50,
-        crossover_prob: float = 0.65,
-        mutation_prob: float = 0.32
     ) -> None:
         self.base_system = base_system
         self.start_year = start_year
@@ -584,8 +556,6 @@ class PymooSingleObjectiveOptimizer:
         self.num_time_steps = num_time_steps
         self.n_gen = n_gen
         self.pop_size = pop_size
-        self.crossover_prob = crossover_prob
-        self.mutation_prob = mutation_prob
         
         # Create problem instance
         self.problem = WaterSystemProblem(
@@ -602,9 +572,8 @@ class PymooSingleObjectiveOptimizer:
         self.algorithm = GA(
             pop_size=pop_size,
             sampling=FloatRandomSampling(),
-            crossover=SBX(prob=crossover_prob, eta=15),
-            mutation=PM(prob=mutation_prob, eta=20),
-            selection=TournamentSelection(pressure=2,func_comp=binary_tournament),
+            crossover=SBX(eta=15),
+            mutation=PM(eta=20),
             eliminate_duplicates=True
         )
 
@@ -648,8 +617,6 @@ class PymooSingleObjectiveOptimizer:
                 'message': f"Optimization completed successfully after {result.algorithm.n_gen} generations",
                 'population_size': self.pop_size,
                 'generations': result.algorithm.n_gen,
-                'crossover_probability': self.crossover_prob,
-                'mutation_probability': self.mutation_prob,
                 'objective_value': float(result.F[0]),
                 'optimal_reservoir_parameters': reservoir_params,
                 'optimal_hydroworks_parameters': hydroworks_params
@@ -662,8 +629,6 @@ class PymooSingleObjectiveOptimizer:
                 'message': f"Optimization failed: {str(e)}",
                 'population_size': self.pop_size,
                 'generations': 0,
-                'crossover_probability': self.crossover_prob,
-                'mutation_probability': self.mutation_prob,
                 'objective_value': float('inf'),
                 'optimal_reservoir_parameters': {},
                 'optimal_hydroworks_parameters': {}
@@ -709,8 +674,6 @@ class PymooMultiObjectiveOptimizer:
         num_time_steps: int,
         n_gen: int = 50,
         pop_size: int = 50,
-        crossover_prob: float = 0.65,
-        mutation_prob: float = 0.32,
         num_objectives: int = 2  # Default to 2 objectives
     ) -> None:
         self.base_system = base_system
@@ -719,8 +682,6 @@ class PymooMultiObjectiveOptimizer:
         self.num_time_steps = num_time_steps
         self.n_gen = n_gen
         self.pop_size = pop_size
-        self.crossover_prob = crossover_prob
-        self.mutation_prob = mutation_prob
         
         # Create problem instance based on number of objectives
         if num_objectives == 2:
@@ -754,8 +715,8 @@ class PymooMultiObjectiveOptimizer:
         self.algorithm = NSGA2(
             pop_size=pop_size,
             sampling=FloatRandomSampling(),
-            crossover=SBX(prob=crossover_prob, eta=15),
-            mutation=PM(prob=mutation_prob, eta=20),
+            crossover=SBX(eta=15),
+            mutation=PM(eta=20),
             eliminate_duplicates=True
         )
     
@@ -823,8 +784,6 @@ class PymooMultiObjectiveOptimizer:
                 'message': f"Multi-objective optimization completed successfully after {result.algorithm.n_gen} generations",
                 'population_size': self.pop_size,
                 'generations': result.algorithm.n_gen,
-                'crossover_probability': self.crossover_prob,
-                'mutation_probability': self.mutation_prob,
                 'objective_values': tuple(float(val) for val in result.F[compromise_idx]),
                 'optimal_reservoir_parameters': reservoir_params,
                 'optimal_hydroworks_parameters': hydroworks_params,
@@ -839,8 +798,6 @@ class PymooMultiObjectiveOptimizer:
                 'message': f"Optimization failed: {str(e)}",
                 'population_size': self.pop_size,
                 'generations': 0,
-                'crossover_probability': self.crossover_prob,
-                'mutation_probability': self.mutation_prob,
                 'objective_values': tuple([float('inf')] * self.problem.n_obj),
                 'optimal_reservoir_parameters': {},
                 'optimal_hydroworks_parameters': {},

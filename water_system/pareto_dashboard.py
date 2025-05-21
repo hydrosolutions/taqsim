@@ -872,11 +872,11 @@ class ParetoFrontDashboard4D:
         })
         # Create formatted versions for display
         for col in ['Regular Demand Deficit', 'Priority Demand Deficit', 'Minimum Flow Deficit', 'Spillage']:
-            representatives[f'{col} (m³)'] = representatives[col].map('{:,.0f}'.format)
+            representatives[f'{col} (km³/a)'] = representatives[col].map('{:,.3f}'.format)
         display_columns = [
             'Solution', 'Solution ID',
-            'Regular Demand Deficit (m³)', 'Priority Demand Deficit (m³)',
-            'Minimum Flow Deficit (m³)', 'Spillage (m³)'
+            'Regular Demand Deficit (km³/a)', 'Priority Demand Deficit (km³/a)',
+            'Minimum Flow Deficit (km³/a)', 'Spillage (km³/a)'
         ]
         fig = go.Figure(data=[go.Table(
             header=dict(

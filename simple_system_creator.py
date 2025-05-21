@@ -4,7 +4,7 @@ import json
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks,RunoffNode, Edge, WaterSystemVisualizer, SingleObjectiveOptimizer, MultiObjectiveOptimizer, ParetoFrontDashboard
 
 
-def create_system(start_year: int,start_month: int,num_time_steps: int, system_type:str = '', scenario:str='', period:str='', agr_scenario:str='', efficiency:str='' ) -> WaterSystem:
+def create_simple_system(start_year: int,start_month: int,num_time_steps: int, system_type:str = '', scenario:str='', period:str='', agr_scenario:str='', efficiency:str='' ) -> WaterSystem:
     """
     Flexible function to create a ZRB water system model for either baseline or scenario simulations.
     
