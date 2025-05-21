@@ -442,7 +442,9 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
                 total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
                 min_flow_deficit += total_deficit_volume #* sink_node.weight
             
-            return [float(regular_demand_deficit)/num_years/1e9, float(priority_demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9]
+            return [float(regular_demand_deficit)/num_years/1e9, 
+                    float(priority_demand_deficit)/num_years/1e9, 
+                    float(min_flow_deficit)/num_years/1e9]
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")

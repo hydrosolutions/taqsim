@@ -3,8 +3,9 @@ import numpy as np
 import os
 import json
 from water_system import (WaterSystem, WaterSystemVisualizer, 
-                          DeapSingleObjectiveOptimizer, DeapThreeObjectiveOptimizer, 
-                          ParetoFrontDashboard3D)
+                          DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer,
+                          DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer,
+                          ParetoFrontDashboard3D, ParetoFrontDashboard4D)
 from water_system.deap_optimization import decode_individual
 from datetime import datetime
 import optuna
@@ -289,7 +290,8 @@ def run_multi_objective_optimization(
     ngen: int = 100,
     pop_size: int = 100,
     cxpb: float = 0.5,
-    mutpb: float = 0.2
+    mutpb: float = 0.2, 
+    number_of_objectives: int = 3
 ) -> Dict[str, Union[Dict, List]]:
     """
     Run a multi-objective optimization for the ZRB water system.
@@ -316,17 +318,42 @@ def run_multi_objective_optimization(
     # Create the base water system
     water_system = system_creator(start_year, start_month, num_time_steps, system_type, scenario, period, agr_scenario, efficiency)
     
-    # Initialize the multi-objective optimizer
-    optimizer = DeapThreeObjectiveOptimizer(
-        base_system=water_system,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps,
-        ngen=ngen,
-        population_size=pop_size,
-        cxpb=cxpb,
-        mutpb=mutpb
-    )
+    if number_of_objectives == 2:
+        optimizer = DeapTwoObjectiveOptimizer(
+            base_system=water_system,
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps,
+            ngen=ngen,
+            population_size=pop_size,
+            cxpb=cxpb,
+            mutpb=mutpb
+        )
+
+    elif number_of_objectives == 3:
+        # Initialize the multi-objective optimizer
+        optimizer = DeapThreeObjectiveOptimizer(
+            base_system=water_system,
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps,
+            ngen=ngen,
+            population_size=pop_size,
+            cxpb=cxpb,
+            mutpb=mutpb
+        )
+    elif number_of_objectives == 4:
+        # Initialize the multi-objective optimizer
+        optimizer = DeapFourObjectiveOptimizer(
+            base_system=water_system,
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps,
+            ngen=ngen,
+            population_size=pop_size,
+            cxpb=cxpb,
+            mutpb=mutpb
+        )
 
     # Run the optimization
     results = optimizer.optimize()
@@ -346,7 +373,10 @@ def run_multi_objective_optimization(
     print(f"Final objective values: {results['objective_values']}")
     print(f"  - Demand deficit:          {results['objective_values'][0]:,.3f} km³/a")
     print(f"  - Priority demand deficit: {results['objective_values'][1]:,.3f} km³/a")
-    print(f"  - Minimum flow deficit:    {results['objective_values'][2]:,.3f} km³/a")
+    if number_of_objectives >= 3:
+        print(f"  - Minimum flow deficit:    {results['objective_values'][2]:,.3f} km³/a")
+    if number_of_objectives == 4:
+        print(f"  - Spillage volume: {results['objective_values'][3]:,.3f} km³/a")
     
     # Print the number of solutions in the Pareto front
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
@@ -523,22 +553,19 @@ if __name__ == "__main__":
             start_year=2017, 
             start_month=1, 
             num_time_steps=12*6,
-            system_type = 'baseline',
-            scenario = '', 
-            period = '', 
-            agr_scenario= '', 
-            efficiency = '', 
+            system_type = 'simplified_ZRB',
             ngen=50, 
             pop_size=100, 
             cxpb=0.65, 
-            mutpb=0.32
+            mutpb=0.32,
+            number_of_objectives=2
         )
 
 
         save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
 
         # Create dashboard for the Pareto front
-        dashboard = ParetoFrontDashboard3D(
+        dashboard = ParetoFrontDashboard4D(
             pareto_solutions=results['pareto_front'],
             output_dir=f"./model_output/deap/pareto_front/",
         )
