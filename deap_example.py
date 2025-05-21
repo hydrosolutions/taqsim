@@ -254,11 +254,11 @@ def run_optimization(
 
     
     if system_type == 'scenario':
-        save_optimized_parameters(results, f"./model_output/optimisation/deap/{system_type}/singleobjective_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+        save_optimized_parameters(results, f"./model_output/deap/parameter/{system_type}/singleobjective_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
     elif system_type == 'baseline':
-        save_optimized_parameters(results, f"./model_output/optimisation/deap/{system_type}/singleobjective_params_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+        save_optimized_parameters(results, f"./model_output/deap/parameter/{system_type}/singleobjective_params_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
     else:
-        save_optimized_parameters(results, f"./model_output/optimisation/deap/{system_type}/singleobjective_params_{system_type}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
+        save_optimized_parameters(results, f"./model_output/deap/parameter/{system_type}/singleobjective_params_{system_type}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
 
     optimizer.plot_convergence()   
     '''ZRB_system = load_optimized_parameters(ZRB_system, results)
@@ -340,12 +340,13 @@ def run_multi_objective_optimization(
     print(f"Success: {results['success']}")
     print(f"Message: {results['message']}")
     print(f"Population size: {results['population_size']}")
-    print(f"Generations: {results['generations']}")
-    print(f"Crossover probability: {results['crossover_probability']}")
-    print(f"Mutation probability: {results['mutation_probability']}")
+    print(f"Generations:     {results['generations']}")
+    print(f"Crossover probability:  {results['crossover_probability']}")
+    print(f"Mutation probability:   {results['mutation_probability']}")
     print(f"Final objective values: {results['objective_values']}")
-    print(f"  - Demand deficit: {results['objective_values'][0]:,.0f} m³")
-    print(f"  - Min flow deficit: {results['objective_values'][1]:,.0f} m³")
+    print(f"  - Demand deficit:          {results['objective_values'][0]:,.3f} km³/a")
+    print(f"  - Priority demand deficit: {results['objective_values'][1]:,.3f} km³/a")
+    print(f"  - Minimum flow deficit:    {results['objective_values'][2]:,.3f} km³/a")
     
     # Print the number of solutions in the Pareto front
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
@@ -429,9 +430,9 @@ if __name__ == "__main__":
     start = datetime.now()
 
 
-    optimization = True
+    optimization = False
     simulation = False
-    multiobjective = False
+    multiobjective = True
     optunastudy = False
 
     
@@ -478,7 +479,7 @@ if __name__ == "__main__":
             loaded_results,
             start_year=2017,
             start_month=1,
-            num_time_steps=12,
+            num_time_steps=12*6,
             system_type = 'simplified_ZRB', 
             scenario = '', 
             period = '',
@@ -527,25 +528,25 @@ if __name__ == "__main__":
             period = '', 
             agr_scenario= '', 
             efficiency = '', 
-            ngen=10, 
-            pop_size=30, 
+            ngen=50, 
+            pop_size=100, 
             cxpb=0.65, 
             mutpb=0.32
         )
 
 
-        save_optimized_parameters(results, f"./model_output/optimisation/deap/multiobjective_params.json")
+        save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
 
         # Create dashboard for the Pareto front
         dashboard = ParetoFrontDashboard3D(
             pareto_solutions=results['pareto_front'],
-            output_dir=f"./model_output/dashboard/baseline",
+            output_dir=f"./model_output/deap/pareto_front/",
         )
         
         # Generate all visualizations
         dashboard.generate_full_report()
 
-        with open("./model_output/optimisation/deap/multiobjective_params.json", "r") as f:
+        '''with open("./model_output/deap/parameter/multiobjective_params.json", "r") as f:
             data = json.load(f)
         
         pareto_solutions = data.get('pareto_solutions', [])
@@ -553,11 +554,11 @@ if __name__ == "__main__":
         # Create dashboard
         dashboard = ParetoFrontDashboard3D(
             pareto_solutions=pareto_solutions,
-            output_dir="./model_output/dashboard/baseline"
+            output_dir="./model_output/deap/pareto_front/",
         )
         
         # Generate all visualizations
-        dashboard.generate_full_report()
+        dashboard.generate_full_report()'''
         
         print(f"Dashboard created at {dashboard.output_dir}/index.html")
    

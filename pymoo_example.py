@@ -91,7 +91,7 @@ def run_pymoo_optimization(
             print("]")
     
     # Save optimization results
-    output_dir = f"./model_output/optimisation/pymoo/{system_type}"
+    output_dir = f"./model_output/pymoo/parameter/"
     os.makedirs(output_dir, exist_ok=True)
     
     if system_type == 'scenario':
@@ -178,15 +178,15 @@ def run_pymoo_multi_objective(
         print(f"  - Demand deficit: {results['objective_values'][0]:,.0f} m³")
         print(f"  - Min flow deficit: {results['objective_values'][1]:,.0f} m³")
     elif len(results['objective_values']) == 3:
-        print(f"  - Regular demand deficit: {results['objective_values'][0]:,.0f} m³")
-        print(f"  - Priority demand deficit: {results['objective_values'][1]:,.0f} m³")
-        print(f"  - Min flow deficit: {results['objective_values'][2]:,.0f} m³")
+        print(f"  - Regular demand deficit: {results['objective_values'][0]:,.3f} km³/a")
+        print(f"  - Priority demand deficit:{results['objective_values'][1]:,.3f} km³/a")
+        print(f"  - Min flow deficit:       {results['objective_values'][2]:,.3f} km³/a")
     
     print(f"\nNumber of Pareto-optimal solutions: {len(results['pareto_front'])}")
     
     
     # Save optimization results
-    output_dir = f"./model_output/optimisation/pymoo/{system_type}"
+    output_dir = f"./model_output/pymoo/parameter/"
     os.makedirs(output_dir, exist_ok=True)
     
     if system_type == 'scenario':
@@ -303,7 +303,7 @@ def save_optimized_parameters(optimization_results, filename):
 if __name__ == "__main__":
     
     
-    # Example of running the pymoo single-objective optimization
+    '''# Example of running the pymoo single-objective optimization
     print("\n=== PYMOO SINGLE-OBJECTIVE OPTIMIZATION ===\n")
     start = datetime.now()
     
@@ -313,11 +313,11 @@ if __name__ == "__main__":
         start_month=1, 
         num_time_steps=12*6,  # Reduced for faster runtime in example
         system_type='simplified_ZRB',
-        n_gen=20,              # Reduced for faster runtime in example
+        n_gen=50,              # Reduced for faster runtime in example
         pop_size=10,           # Reduced for faster runtime in example
     )
     
-    print(f"\nSingle-objective optimization completed in {datetime.now() - start}")
+    print(f"\nSingle-objective optimization completed in {datetime.now() - start}")'''
     
     # Example of running pymoo multi-objective optimization
     print("\n=== PYMOO MULTI-OBJECTIVE OPTIMIZATION ===\n")
@@ -329,20 +329,20 @@ if __name__ == "__main__":
         start_month=1, 
         num_time_steps=12*6,  # Reduced for faster runtime in example
         system_type='simplified_ZRB',
-        n_gen=20,              # Reduced for faster runtime in example
-        pop_size=50,           # Reduced for faster runtime in example
-        num_objectives=4       # Using 2 objectives for simplicity
+        n_gen=50,              # Reduced for faster runtime in example
+        pop_size=100,           # Reduced for faster runtime in example
+        num_objectives=3       # Using 2 objectives for simplicity
     )
     
-    with open("./model_output/optimisation/pymoo/simplified_ZRB/pymoo_mo4_simplified_ZRB_20_50.json", "r") as f:
+    with open("./model_output/pymoo/parameter/pymoo_mo3_simplified_ZRB_50_100.json", "r") as f:
         data = json.load(f)
     
     pareto_solutions = data.get('pareto_solutions', [])
     
     # Create dashboard
-    dashboard = ParetoFrontDashboard4D(
+    dashboard = ParetoFrontDashboard3D(
         pareto_solutions=pareto_solutions,
-        output_dir="./model_output/dashboard/baseline"
+        output_dir="./model_output/pymoo/pareto_front"
     )
     
     # Generate all visualizations

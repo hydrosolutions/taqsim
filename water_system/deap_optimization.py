@@ -449,7 +449,7 @@ class DeapSingleObjectiveOptimizer:
 
     def plot_convergence(self)-> None:
         """Plot convergence history"""
-        directory = './model_output/optimisation/deap'
+        directory = './model_output/deap/convercence/'
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -469,7 +469,7 @@ class DeapSingleObjectiveOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/deap/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
+        plt.savefig(f'./model_output/deap/convergence/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')
         plt.close()
 
 # --------------------- MULTI OBJECTIVE OPTIMIZER ---------------------
@@ -502,37 +502,44 @@ class DeapThreeObjectiveOptimizer:
         self.cxpb = cxpb
         self.mutpb = mutpb
         self.dt = base_system.dt  # Time step in seconds
-        self.reservoir_ids = []
-        self.hydroworks_ids = []
+        self.reservoir_ids = StorageNode.all_ids 
+        self.demand_ids = DemandNode.all_ids
+        self.sink_ids = SinkNode.all_ids
+        self.hydroworks_ids = HydroWorks.all_ids
         self.hydroworks_targets = {}
 
         # Dictionary to store reservoir-specific bounds
         self.reservoir_bounds = {}
         
         # Identify reservoirs and hydroworks in system
-        for node_id, node_data in base_system.graph.nodes(data=True):
-            if isinstance(node_data['node'], StorageNode):
-                self.reservoir_ids.append(node_id)
-                reservoir = node_data['node']
-                
-                # Calculate total outflow capacity
-                total_capacity = reservoir.outflow_edge.capacity
-                
-                # Set volume-based bounds for the new parameterization
-                dead_storage = reservoir.dead_storage
-                capacity = reservoir.capacity
-                
-                # Set reservoir-specific bounds
-                self.reservoir_bounds[node_id] = {
-                    'Vr': (0, total_capacity*self.dt),              # Target monthly release volume
-                    'V1': (dead_storage, capacity),  # Top of buffer zone
-                    'V2': (dead_storage, capacity)  # Top of conservation zone
-                }
+        for node_id in self.reservoir_ids:
+            reservoir = self.base_system.graph.nodes[node_id]['node']
+            
+            # Calculate total outflow capacity
+            total_capacity = reservoir.outflow_edge.capacity
+            
+            # Set volume-based bounds for the new parameterization
+            dead_storage = reservoir.dead_storage
+            capacity = reservoir.capacity
+            
+            # Set reservoir-specific bounds
+            self.reservoir_bounds[node_id] = {
+                'Vr': (0, total_capacity*self.dt),# Target monthly release volume
+                'V1': (dead_storage, capacity),  # Top of buffer zone
+                'V2': (dead_storage, capacity)  # Top of conservation zone
+            }
 
-            elif isinstance(node_data['node'], HydroWorks):
-                self.hydroworks_ids.append(node_id)
-                # Get target nodes for each hydroworks
-                self.hydroworks_targets[node_id] = list(node_data['node'].outflow_edges.keys())
+        for node_id in self.hydroworks_ids:
+            hydrowork = self.base_system.graph.nodes[node_id]['node']
+            self.hydroworks_targets[node_id] = list(hydrowork.outflow_edges.keys())
+
+        # Identify high priority demand nodes (those with weight > 1)
+        self.priority_demand_ids = [node_id for node_id in self.demand_ids 
+                                    if self.base_system.graph.nodes[node_id]['node'].weight > 1]
+        
+        # Regular priority demands
+        self.regular_demand_ids = [node_id for node_id in self.demand_ids 
+                                  if self.base_system.graph.nodes[node_id]['node'].weight == 1]
         
         # Set up DEAP multi-objective genetic algorithm components
         # Remove any existing FitnessMulti and Individual if they exist
@@ -582,7 +589,7 @@ class DeapThreeObjectiveOptimizer:
         """
         try:
             # Decode parameters and configure water system
-            reservoir_params, hydroworks_params = decode_individual(self, individual)
+            reservoir_params, hydroworks_params = decode_individual(self,individual)
             
             # Create and configure water system
             system = copy.deepcopy(self.base_system)
@@ -600,49 +607,36 @@ class DeapThreeObjectiveOptimizer:
             # Run simulation
             system.simulate(self.num_time_steps)
             
-            # Initialize objective values
-            regular_demand_deficit = 0  # Objective 1: Regular demand nodes (weight = 1)
-            priority_demand_deficit = 0  # Objective 2: High-priority demand nodes (weight = 1000)
-            minflow_deficit = 0  # Objective 3: Minimum flow requirements at sink nodes
+            # Calculate the number of years
+            num_years = self.num_time_steps / 12
             
-            # Calculate penalties for each component
-            for node_id, node_data in system.graph.nodes(data=True):
-                node = node_data['node']
-                
-                if isinstance(node, DemandNode):
-                    # Get demand data
-                    demand = np.array([node.demand_rates[t] for t in range(self.num_time_steps)])
-                    satisfied = np.array(node.satisfied_demand_total)
-                    deficit = (demand - satisfied) * system.dt
-                    
-                    # Separate nodes based on their weight
-                    if node.weight > 1:  # High-priority node
-                        priority_demand_deficit += np.sum(deficit)
-                    elif node.weight == 1:  # Regular node
-                        regular_demand_deficit += np.sum(deficit)
-
-                
-                elif isinstance(node, SinkNode):
-                    # Objective 3: Calculate minimum flow deficit
-                    min_flow_volume = sum(deficit * system.dt for deficit in node.flow_deficits)
-                    minflow_deficit += min_flow_volume  # Use the weight if needed
+            # Objective 1: Regular priority demand deficit
+            regular_demand_deficit = 0
+            for node_id in self.regular_demand_ids:
+                demand_node = system.graph.nodes[node_id]['node']
+                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
+                satisfied = np.array(demand_node.satisfied_demand_total)
+                deficit = (demand - satisfied) * system.dt
+                regular_demand_deficit += np.sum(deficit)
             
-            # Handle spills (distribute evenly among objectives or based on priority)
-            spill_penalty = 0
-            for node_id, node_data in system.graph.nodes(data=True):
-                node = node_data['node']
-                
-                if hasattr(node, 'spillway_register'):
-                    spill_penalty += np.sum(node.spillway_register)
-                
-                elif hasattr(node, 'spill_register'):
-                    spill_penalty += np.sum(node.spill_register)
+            # Objective 2: High priority demand deficit
+            priority_demand_deficit = 0
+            for node_id in self.priority_demand_ids:
+                demand_node = system.graph.nodes[node_id]['node']
+                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
+                satisfied = np.array(demand_node.satisfied_demand_total)
+                deficit = (demand - satisfied) * system.dt
+                priority_demand_deficit += np.sum(deficit) #* demand_node.weight
             
-            # Place Spill penalty to priority objective
-            priority_demand_deficit += spill_penalty
+            # Objective 3: Minimum flow deficit
+            min_flow_deficit = 0
+            for node_id in self.sink_ids:
+                sink_node = system.graph.nodes[node_id]['node']
+                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
+                min_flow_deficit += total_deficit_volume #* sink_node.weight
             
+            return (float(regular_demand_deficit)/num_years/1e9, float(priority_demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9)
             
-            return (regular_demand_deficit, priority_demand_deficit, minflow_deficit)
         
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -806,7 +800,7 @@ class DeapThreeObjectiveOptimizer:
         
         plt.tight_layout()
         # Ensure the directory exists
-        directory = './model_output/optimisation/deap'
+        directory = './model_output/deap/convergence/'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/three_objective_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png')

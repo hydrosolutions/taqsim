@@ -640,7 +640,7 @@ class PymooSingleObjectiveOptimizer:
         """
         Plot convergence history after optimization
         """
-        directory = './model_output/pymoo/optimisation'
+        directory = './model_output/pymoo/convergence'
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -660,7 +660,7 @@ class PymooSingleObjectiveOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/pymoo/pymoo_convergence_pop{self.pop_size}_ngen{self.n_gen}.png')
+        plt.savefig(f'./model_output/pymoo/convergence/pymoo_convergence_pop{self.pop_size}_ngen{self.n_gen}.png')
         plt.close()
     
 
@@ -825,7 +825,7 @@ class PymooMultiObjectiveOptimizer:
         """
         Plot convergence history after optimization
         """
-        directory = './model_output/pymoo/optimisation'
+        directory = './model_output/pymoo/convergence'
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -842,7 +842,7 @@ class PymooMultiObjectiveOptimizer:
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f'./model_output/optimisation/pymoo_mo_convergence_pop{self.pop_size}_ngen{self.n_gen}.png')
+        plt.savefig(f'./model_output/pymoo/convergence/pymoo_mo_convergence_pop{self.pop_size}_ngen{self.n_gen}.png')
         plt.close()
         
         # Plot Pareto front for 2-objective case
@@ -880,7 +880,7 @@ class PymooMultiObjectiveOptimizer:
                 plt.legend()
                 plt.grid(True)
                 plt.tight_layout()
-                plt.savefig(f'./model_output/optimisation/pymoo_pareto_front_pop{self.pop_size}_ngen{self.n_gen}.png')
+                plt.savefig(f'./model_output/pymoo/convergence/pymoo_pareto_front_pop{self.pop_size}_ngen{self.n_gen}.png')
                 plt.close()
             except Exception as e:
                 print(f"Could not plot Pareto front: {str(e)}")
