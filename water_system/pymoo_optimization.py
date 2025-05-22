@@ -8,6 +8,7 @@ from pymoo.core.problem import Problem
 from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.algorithms.moo.nsga3 import NSGA3
+from pymoo.algorithms.moo.unsga3 import UNSGA3
 from pymoo.util.ref_dirs import get_reference_directions
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
@@ -715,12 +716,12 @@ class PymooMultiObjectiveOptimizer:
         # Create callback for tracking progress
         self.callback = WaterSystemCallback()
         
-        if num_objectives ==0: 
+        if num_objectives ==4: 
             # create the reference directions to be used for the optimization
             ref_dirs = get_reference_directions("das-dennis", 4, n_partitions=12)
 
             # Use NSGA3 for 4 objectives
-            self.algorithm = NSGA3(
+            self.algorithm = UNSGA3(
                 ref_dirs=ref_dirs,
                 pop_size=pop_size,
                 sampling=FloatRandomSampling(),
