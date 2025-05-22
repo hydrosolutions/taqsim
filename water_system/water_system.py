@@ -10,7 +10,7 @@ from typing import Dict, List, Union, Optional, Any, Tuple
 import networkx as nx
 import pandas as pd
 import numpy as np
-from .structure import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode
+from .nodes import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode
 from .edge import Edge
 from .validation_functions import (validate_positive_float, 
                                    validate_month,

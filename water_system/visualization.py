@@ -18,7 +18,7 @@ import json
 import networkx as nx
 from datetime import datetime
 from typing import Dict, List, Optional, Union, Any, Tuple
-from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
+from .nodes import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
 
 # Helper function for getting node outflow
 def get_node_outflow(node, time_step):
@@ -33,7 +33,7 @@ def get_node_outflow(node, time_step):
         float: The total outflow from the node at the specified time step
     """
     # Import node types here to avoid circular imports
-    from .structure import SupplyNode, StorageNode, DemandNode, RunoffNode, HydroWorks
+    from .nodes import SupplyNode, StorageNode, DemandNode, RunoffNode, HydroWorks
     
     if isinstance(node, (SupplyNode, StorageNode, DemandNode, RunoffNode)):
         # New structure with single outflow_edge
@@ -63,7 +63,7 @@ def get_node_outflow_capacity(node):
         float: The total outflow capacity from the node
     """
     # Import node types here to avoid circular imports
-    from .structure import SupplyNode, StorageNode, DemandNode, RunoffNode, HydroWorks
+    from .nodes import SupplyNode, StorageNode, DemandNode, RunoffNode, HydroWorks
     
     if isinstance(node, (SupplyNode, StorageNode, DemandNode, RunoffNode)):
         # New structure with single outflow_edge
@@ -356,7 +356,7 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
-        from .structure import HydroWorks, StorageNode
+        from .nodes import HydroWorks, StorageNode
         
         plt.rcParams.update({'font.size': 16})
         
@@ -506,7 +506,7 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
-        from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
+        from .nodes import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
         
         # Create a larger figure for detailed visualization
         fig, ax = plt.subplots(figsize=(20, 10.5))
@@ -620,6 +620,18 @@ class WaterSystemVisualizer:
                     for u, v, edge_data in self.system.graph.edges(data=True)
                     if edge_data['edge'].capacity > capacity_threshold}
         
+        # Draw edge labels (capacity) on the figure
+        nx.draw_networkx_edge_labels(
+            self.system.graph,
+            pos,
+            edge_labels=edge_labels,
+            font_size=14,
+            font_color='navy',
+            font_weight='bold',
+            bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7),
+            ax=ax
+        )
+        
         # Create node labels with key information
         node_labels = {}
         for node_id, data in self.system.graph.nodes(data=True):
@@ -686,7 +698,7 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
-        from .structure import SinkNode
+        from .nodes import SinkNode
         
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         # Find sink nodes in the system that have minimum flow requirements
@@ -809,7 +821,7 @@ class WaterSystemVisualizer:
         Create enhanced heatmaps showing total demand deficits across all demand nodes over time.
         This version is compatible with the updated NodeTypes.
         """
-        from .structure import DemandNode
+        from .nodes import DemandNode
         
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         # Collect total deficits for each demand node
@@ -907,7 +919,7 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
-        from .structure import StorageNode
+        from .nodes import StorageNode
         
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         # Find storage nodes in the system

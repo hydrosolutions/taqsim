@@ -19,12 +19,12 @@ Classes:
 """
 
 from .water_system import WaterSystem
-from .structure import SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks, RunoffNode
+from .nodes import SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks, RunoffNode
 from .edge import Edge
 from .visualization import WaterSystemVisualizer
-from .deap_optimization import DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer, DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer
-from .pareto_dashboard import ParetoFrontDashboard3D, ParetoFrontDashboard4D
-from .pymoo_optimization import PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer
+from .optimization.deap_optimization import DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer, DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer
+from .optimization.pareto_dashboard import ParetoFrontDashboard3D, ParetoFrontDashboard4D
+from .optimization.pymoo_optimization import PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'SupplyNode', 'SinkNode', 'DemandNode', 

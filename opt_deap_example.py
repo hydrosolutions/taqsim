@@ -6,7 +6,7 @@ from water_system import (WaterSystem, WaterSystemVisualizer,
                           DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer,
                           DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer,
                           ParetoFrontDashboard3D, ParetoFrontDashboard4D)
-from water_system.deap_optimization import decode_individual
+from water_system.optimization.deap_optimization import decode_individual
 from datetime import datetime
 import optuna
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf

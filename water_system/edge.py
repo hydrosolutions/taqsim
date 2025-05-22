@@ -7,7 +7,7 @@ It supports specialized node types: SupplyNode, StorageNode, DemandNode, SinkNod
 
 import math
 from typing import Optional, Tuple, Union, Any
-from .structure import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
+from .nodes import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
 from .validation_functions import validate_nonnegativity_int_or_float, validate_probability
 
 # Forward references for type hints - these are imported in the Edge class
