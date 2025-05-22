@@ -14,9 +14,9 @@ from pyomo.opt import SolverFactory
 
 # Import original system components for reference
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
-from ZRB_system_creator import create_ZRB_system
-from deap_example import load_optimized_parameters, load_parameters_from_file
-from simple_system_creator import create_system
+from system_creator_ZRB import create_ZRB_system
+from opt_deap_example import load_optimized_parameters, load_parameters_from_file
+from system_creator_simple import create_system
 
 class LPOptimizationModel:
     """

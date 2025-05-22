@@ -10,7 +10,7 @@ from water_system.deap_optimization import decode_individual
 from datetime import datetime
 import optuna
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
-from ZRB_system_creator import create_ZRB_system
+from system_creator_ZRB import create_ZRB_system
 
 
 def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str, Union[Dict, List]]) -> WaterSystem:
@@ -558,7 +558,7 @@ if __name__ == "__main__":
             pop_size=100, 
             cxpb=0.65, 
             mutpb=0.32,
-            number_of_objectives=2
+            number_of_objectives=4
         )
 
 

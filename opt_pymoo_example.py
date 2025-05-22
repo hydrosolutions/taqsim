@@ -5,12 +5,11 @@ import time
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-
 from water_system import (PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer, 
                           ParetoFrontDashboard3D, ParetoFrontDashboard4D)
 # Import from your original script to get the system creator
-from ZRB_system_creator import create_ZRB_system
-from simple_system_creator import create_simple_system
+from system_creator_ZRB import create_ZRB_system
+from system_creator_simple import create_simple_system
 
 def run_pymoo_optimization(
     system_creator,
@@ -322,6 +321,10 @@ if __name__ == "__main__":
     # Example of running pymoo multi-objective optimization
     print("\n=== PYMOO MULTI-OBJECTIVE OPTIMIZATION ===\n")
     start = datetime.now()
+    ngen = 10
+    popsize = 100
+    num_obj = 3
+
     
     results_mo = run_pymoo_multi_objective(
         create_ZRB_system,
@@ -329,24 +332,34 @@ if __name__ == "__main__":
         start_month=1, 
         num_time_steps=12*6,  # Reduced for faster runtime in example
         system_type='simplified_ZRB',
-        n_gen=50,              # Reduced for faster runtime in example
-        pop_size=100,           # Reduced for faster runtime in example
-        num_objectives=3       # Using 2 objectives for simplicity
+        n_gen=ngen,              # Reduced for faster runtime in example
+        pop_size=popsize,           # Reduced for faster runtime in example
+        num_objectives=num_obj       # Using 2 objectives for simplicity
     )
     
-    with open("./model_output/pymoo/parameter/pymoo_mo3_simplified_ZRB_50_100.json", "r") as f:
+    with open(f"./model_output/pymoo/parameter/pymoo_mo{num_obj}_simplified_ZRB_{ngen}_{popsize}.json", "r") as f:
         data = json.load(f)
     
     pareto_solutions = data.get('pareto_solutions', [])
     
-    # Create dashboard
-    dashboard = ParetoFrontDashboard3D(
-        pareto_solutions=pareto_solutions,
-        output_dir="./model_output/pymoo/pareto_front"
-    )
+    if num_obj == 3:
+        # Create 2D dashboard
+        dashboard = ParetoFrontDashboard3D(
+            pareto_solutions=pareto_solutions,
+            output_dir="./model_output/pymoo/pareto_front"
+        )
+        # Generate all visualizations
+        dashboard.generate_full_report()
+
+    elif num_obj == 4:
+        # Create 3D dashboard
+        dashboard = ParetoFrontDashboard4D(
+            pareto_solutions=pareto_solutions,
+            output_dir="./model_output/pymoo/pareto_front"
+        )
+        # Generate all visualizations
+        dashboard.generate_full_report()
     
-    # Generate all visualizations
-    dashboard.generate_full_report()
     
     print(f"Dashboard created at {dashboard.output_dir}/index.html")
 
