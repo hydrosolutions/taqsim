@@ -33,7 +33,10 @@ class Edge:
         length (float): The length of the canals in the irrigation/demand system [km]
         loss_factor (float): The loss factor per unit distance [fraction/km].
         losses (list): A list of total losses for each time step.
+        ecological_flow (float): The minimum flow that must be maintained in the edge [m³/s].
+        unmet_ecological_flow (list): A list of unmet ecological flow values for each time step.
     """
+    edges_with_min_flow = {}  # Format: {(source_id, target_id): min_flow}
 
     def __init__(
         self,
@@ -41,7 +44,8 @@ class Edge:
         target: NodeType,
         capacity: float,
         length: Optional[float] = None,
-        loss_factor: float = 0
+        loss_factor: float = 0, 
+        ecological_flow: float = 0,
     ) -> None:
         """
         Initialize an Edge object.
@@ -52,7 +56,8 @@ class Edge:
             capacity (float): The maximum flow capacity of the edge in m³/s.
             length (float, optional): The length of the edge in km. If None, calculated from coordinates.
             loss_factor (float, optional): The loss factor per unit distance [fraction/km]. Defaults to 0 (0% per km)
-        
+            ecological_flow (float, optional): The minimum flow that must be maintained in the edge [m³/s]. Defaults to 0.
+
         Raises:
             ValueError: If invalid parameters are provided (negative capacity, loss_factor, or length).
             AttributeError: If nodes cannot be connected or lack required attributes.
@@ -61,6 +66,10 @@ class Edge:
         validate_nonnegativity_int_or_float(capacity, "Edge capacity")
         # Validate loss factor
         validate_probability(loss_factor, "Edge loss factor")
+        # Validate min flow
+        validate_nonnegativity_int_or_float(ecological_flow, "Edge min flow")
+        if ecological_flow > capacity:
+            raise ValueError(f"Ecological flow from {source} to {target} ({ecological_flow}) cannot exceed capacity {capacity}")
 
         self.source = source
         self.target = target
@@ -69,6 +78,12 @@ class Edge:
         self.flow_after_losses = []
         self.flow_before_losses = []
         self.losses = []
+        self.ecological_flow = ecological_flow
+        self.unmet_ecological_flow = []
+
+        if self.ecological_flow > 0:
+            # Store the minimum flow for this edge using tuple as key
+            Edge.edges_with_min_flow[(self.source.id, self.target.id)] = self.ecological_flow
 
         # Set or calculate length
         if length is not None:
@@ -121,6 +136,11 @@ class Edge:
             
             # Record the inflow before losses
             self.flow_before_losses.append(input_flow)
+            # Check for ecological flow requirement
+            if self.ecological_flow > 0:
+                if input_flow < self.ecological_flow:
+                    unmet_flow = self.ecological_flow - input_flow
+                    self.unmet_ecological_flow.append(unmet_flow)
             
             # Calculate and record losses
             remaining_flow, losses = self.calculate_edge_losses(input_flow)

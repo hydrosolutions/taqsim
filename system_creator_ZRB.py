@@ -210,7 +210,7 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
         node = system.graph.nodes[node_id]['node']
         for edge in edge_list[node_id]:
             target_node = system.graph.nodes[edge['target']]['node']
-            system.add_edge(Edge(node, target_node, capacity=edge['capacity']))
+            system.add_edge(Edge(node, target_node, capacity=edge['capacity'], ecological_flow=edge['ecological_flow']))
     
     # Finalize and validate the system
     system._check_network()

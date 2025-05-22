@@ -82,8 +82,8 @@ def create_simple_system(start_year: int,start_month: int,num_time_steps: int, s
                      num_time_steps=num_time_steps)
     system.add_node(sink)
     # Add Edge from Demand Node to Sink Node
-    system.add_edge(Edge(demand1, sink, capacity=100))
-    system.add_edge(Edge(demand2, sink, capacity=100))
+    system.add_edge(Edge(demand1, sink, capacity=100, ecological_flow=10))
+    system.add_edge(Edge(demand2, sink, capacity=100, ecological_flow=10))
     
 
     system._check_network()
