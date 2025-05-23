@@ -10,7 +10,7 @@ from water_system.optimization.deap_optimization import decode_individual
 from datetime import datetime
 import optuna
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
-from system_creator_ZRB import create_ZRB_system
+from system_creator_ZRB import create_simplified_ZRB_system
 
 def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]], filename: str) -> None:
     """
@@ -107,123 +107,14 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
 
 def run_optimization(
     system_creator: Callable[..., WaterSystem],
-    start_year: int = 2017,
-    start_month: int = 1,
-    num_time_steps: int = 12,
-    system_type: str = 'baseline',
-    scenario: str = '',
-    period: str = '',
-    agr_scenario: str = '',
-    efficiency: str = '',
-    ngen: int = 100,
-    pop_size: int = 2000,
-    cxpb: float = 0.5,
-    mutpb: float = 0.2
-) -> Dict[str, Union[Dict, List]]:
-    """
-    Run a single-objective optimization for the ZRB water system.
-    
-    Args:
-        system_creator (function): Function to create the water system
-        start_year (int): Start year for simulation
-        start_month (int): Start month for simulation (1-12)
-        num_time_steps (int): Number of time steps to simulate
-        system_type (str): "baseline" or "scenario"
-        scenario (str): Climate scenario (e.g., 'ssp126') - only used for scenario simulations
-        period (str): Time period (e.g., '2041-2070') - only used for scenario simulations
-        agr_scenario (str): Agricultural scenario - only used for scenario simulations
-        efficiency (str): Efficiency scenario (e.g., 'improved_efficiency') - only used for scenario simulations
-        ngen (int): Number of generations for the optimizer
-        pop_size (int): Population size for the optimizer
-        cxpb (float): Crossover probability
-        mutpb (float): Mutation probability
-        
-    Returns:
-        dict: Results of the optimization
-    """
-        
-    ZRB_system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
-
-    
-    optimizer = DeapSingleObjectiveOptimizer(
-        base_system=ZRB_system,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps,
-        ngen=ngen,
-        population_size=pop_size,
-        cxpb=cxpb,
-        mutpb=mutpb
-    )
-
-    results = optimizer.optimize()
-
-    print("\nOptimization Results:")
-    print("-" * 50)
-    print(f"Success: {results['success']}")
-    print(f"Message: {results['message']}")
-    print(f"Population size: {results['population_size']}")
-    print(f"Generations: {results['generations']}")
-    print(f"Corss-over probability: {results['crossover_probability']}")
-    print(f"Mutation probability: {results['mutation_probability']}")
-    print(f"Final objective value: {results['objective_value']:,.3f} km³")
-    
-    print("\nOptimal Reservoir Parameters:")
-    for res_id, params in results['optimal_reservoir_parameters'].items():
-        print(f"\n{res_id}:")
-        for param, values in params.items():
-            print(f"{param}: [", end="")
-            print(", ".join(f"{v:.3f}" for v in values), end="")
-            print("]")
-        
-    print("\nOptimal Hydroworks Parameters:")
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    for hw_id, params in results['optimal_hydroworks_parameters'].items():
-        print(f"\n{hw_id}:")
-        for target, values in params.items():
-            print(f"{target}: [", end="")
-            print(", ".join(f"{v:.3f}" for v in values), end="")
-            print("]")
-
-    
-    if system_type == 'scenario':
-        save_optimized_parameters(results, f"./model_output/deap/parameter/{system_type}/singleobjective_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
-    elif system_type == 'baseline':
-        save_optimized_parameters(results, f"./model_output/deap/parameter/{system_type}/singleobjective_params_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
-    else:
-        save_optimized_parameters(results, f"./model_output/deap/parameter/{system_type}/singleobjective_params_{system_type}_{ngen}_{pop_size}_{cxpb}_{mutpb}.json")
-
-    optimizer.plot_convergence()   
-    '''ZRB_system = load_optimized_parameters(ZRB_system, results)
-    ZRB_system.simulate(num_time_steps)
-
-    vis=WaterSystemVisualizer(ZRB_system, name=f'ZRB_optimization_{system_type}')
-    vis.plot_reservoir_dynamics()
-    vis.plot_spills()
-    vis.plot_reservoir_volumes()
-    vis.plot_system_demands_vs_inflow()
-    vis.print_water_balance_summary()
-    vis.plot_demand_deficit_heatmap()
-    vis.plot_network_overview()
-    vis.plot_minimum_flow_compliance()'''
-
-    return results
-
-def run_multi_objective_optimization(
-    system_creator: Callable[..., WaterSystem],
-    start_year: int = 2017,
-    start_month: int = 1,
-    num_time_steps: int = 12,
-    system_type: str = 'baseline',
-    scenario: str = '',
-    period: str = '',
-    agr_scenario: str = '',
-    efficiency: str = '',
-    ngen: int = 100,
-    pop_size: int = 100,
-    cxpb: float = 0.5,
-    mutpb: float = 0.2, 
-    number_of_objectives: int = 3
+    start_year: int,
+    start_month: int,
+    num_time_steps: int,
+    ngen: int,
+    pop_size:int,
+    cxpb: float,
+    mutpb: float, 
+    number_of_objectives: int
 ) -> Dict[str, Union[Dict, List]]:
     """
     Run a multi-objective optimization for the ZRB water system.
@@ -248,7 +139,21 @@ def run_multi_objective_optimization(
     """
 
     # Create the base water system
-    water_system = system_creator(start_year, start_month, num_time_steps, system_type, scenario, period, agr_scenario, efficiency)
+    water_system = system_creator(start_year, start_month, num_time_steps)
+
+    if number_of_objectives == 1:
+        # Initialize the single-objective optimizer
+        optimizer = DeapSingleObjectiveOptimizer(
+            base_system=water_system,
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps,
+            ngen=ngen,
+            population_size=pop_size,
+            cxpb=cxpb,
+            mutpb=mutpb,
+            number_of_objectives=number_of_objectives
+        )
     
     if number_of_objectives == 2:
         optimizer = DeapTwoObjectiveOptimizer(
@@ -259,7 +164,8 @@ def run_multi_objective_optimization(
             ngen=ngen,
             population_size=pop_size,
             cxpb=cxpb,
-            mutpb=mutpb
+            mutpb=mutpb, 
+            number_of_objectives=number_of_objectives
         )
 
     elif number_of_objectives == 3:
@@ -272,7 +178,8 @@ def run_multi_objective_optimization(
             ngen=ngen,
             population_size=pop_size,
             cxpb=cxpb,
-            mutpb=mutpb
+            mutpb=mutpb,
+            number_of_objectives=number_of_objectives
         )
     elif number_of_objectives == 4:
         # Initialize the multi-objective optimizer
@@ -284,7 +191,8 @@ def run_multi_objective_optimization(
             ngen=ngen,
             population_size=pop_size,
             cxpb=cxpb,
-            mutpb=mutpb
+            mutpb=mutpb,
+            number_of_objectives=number_of_objectives
         )
 
     # Run the optimization
@@ -292,6 +200,7 @@ def run_multi_objective_optimization(
 
     # Plot convergence and Pareto front
     optimizer.plot_convergence()
+    optimizer.plot_total_objective_convergence()
 
     # Print optimization results
     print("\nMulti-Objective Optimization Results:")
@@ -303,34 +212,16 @@ def run_multi_objective_optimization(
     print(f"Crossover probability:  {results['crossover_probability']}")
     print(f"Mutation probability:   {results['mutation_probability']}")
     print(f"Final objective values: {results['objective_values']}")
-    print(f"  - Demand deficit:          {results['objective_values'][0]:,.3f} km³/a")
-    print(f"  - Priority demand deficit: {results['objective_values'][1]:,.3f} km³/a")
+    print(f"  - Objective 1:    {results['objective_values'][0]:,.3f} km³/a")
+    if number_of_objectives >= 2:
+        print(f"  - Objective 2:    {results['objective_values'][1]:,.3f} km³/a")
     if number_of_objectives >= 3:
-        print(f"  - Minimum flow deficit:    {results['objective_values'][2]:,.3f} km³/a")
+        print(f"  - Objective 3:    {results['objective_values'][2]:,.3f} km³/a")
     if number_of_objectives == 4:
-        print(f"  - Spillage volume: {results['objective_values'][3]:,.3f} km³/a")
+        print(f"  - Objective 4:    {results['objective_values'][3]:,.3f} km³/a")
     
     # Print the number of solutions in the Pareto front
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
-    
-    # Print optimal reservoir parameters
-    print("\nOptimal Reservoir Parameters:")
-    for res_id, params in results['optimal_reservoir_parameters'].items():
-        print(f"\n{res_id}:")
-        for param, values in params.items():
-            print(f"{param}: [", end="")
-            print(", ".join(f"{v:.3f}" for v in values), end="")
-            print("]")
-        
-    # Print optimal hydroworks parameters
-    print("\nOptimal Hydroworks Parameters:")
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    for hw_id, params in results['optimal_hydroworks_parameters'].items():
-        print(f"\n{hw_id}:")
-        for target, values in params.items():
-            print(f"{target}: [", end="")
-            print(", ".join(f"{v:.3f}" for v in values), end="")
-            print("]")
     
     return results
 
@@ -341,56 +232,18 @@ if __name__ == "__main__":
     number_of_objectives = 4
 
 
-    optimization = False
-    multiobjective = True
+    optimization = True
     optunastudy = False
 
-    
-    if optimization: 
-        # Example of running the optimization for a baseline system
-        results = run_optimization(
-            create_ZRB_system,
-            start_year=2017, 
-            start_month=1, 
-            num_time_steps=12*6,
-            system_type = 'simplified_ZRB',
-            scenario = '', 
-            period = '', 
-            agr_scenario= ' ', 
-            efficiency = ' ', 
-            ngen=5, 
-            pop_size=100, 
-            cxpb=0.98, 
-            mutpb= 0.22
-        )
-        
-        # Example of running the optimization for a future scenario
-        '''results = run_optimization(
-            create_ZRB_system,
-            start_year=2041, 
-            start_month=1, 
-            num_time_steps=12*30,
-            system_type = 'scenario',
-            scenario = 'ssp126',
-            period = '2041-2070',
-            agr_scenario = 'diversification', 
-            efficiency = 'improved_efficiency', # or 'noeff' 
-            ngen=10, 
-            pop_size=30, 
-            cxpb=0.65, 
-            mutpb= 0.32
-        )''' 
-
-    if multiobjective:
+    if optimization:
         # Example of running the multi-objective optimization for a baseline system
-        results = run_multi_objective_optimization(
-            create_ZRB_system,
+        results = run_optimization(
+            create_simplified_ZRB_system,
             start_year=2017, 
             start_month=1, 
             num_time_steps=12*6,
-            system_type = 'simplified_ZRB',
             ngen=10, 
-            pop_size=100, 
+            pop_size=10, 
             cxpb=0.65, 
             mutpb=0.32,
             number_of_objectives=number_of_objectives
@@ -438,19 +291,15 @@ if __name__ == "__main__":
 
             # Run the optimization
             results = run_optimization(
-                create_ZRB_system,
+                create_simplified_ZRB_system,
                 start_year=2017, 
                 start_month=1, 
                 num_time_steps=12*6,
-                system_type = 'simplified_ZRB',
-                scenario = '', 
-                period = '', 
-                agr_scenario= '', 
-                efficiency = '', 
                 ngen=ngen, 
                 pop_size=pop_size, 
                 cxpb=cxpb, 
-                mutpb=mutpb
+                mutpb=mutpb,
+                number_of_objectives=1
             )
 
             return results['objective_value']
