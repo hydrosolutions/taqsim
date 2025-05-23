@@ -174,8 +174,8 @@ def run_pymoo_multi_objective(
     
     print(f"\nRecommended solution objective values:")
     if len(results['objective_values']) == 2:
-        print(f"  - Demand deficit: {results['objective_values'][0]:,.0f} m³")
-        print(f"  - Min flow deficit: {results['objective_values'][1]:,.0f} m³")
+        print(f"  - Demand deficit: {results['objective_values'][0]:,.3f} km³")
+        print(f"  - Min flow deficit: {results['objective_values'][1]:,.3f} km³")
     elif len(results['objective_values']) == 3:
         print(f"  - Regular demand deficit: {results['objective_values'][0]:,.3f} km³/a")
         print(f"  - Priority demand deficit:{results['objective_values'][1]:,.3f} km³/a")
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     start = datetime.now()
     ngen = 10
     popsize = 100
-    num_obj = 3
+    num_obj = 4
 
     
     results_mo = run_pymoo_multi_objective(
@@ -337,13 +337,13 @@ if __name__ == "__main__":
         num_objectives=num_obj       # Using 2 objectives for simplicity
     )
     
-    with open(f"./model_output/pymoo/parameter/pymoo_mo{num_obj}_simplified_ZRB_{ngen}_{popsize}.json", "r") as f:
-        data = json.load(f)
-    
-    pareto_solutions = data.get('pareto_solutions', [])
-    
+    if num_obj > 2:
+        with open(f"./model_output/pymoo/parameter/pymoo_mo{num_obj}_simplified_ZRB_{ngen}_{popsize}.json", "r") as f:
+            data = json.load(f)
+        
+        pareto_solutions = data.get('pareto_solutions', [])
+        
     if num_obj == 3:
-        # Create 2D dashboard
         dashboard = ParetoFrontDashboard3D(
             pareto_solutions=pareto_solutions,
             output_dir="./model_output/pymoo/pareto_front"
@@ -360,7 +360,5 @@ if __name__ == "__main__":
         # Generate all visualizations
         dashboard.generate_full_report()
     
-    
-    print(f"Dashboard created at {dashboard.output_dir}/index.html")
 
     print(f"\nMulti-objective optimization completed in {datetime.now() - start}")

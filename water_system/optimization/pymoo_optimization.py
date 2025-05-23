@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import List, Dict, Tuple, Union, Optional
 import os
+import copy
 
 # For pymoo
 from pymoo.core.problem import Problem
@@ -20,6 +21,12 @@ from pymoo.core.callback import Callback
 
 # Import your water system components
 from water_system import StorageNode, DemandNode, HydroWorks, SinkNode, WaterSystem, RunoffNode
+from .objectives import (
+    regular_demand_deficit,
+    priority_demand_deficit,
+    sink_node_min_flow_deficit,
+    total_spillage,
+)
 
 class WaterSystemCallback(Callback):
     """
@@ -54,6 +61,7 @@ class PymooProblemSingleObjective(Problem):
         self.start_year = start_year
         self.start_month = start_month
         self.num_time_steps = num_time_steps
+        self.num_years = num_time_steps / 12
         self.dt = base_system.dt  # Time step in seconds
         
         # Get IDs from the system
@@ -62,6 +70,11 @@ class PymooProblemSingleObjective(Problem):
         self.sink_ids = SinkNode.all_ids
         self.hydroworks_ids = HydroWorks.all_ids
         self.hydroworks_targets = {}
+
+        # For multi-objective: identify demand types
+        self.priority_demand_ids = DemandNode.high_priority_demand_ids
+
+        self.regular_demand_ids = DemandNode.low_priority_demand_ids
         
         # Dictionary to store reservoir-specific bounds
         self.reservoir_bounds = {}
@@ -162,7 +175,6 @@ class PymooProblemSingleObjective(Problem):
         
         try:
             # Create and configure water system
-            import copy
             system = copy.deepcopy(self.base_system)
             
             # Set parameters for reservoirs
@@ -179,33 +191,12 @@ class PymooProblemSingleObjective(Problem):
             system.simulate(self.num_time_steps)
             
             total_penalty = 0
+            total_penalty += regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
+            total_penalty += priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
+            total_penalty += sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            total_penalty += total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
-            # Calculate penalties for demand nodes
-            for node_id in self.demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(deficit) 
-            
-            # Calculate penalties for sink nodes
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                deficit = np.array([sink_node.flow_deficits[t] for t in range(self.num_time_steps)])
-                required= np.array([sink_node.min_flows[t] for t in range(self.num_time_steps)])
-                total_penalty += np.sum(deficit)*system.dt
-            
-            # Penalties for hydroworks spills
-            for node_id in self.hydroworks_ids:
-                hydroworks_node = system.graph.nodes[node_id]['node']
-                total_penalty += 10.0 * np.sum(hydroworks_node.spill_register)
-            
-            # Penalties for reservoir spillage
-            for node_id in self.reservoir_ids:
-                reservoir_node = system.graph.nodes[node_id]['node']
-                total_penalty += 10.0 * np.sum(reservoir_node.spillway_register)
-            
-            return float(float(total_penalty)/(self.num_time_steps / 12) / 1e9)  # Convert to km3/year
+            return float(total_penalty) 
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -326,7 +317,6 @@ class PymooProblemTwoObjective(PymooProblemSingleObjective):
         
         try:
             # Create and configure water system
-            import copy
             system = copy.deepcopy(self.base_system)
             
             # Set parameters for reservoirs
@@ -341,28 +331,17 @@ class PymooProblemTwoObjective(PymooProblemSingleObjective):
             
             # Run simulation
             system.simulate(self.num_time_steps)
-
-            # Calculate the number of years
-            num_years = self.num_time_steps / 12
             
             # Objective 1: Demand deficit
             demand_deficit = 0
-            for node_id in self.demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                demand_deficit += np.sum(deficit)
-            
+            demand_deficit += regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
+            demand_deficit += priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
+            demand_deficit += total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             # Objective 2: Minimum flow deficit
-            min_flow_deficit = 0
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
             
             # Return both objectives
-            return [float(demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9]
+            return [demand_deficit, min_flow_deficit]
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -382,10 +361,6 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
         super().__init__(base_system, start_year, start_month, num_time_steps)
         self.n_obj = 3  # Three objectives
                 
-        self.priority_demand_ids = DemandNode.high_priority_demand_ids
-
-        self.regular_demand_ids = DemandNode.low_priority_demand_ids
-    
     def _evaluate_individual_multi(self, x):
         """
         Three-objective evaluation
@@ -395,7 +370,6 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
         
         try:
             # Create and configure water system
-            import copy
             system = copy.deepcopy(self.base_system)
             
             # Set parameters for all reservoirs
@@ -411,37 +385,16 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
             # Run simulation
             system.simulate(self.num_time_steps)
 
-            # Calculate the number of years
-            num_years = self.num_time_steps / 12
-            
             # Objective 1: Regular priority demand deficit
-            regular_demand_deficit = 0
-            for node_id in self.regular_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                regular_demand_deficit += np.sum(deficit)
-            
+            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
             # Objective 2: High priority demand deficit
-            priority_demand_deficit = 0
-            for node_id in self.priority_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                priority_demand_deficit += np.sum(deficit)
-            
+            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
             # Objective 3: Minimum flow deficit
-            min_flow_deficit = 0
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
             
-            return [float(regular_demand_deficit)/num_years/1e9, 
-                    float(priority_demand_deficit)/num_years/1e9, 
-                    float(min_flow_deficit)/num_years/1e9]
+            return [low_priority_demand_deficit, 
+                    high_priority_demand_deficit, 
+                    min_flow_deficit]
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -460,13 +413,7 @@ class PymooProblemFourObjective(PymooProblemTwoObjective):
         
         super().__init__(base_system, start_year, start_month, num_time_steps)
         self.n_obj = 4  # Four objectives
-        
-        # high priority demands
-        self.priority_demand_ids = DemandNode.high_priority_demand_ids
-        
-        # low priority demands
-        self.regular_demand_ids = DemandNode.low_priority_demand_ids
-    
+
     def _evaluate_individual_multi(self, x):
         """
         Three-objective evaluation
@@ -476,7 +423,6 @@ class PymooProblemFourObjective(PymooProblemTwoObjective):
         
         try:
             # Create and configure water system
-            import copy
             system = copy.deepcopy(self.base_system)
             
             # Set parameters for all reservoirs
@@ -492,45 +438,19 @@ class PymooProblemFourObjective(PymooProblemTwoObjective):
             # Run simulation
             system.simulate(self.num_time_steps)
 
-            # Calculate the number of years
-            num_years = self.num_time_steps /12
-            
             # Objective 1: Regular priority demand deficit
-            regular_demand_deficit = 0
-            for node_id in self.regular_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                regular_demand_deficit += np.sum(deficit)
-            
+            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
             # Objective 2: High priority demand deficit
-            priority_demand_deficit = 0
-            for node_id in self.priority_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                priority_demand_deficit += np.sum(deficit)
-            
+            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
             # Objective 3: Minimum flow deficit
-            min_flow_deficit = 0
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume 
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            # Objective 4: Total spillage
+            total_flooding = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
-            # Objective 4: Total hydrowork and reservoir spillage
-            total_spillage = 0
-            for node_id in self.hydroworks_ids:
-                hydroworks_node = system.graph.nodes[node_id]['node']
-                total_spillage += np.sum(hydroworks_node.spill_register)
-            for node_id in self.reservoir_ids:
-                reservoir_node = system.graph.nodes[node_id]['node']
-                total_spillage += np.sum(reservoir_node.spillway_register)
-            
-            return [float(regular_demand_deficit)/num_years/1e9, float(priority_demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9, float(total_spillage)/num_years/1e9]
-            
+            return [low_priority_demand_deficit,    
+                    high_priority_demand_deficit, 
+                    min_flow_deficit,
+                    total_flooding]            
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
             return [float('inf'), float('inf'), float('inf'), float('inf')]
