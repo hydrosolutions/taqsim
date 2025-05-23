@@ -31,10 +31,7 @@ This allows users to easily access all major optimization and visualization tool
 water system model calibration and analysis.
 """
 
-from .deap_optimization import (
-    DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer,
-    DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer
-)
+from .deap_optimization import DeapOptimizer
 from .pymoo_optimization import (
     PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer
 )
@@ -43,8 +40,6 @@ from .pareto_dashboard import (
 )
 
 __all__ = [
-    'DeapSingleObjectiveOptimizer', 'DeapTwoObjectiveOptimizer',
-    'DeapThreeObjectiveOptimizer', 'DeapFourObjectiveOptimizer',
     'PymooSingleObjectiveOptimizer', 'PymooMultiObjectiveOptimizer',
-    'ParetoFrontDashboard3D', 'ParetoFrontDashboard4D'
+    'ParetoFrontDashboard3D', 'ParetoFrontDashboard4D', 'DeapOptimizer'
 ]

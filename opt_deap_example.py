@@ -2,9 +2,8 @@ from typing import Callable, Dict, List, Optional, Union
 import numpy as np
 import os
 import json
-from water_system import (WaterSystem, WaterSystemVisualizer, 
-                          DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer,
-                          DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer,
+from water_system import (WaterSystem, WaterSystemVisualizer,
+                          DeapOptimizer,
                           ParetoFrontDashboard3D, ParetoFrontDashboard4D)
 from water_system.optimization.deap_optimization import decode_individual
 from datetime import datetime
@@ -142,9 +141,9 @@ def run_optimization(
     # Create the base water system
     water_system = system_creator(start_year, start_month, num_time_steps)
 
-    if number_of_objectives == 1:
+    if number_of_objectives in range(1, 5):
         # Initialize the single-objective optimizer
-        optimizer = DeapSingleObjectiveOptimizer(
+        optimizer = DeapOptimizer(
             base_system=water_system,
             start_year=start_year,
             start_month=start_month,
@@ -156,51 +155,6 @@ def run_optimization(
             number_of_objectives=number_of_objectives,
             objective_weights=objective_weights
         )
-    
-    elif number_of_objectives == 2:
-        optimizer = DeapTwoObjectiveOptimizer(
-            base_system=water_system,
-            start_year=start_year,
-            start_month=start_month,
-            num_time_steps=num_time_steps,
-            ngen=ngen,
-            population_size=pop_size,
-            cxpb=cxpb,
-            mutpb=mutpb, 
-            number_of_objectives=number_of_objectives,
-            objective_weights=objective_weights
-        )
-
-    elif number_of_objectives == 3:
-        # Initialize the multi-objective optimizer
-        optimizer = DeapThreeObjectiveOptimizer(
-            base_system=water_system,
-            start_year=start_year,
-            start_month=start_month,
-            num_time_steps=num_time_steps,
-            ngen=ngen,
-            population_size=pop_size,
-            cxpb=cxpb,
-            mutpb=mutpb,
-            number_of_objectives=number_of_objectives,
-            objective_weights=objective_weights
-        )
-    
-    elif number_of_objectives == 4:
-        # Initialize the multi-objective optimizer
-        optimizer = DeapFourObjectiveOptimizer(
-            base_system=water_system,
-            start_year=start_year,
-            start_month=start_month,
-            num_time_steps=num_time_steps,
-            ngen=ngen,
-            population_size=pop_size,
-            cxpb=cxpb,
-            mutpb=mutpb,
-            number_of_objectives=number_of_objectives,
-            objective_weights=objective_weights
-        )
-
     else:
         raise ValueError("number_of_objectives must be 1, 2, 3, or 4.")
     # Run the optimization
@@ -317,7 +271,8 @@ if __name__ == "__main__":
                 pop_size=pop_size, 
                 cxpb=cxpb, 
                 mutpb=mutpb,
-                number_of_objectives=1
+                number_of_objectives=1, 
+                objective_weights=objective_weights
             )
 
             return results['objective_value']
