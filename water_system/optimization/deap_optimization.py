@@ -6,7 +6,12 @@ import copy
 import os
 from typing import Dict, List, Tuple, Union, Optional, Any
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
-
+from .objectives import (
+    regular_demand_deficit,
+    priority_demand_deficit,
+    min_flow_deficit,
+    total_spillage,
+)
 # --------------------- SHARED UTILITY FUNCTIONS ---------------------
 
 def normalize_distribution(values: np.ndarray) -> np.ndarray:
@@ -296,6 +301,7 @@ class DeapOptimizer:
         self.start_year = start_year
         self.start_month = start_month
         self.num_time_steps = num_time_steps
+        self.num_years = num_time_steps / 12
         self.population_size = population_size
         self.ngen = ngen
         self.cxpb = cxpb
@@ -530,33 +536,12 @@ class DeapSingleObjectiveOptimizer(DeapOptimizer):
             
             # Calculate total penalty
             total_penalty = 0
+            total_penalty += regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
+            total_penalty += priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
+            total_penalty += min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            total_penalty += total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
-            # Demand node penalties
-            for node_id in self.demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(deficit)
-            
-            # Sink node penalties
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                deficit = np.array([sink_node.flow_deficits[t] for t in range(self.num_time_steps)])
-                total_penalty += np.sum(deficit) * system.dt
-            
-            # Hydroworks spills
-            for node_id in self.hydroworks_ids:
-                total_penalty += 10.0 * np.sum(system.graph.nodes[node_id]['node'].spill_register)
-            
-            # Reservoir spillway flows
-            for node_id in self.reservoir_ids:
-                total_penalty += 10.0 * np.sum(system.graph.nodes[node_id]['node'].spillway_register)
-            
-            # Convert to annual value in km³
-            normalized_penalty = float(total_penalty) / (self.num_time_steps / 12) / 1e9
-            
-            return (normalized_penalty,)
+            return (total_penalty,)
         
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
