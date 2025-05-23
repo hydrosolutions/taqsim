@@ -8,120 +8,17 @@ import matplotlib.pyplot as plt
 from water_system import (PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer, 
                           ParetoFrontDashboard3D, ParetoFrontDashboard4D)
 # Import from your original script to get the system creator
-from system_creator_ZRB import create_ZRB_system
+from system_creator_ZRB import create_simplified_ZRB_system
 from system_creator_simple import create_simple_system
 
 def run_pymoo_optimization(
     system_creator,
-    start_year: int = 2017,
-    start_month: int = 1,
-    num_time_steps: int = 12,
-    system_type: str = 'baseline',
-    scenario: str = '',
-    period: str = '',
-    agr_scenario: str = '',
-    efficiency: str = '',
-    n_gen: int = 50,
-    pop_size: int = 50,
-) -> Dict[str, Union[Dict, List]]:
-    """
-    Run single-objective optimization for the ZRB water system using pymoo.
-    
-    Args:
-        system_creator: Function to create the water system
-        start_year: Start year for simulation
-        start_month: Start month for simulation (1-12)
-        num_time_steps: Number of time steps to simulate
-        system_type: "baseline" or "scenario"
-        scenario: Climate scenario (e.g., 'ssp126')
-        period: Time period (e.g., '2041-2070')
-        agr_scenario: Agricultural scenario
-        efficiency: Efficiency scenario
-        n_gen: Number of generations
-        pop_size: Population size
-        
-    Returns:
-        dict: Results of the optimization
-    """
-    print(f"Creating {system_type} water system...")
-    ZRB_system = system_creator(
-        start_year, start_month, num_time_steps,
-        system_type, scenario, period, agr_scenario, efficiency
-    )
-    
-    print(f"Initializing pymoo optimizer with pop_size={pop_size}, n_gen={n_gen}...")
-    optimizer = PymooSingleObjectiveOptimizer(
-        base_system=ZRB_system,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps,
-        n_gen=n_gen,
-        pop_size=pop_size,
-    )
-    
-    print("Starting optimization process...")
-    start_time = time.time()
-    results = optimizer.optimize()
-    end_time = time.time()
-    
-    print(f"\nOptimization completed in {end_time - start_time:.2f} seconds")
-    print("-" * 50)
-    print(f"Success: {results['success']}")
-    print(f"Message: {results['message']}")
-    print(f"Population size: {results['population_size']}")
-    print(f"Generations: {results['generations']}")
-    print(f"Final objective value: {results['objective_value']:,.0f} m³")
-    
-    print("\nOptimal Reservoir Parameters:")
-    for res_id, params in results['optimal_reservoir_parameters'].items():
-        print(f"\n{res_id}:")
-        for param, values in params.items():
-            print(f"{param}: [", end="")
-            print(", ".join(f"{v:.3f}" for v in values), end="")
-            print("]")
-        
-    print("\nOptimal Hydroworks Parameters:")
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    for hw_id, params in results['optimal_hydroworks_parameters'].items():
-        print(f"\n{hw_id}:")
-        for target, values in params.items():
-            print(f"{target}: [", end="")
-            print(", ".join(f"{v:.3f}" for v in values), end="")
-            print("]")
-    
-    # Save optimization results
-    output_dir = f"./model_output/pymoo/parameter/"
-    os.makedirs(output_dir, exist_ok=True)
-    
-    if system_type == 'scenario':
-        filename = f"{output_dir}/pymoo_params_{scenario}_{period}_{agr_scenario}_{efficiency}_{n_gen}_{pop_size}.json"
-    elif system_type == 'baseline':
-        filename = f"{output_dir}/pymoo_params_{n_gen}_{pop_size}.json"
-    else:
-        filename = f"{output_dir}/pymoo_params_{system_type}_{n_gen}_{pop_size}.json"
-    
-    save_optimized_parameters(results, filename)
-    # Generate convergence plot
-    optimizer.plot_convergence()
-
-    print(f"Optimization results saved to {filename}")
-    
-    return results
-
-
-def run_pymoo_multi_objective(
-    system_creator,
-    start_year: int = 2017,
-    start_month: int = 1,
-    num_time_steps: int = 12,
-    system_type: str = 'baseline',
-    scenario: str = '',
-    period: str = '',
-    agr_scenario: str = '',
-    efficiency: str = '',
-    n_gen: int = 50,
-    pop_size: int = 100,
-    num_objectives: int = 2
+    start_year: int,
+    start_month: int,
+    num_time_steps: int,
+    n_gen: int,
+    pop_size: int,
+    num_objectives: int
 ) -> Dict[str, Union[Dict, List]]:
     """
     Run multi-objective optimization for the ZRB water system using pymoo.
@@ -143,57 +40,62 @@ def run_pymoo_multi_objective(
     Returns:
         dict: Results of the optimization
     """
-    print(f"Creating {system_type} water system...")
+    print(f"Creating water system...")
     ZRB_system = system_creator(
-        start_year, start_month, num_time_steps,
-        system_type, scenario, period, agr_scenario, efficiency
+        start_year, start_month, num_time_steps
     )
     
-    print(f"Initializing pymoo multi-objective optimizer with {num_objectives} objectives...")
-    optimizer = PymooMultiObjectiveOptimizer(
-        base_system=ZRB_system,
-        start_year=start_year,
-        start_month=start_month,
-        num_time_steps=num_time_steps,
-        n_gen=n_gen,
-        pop_size=pop_size,
-        num_objectives=num_objectives
-    )
+    print(f"Initializing pymoo optimizer with {num_objectives} objectives...")
+    if num_objectives == 1:
+        optimizer = PymooSingleObjectiveOptimizer(
+            base_system=ZRB_system,
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps,
+            n_gen=n_gen,
+            pop_size=pop_size
+        )
+    else:
+        optimizer = PymooMultiObjectiveOptimizer(
+            base_system=ZRB_system,
+            start_year=start_year,
+            start_month=start_month,
+            num_time_steps=num_time_steps,
+            n_gen=n_gen,
+            pop_size=pop_size,
+            num_objectives=num_objectives
+        )
     
-    print("Starting multi-objective optimization process...")
+    print("Starting objective optimization process...")
     start_time = time.time()
     results = optimizer.optimize()
     end_time = time.time()
     
     print(f"\nMulti-objective optimization completed in {end_time - start_time:.2f} seconds")
     print("-" * 60)
-    print(f"Success: {results['success']}")
-    print(f"Message: {results['message']}")
-    print(f"Population size: {results['population_size']}")
-    print(f"Generations: {results['generations']}")
+    print(f"Success:        {results['success']}")
+    print(f"Message:        {results['message']}")
+    print(f"Population size:{results['population_size']}")
+    print(f"Generations:    {results['generations']}")
     
     print(f"\nRecommended solution objective values:")
-    if len(results['objective_values']) == 2:
-        print(f"  - Demand deficit: {results['objective_values'][0]:,.3f} km³")
-        print(f"  - Min flow deficit: {results['objective_values'][1]:,.3f} km³")
-    elif len(results['objective_values']) == 3:
-        print(f"  - Regular demand deficit: {results['objective_values'][0]:,.3f} km³/a")
-        print(f"  - Priority demand deficit:{results['objective_values'][1]:,.3f} km³/a")
-        print(f"  - Min flow deficit:       {results['objective_values'][2]:,.3f} km³/a")
+    print(f"  - Objective 1:    {results['objective_values'][0]:,.3f} km³/a")
+    if len(results['objective_values']) >= 2:
+        print(f"  - Objective 2:    {results['objective_values'][1]:,.3f} km³/a")
+    if len(results['objective_values']) >= 3:
+        print(f"  - Objective 3:    {results['objective_values'][2]:,.3f} km³/a")
+    if len(results['objective_values']) >= 4:
+        print(f"  - Objective 4:    {results['objective_values'][3]:,.3f} km³/a")
     
-    print(f"\nNumber of Pareto-optimal solutions: {len(results['pareto_front'])}")
+    if num_objectives >= 2:
+        print(f"\nNumber of Pareto-optimal solutions: {len(results['pareto_front'])}")
     
     
     # Save optimization results
     output_dir = f"./model_output/pymoo/parameter/"
     os.makedirs(output_dir, exist_ok=True)
     
-    if system_type == 'scenario':
-        filename = f"{output_dir}/pymoo_mo{num_objectives}_{scenario}_{period}_{agr_scenario}_{efficiency}_{n_gen}_{pop_size}.json"
-    elif system_type == 'baseline':
-        filename = f"{output_dir}/pymoo_mo{num_objectives}_{n_gen}_{pop_size}.json"
-    else:
-        filename = f"{output_dir}/pymoo_mo{num_objectives}_{system_type}_{n_gen}_{pop_size}.json"
+    filename = f"{output_dir}/pymoo_mo{num_objectives}_simplified_ZRB_{n_gen}_{pop_size}.json"
     
     save_optimized_parameters(results, filename)
     # Generate convergence and Pareto front plots
@@ -202,7 +104,6 @@ def run_pymoo_multi_objective(
     print(f"Multi-objective optimization results saved to {filename}")
     
     return results
-
 
 def save_optimized_parameters(optimization_results, filename):
     """
@@ -301,37 +202,17 @@ def save_optimized_parameters(optimization_results, filename):
 
 if __name__ == "__main__":
     
-    
-    '''# Example of running the pymoo single-objective optimization
-    print("\n=== PYMOO SINGLE-OBJECTIVE OPTIMIZATION ===\n")
-    start = datetime.now()
-    
-    results_so = run_pymoo_optimization(
-        create_ZRB_system,
-        start_year=2017, 
-        start_month=1, 
-        num_time_steps=12*6,  # Reduced for faster runtime in example
-        system_type='simplified_ZRB',
-        n_gen=50,              # Reduced for faster runtime in example
-        pop_size=10,           # Reduced for faster runtime in example
-    )
-    
-    print(f"\nSingle-objective optimization completed in {datetime.now() - start}")'''
-    
-    # Example of running pymoo multi-objective optimization
-    print("\n=== PYMOO MULTI-OBJECTIVE OPTIMIZATION ===\n")
     start = datetime.now()
     ngen = 10
-    popsize = 100
+    popsize = 10
     num_obj = 4
 
     
-    results_mo = run_pymoo_multi_objective(
-        create_ZRB_system,
+    results_mo = run_pymoo_optimization(
+        create_simplified_ZRB_system,
         start_year=2017, 
         start_month=1, 
         num_time_steps=12*6,  # Reduced for faster runtime in example
-        system_type='simplified_ZRB',
         n_gen=ngen,              # Reduced for faster runtime in example
         pop_size=popsize,           # Reduced for faster runtime in example
         num_objectives=num_obj       # Using 2 objectives for simplicity

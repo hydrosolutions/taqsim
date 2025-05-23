@@ -536,7 +536,7 @@ class PymooSingleObjectiveOptimizer:
                 'message': f"Optimization completed successfully after {result.algorithm.n_gen} generations",
                 'population_size': self.pop_size,
                 'generations': result.algorithm.n_gen,
-                'objective_value': float(result.F[0]),
+                'objective_values': (float(result.F[0]),),
                 'optimal_reservoir_parameters': reservoir_params,
                 'optimal_hydroworks_parameters': hydroworks_params
             }
@@ -548,7 +548,7 @@ class PymooSingleObjectiveOptimizer:
                 'message': f"Optimization failed: {str(e)}",
                 'population_size': self.pop_size,
                 'generations': 0,
-                'objective_value': float('inf'),
+                'objective_values': (float('inf'),),
                 'optimal_reservoir_parameters': {},
                 'optimal_hydroworks_parameters': {}
             }
@@ -653,7 +653,6 @@ class PymooMultiObjectiveOptimizer:
                 eliminate_duplicates=True
             )
 
-    
     def optimize(self) -> Dict[str, Union[bool, str, int, float, Dict[str, Dict[str, List[float]]]]]:
         """
         Run the multi-objective optimization process
