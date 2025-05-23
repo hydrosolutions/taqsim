@@ -310,10 +310,9 @@ class DeapOptimizer:
         self.hydroworks_targets = {}
 
         # For multi-objective: identify demand types
-        self.priority_demand_ids = [node_id for node_id in self.demand_ids
-                                    if self.base_system.graph.nodes[node_id]['node'].weight > 1]
-        self.regular_demand_ids = [node_id for node_id in self.demand_ids
-                                   if self.base_system.graph.nodes[node_id]['node'].weight == 1]
+        self.priority_demand_ids = DemandNode.high_priority_demand_ids
+
+        self.regular_demand_ids = DemandNode.low_priority_demand_ids
 
         # Reservoir bounds
         self.reservoir_bounds = {}
@@ -538,7 +537,7 @@ class DeapSingleObjectiveOptimizer(DeapOptimizer):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(deficit) * demand_node.weight
+                total_penalty += np.sum(deficit)
             
             # Sink node penalties
             for node_id in self.sink_ids:

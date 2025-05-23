@@ -385,7 +385,7 @@ if __name__ == "__main__":
             start_month=1, 
             num_time_steps=12*6,
             system_type = 'simplified_ZRB',
-            ngen=50, 
+            ngen=10, 
             pop_size=100, 
             cxpb=0.65, 
             mutpb=0.32,

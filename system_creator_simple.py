@@ -59,14 +59,14 @@ def create_simple_system(start_year: int,start_month: int,num_time_steps: int, s
                             constant_demand_rate=40, 
                             non_consumptive_rate=0, 
                             num_time_steps=num_time_steps,
-                            weight=1)
+                            priority=1)
     demand2= DemandNode("demand2", 
                             easting=20, 
                             northing=10, 
                             constant_demand_rate=35, 
                             non_consumptive_rate=5, 
                             num_time_steps=num_time_steps,
-                            weight=1)
+                            priority=2)
     system.add_node(demand1)
     system.add_node(demand2)
     # Add Edge from HydroWorks to Demand Node

@@ -109,7 +109,6 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
             num_time_steps=num_time_steps,
             field_efficiency=row['field_efficiency'],
             conveyance_efficiency=row['conveyance_efficiency'],
-            weight=row['weight']
         )
         globals()[row['name']] = demand_node
         system.add_node(demand_node)
@@ -121,7 +120,7 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
                            constant_demand_rate=25, 
                            non_consumptive_rate=17, 
                            num_time_steps=num_time_steps,
-                           weight=10)
+                           priority=1)
     system.add_node(Powerplant)
     
     # Determine evaporation file path

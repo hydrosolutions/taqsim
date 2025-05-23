@@ -186,7 +186,7 @@ class PymooProblemSingleObjective(Problem):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                total_penalty += np.sum(deficit)* demand_node.weight
+                total_penalty += np.sum(deficit) 
             
             # Calculate penalties for sink nodes
             for node_id in self.sink_ids:
@@ -352,7 +352,7 @@ class PymooProblemTwoObjective(PymooProblemSingleObjective):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                demand_deficit += np.sum(deficit) #* demand_node.weight
+                demand_deficit += np.sum(deficit)
             
             # Objective 2: Minimum flow deficit
             min_flow_deficit = 0
@@ -381,14 +381,10 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
         
         super().__init__(base_system, start_year, start_month, num_time_steps)
         self.n_obj = 3  # Three objectives
-        
-        # Identify high priority demand nodes (those with weight > 1)
-        self.priority_demand_ids = [node_id for node_id in self.demand_ids 
-                                    if self.base_system.graph.nodes[node_id]['node'].weight > 1]
-        
-        # Regular priority demands
-        self.regular_demand_ids = [node_id for node_id in self.demand_ids 
-                                  if self.base_system.graph.nodes[node_id]['node'].weight == 1]
+                
+        self.priority_demand_ids = DemandNode.high_priority_demand_ids
+
+        self.regular_demand_ids = DemandNode.low_priority_demand_ids
     
     def _evaluate_individual_multi(self, x):
         """
@@ -434,7 +430,7 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                priority_demand_deficit += np.sum(deficit) #* demand_node.weight
+                priority_demand_deficit += np.sum(deficit)
             
             # Objective 3: Minimum flow deficit
             min_flow_deficit = 0
@@ -466,12 +462,10 @@ class PymooProblemFourObjective(PymooProblemTwoObjective):
         self.n_obj = 4  # Four objectives
         
         # Identify high priority demand nodes (those with weight > 1)
-        self.priority_demand_ids = [node_id for node_id in self.demand_ids 
-                                    if self.base_system.graph.nodes[node_id]['node'].weight > 1]
+        self.priority_demand_ids = DemandNode.high_priority_demand_ids
         
         # Regular priority demands
-        self.regular_demand_ids = [node_id for node_id in self.demand_ids 
-                                  if self.base_system.graph.nodes[node_id]['node'].weight == 1]
+        self.regular_demand_ids = DemandNode.low_priority_demand_ids
     
     def _evaluate_individual_multi(self, x):
         """
@@ -517,14 +511,14 @@ class PymooProblemFourObjective(PymooProblemTwoObjective):
                 demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
                 satisfied = np.array(demand_node.satisfied_demand_total)
                 deficit = (demand - satisfied) * system.dt
-                priority_demand_deficit += np.sum(deficit) #* demand_node.weight
+                priority_demand_deficit += np.sum(deficit)
             
             # Objective 3: Minimum flow deficit
             min_flow_deficit = 0
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
                 total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume #* sink_node.weight
+                min_flow_deficit += total_deficit_volume 
             
             # Objective 4: Total hydrowork and reservoir spillage
             total_spillage = 0

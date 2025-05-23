@@ -329,8 +329,7 @@ class DemandNode:
         field_efficiency (float): Efficiency of water use at the field/end-use level (0-1)
         conveyance_efficiency (float): Efficiency of the water delivery system (0-1)
         non_consumptive_rate (float): Flow rate [m³/s] that returns to the system
-        weight (float): Weight factor for demand shortfalls in optimization
-        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
+        priority (int): Priority indicator for demand shortfalls in optimization (1=high, 2=low)        inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
         outflow_edge: The single outflow edge from this node.
         satisfied_consumptive_demand (list): Record of met consumptive demand [m³/s]
         satisfied_non_consumptive_demand (list): Record of met non-consumptive demand [m³/s]
@@ -338,6 +337,9 @@ class DemandNode:
     """
     # Class variable to track all instances of DemandNode
     all_ids = []
+    high_priority_demand_ids = []  # List to track priority demand node IDs
+    low_priority_demand_ids = []  # List to track low priority demand node IDs
+
 
     def __init__(
         self,
@@ -352,7 +354,7 @@ class DemandNode:
         num_time_steps: int = 0,
         field_efficiency: float = 1.0,
         conveyance_efficiency: float = 1.0,
-        weight: int = 1
+        priority: int = 2
     ) -> None:
         """
         Initialize a DemandNode object.
@@ -369,10 +371,10 @@ class DemandNode:
             num_time_steps (int): Number of time steps to simulate
             field_efficiency (float): Efficiency of water use at field/end-use (0-1)
             conveyance_efficiency (float): Efficiency of water delivery system (0-1)
-            weight (int): Weight factor for demand shortfalls in optimization
+            priority (int): Priority indicator (1=high, 2=low)
             
         Raises:
-            ValueError: If efficiency values are invalid, weight is non-positive,
+            ValueError: If efficiency values are invalid, priority is not 1 or 2,
                       or non-consumptive rate is negative
                       
         Note:
@@ -384,8 +386,10 @@ class DemandNode:
         validate_node_id(id, "DemandNode")
         # Validate coordinates
         validate_coordinates(easting, northing, id)
-        # Validate weight
-        validate_positive_integer(weight, "DemandNode weight")
+        # Validate priority
+        if priority not in (1, 2):
+            raise ValueError("DemandNode priority must be 1 (high) or 2 (low)")
+        self.priority = priority
         # Validate field efficiency
         validate_probability(field_efficiency, "field_efficiency")
         # Validate conveyance efficiency
@@ -397,7 +401,11 @@ class DemandNode:
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
         self.outflow_edge = None  # Single outflow edge
-        self.weight = weight  # Weight factor for demand shortfalls in optimization
+        self.priority = priority  # Priority for demand shortfalls in optimization
+        if priority == 1:
+            DemandNode.high_priority_demand_ids.append(id)
+        else:
+            DemandNode.low_priority_demand_ids.append(id)
         self.field_efficiency = field_efficiency  # Field efficiency (0-1)
         self.conveyance_efficiency = conveyance_efficiency # Conveyance efficiency (0-1)
 
