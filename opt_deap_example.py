@@ -238,9 +238,9 @@ if __name__ == "__main__":
 
     start = datetime.now()
     
-    number_of_objectives = 1
-    number_of_generations = 50
-    population_size = 100
+    number_of_objectives = 4
+    number_of_generations = 20
+    population_size = 50
 
 
     if number_of_objectives == 1:

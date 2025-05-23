@@ -438,7 +438,7 @@ class DeapOptimizer:
 
         # Begin the evolution
         for gen in range(1, self.ngen + 1):
-            # Select the next generation individuals (using NSGA-II selection)
+            # Select the next generation individuals (using NSGA-II selection or tournament)
             offspring = self.toolbox.select(pop, len(pop))
 
             # Clone the selected individuals
@@ -688,125 +688,6 @@ class DeapMultiObjectiveOptimizer(DeapOptimizer):
         Multi-objective evaluation. Must be implemented by subclasses.
         """
         raise NotImplementedError("Subclasses must implement this method.")
-
-    def optimize(self):
-        """
-        Shared multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
-        Handles any number of objectives.
-        Returns:
-            dict: Results of the optimization including Pareto front
-        """
-        # Create initial population
-        pop = self.toolbox.population(n=self.population_size)
-
-        # Evaluate initial population
-        fitnesses = list(map(self.toolbox.evaluate, pop))
-        for ind, fit in zip(pop, fitnesses):
-            ind.fitness.values = fit
-
-        # Determine number of objectives from the first individual's fitness
-        n_obj = len(pop[0].fitness.values)
-        # Initialize history keys for all objectives
-        for i in range(1, n_obj + 1):
-            self.history[f'min_obj{i}'] = []
-            self.history[f'avg_obj{i}'] = []
-            self.history[f'std_obj{i}'] = []
-
-        # Initialize statistics tracking for all objectives
-        stats_objs = []
-        for i in range(n_obj):
-            stats = tools.Statistics(lambda ind, idx=i: ind.fitness.values[idx])
-            stats.register("min", np.min)
-            stats.register("avg", np.mean)
-            stats.register("std", np.std)
-            stats_objs.append(stats)
-
-        # Combine statistics into a multi-statistics object
-        mstats = tools.MultiStatistics(**{f'obj{i+1}': stats_objs[i] for i in range(n_obj)})
-
-        # Create the logbook for statistics
-        logbook = tools.Logbook()
-        # Show gen, nevals, and only avg, min, std for each objective
-        logbook.header = ['gen', 'nevals']
-        for i in range(n_obj):
-            logbook.header += [f'obj{i+1}_avg', f'obj{i+1}_min', f'obj{i+1}_std']
-
-        # Record the initial statistics
-        record = mstats.compile(pop)
-        # Flatten the record for custom header
-        flat_record = {'gen': 0, 'nevals': len(pop)}
-        for i in range(n_obj):
-            flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
-            flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
-            flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
-        logbook.record(**flat_record)
-        print(logbook.stream)
-
-        # Begin the evolution
-        for gen in range(1, self.ngen + 1):
-            # Select the next generation individuals (using NSGA-II selection)
-            offspring = self.toolbox.select(pop, len(pop))
-
-            # Clone the selected individuals
-            offspring = list(map(self.toolbox.clone, offspring))
-
-            # Apply crossover and mutation
-            for i in range(1, len(offspring), 2):
-                if random.random() < self.cxpb:
-                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
-                    del offspring[i-1].fitness.values, offspring[i].fitness.values
-
-            for i in range(len(offspring)):
-                if random.random() < self.mutpb:
-                    offspring[i], = self.toolbox.mutate(offspring[i])
-                    del offspring[i].fitness.values
-
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-
-            # Select the survivors from the combined population of parents and offspring
-            pop = self.toolbox.select(pop + offspring, self.population_size)
-
-            # Record statistics
-            record = mstats.compile(pop)
-            flat_record = {'gen': gen, 'nevals': len(offspring)}
-            for i in range(n_obj):
-                flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
-                flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
-                flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
-            logbook.record(**flat_record)
-            print(logbook.stream)
-
-            # Store the history for all objectives
-            for i in range(1, n_obj + 1):
-                self.history[f'min_obj{i}'].append(record[f'obj{i}']['min'])
-                self.history[f'avg_obj{i}'].append(record[f'obj{i}']['avg'])
-                self.history[f'std_obj{i}'].append(record[f'obj{i}']['std'])
-
-        # Extract the Pareto front
-        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
-
-        # Get the overall best individual based on a weighted sum of all objectives
-        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
-        reservoir_params, hydroworks_params = decode_individual(self, best_ind)
-
-        # Return results in a format similar to pymoo
-        return {
-            'success': True,
-            'message': f"{n_obj}-objective optimization completed successfully",
-            'population_size': self.population_size,
-            'generations': self.ngen,
-            'crossover_probability': self.cxpb,
-            'mutation_probability': self.mutpb,
-            'objective_values': best_ind.fitness.values,
-            'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params,
-            'pareto_front': self.pareto_front,
-            'optimizer': self  # Include the optimizer instance for parameter decoding
-        }
 
 class DeapTwoObjectiveOptimizer(DeapMultiObjectiveOptimizer):
     """
