@@ -206,7 +206,6 @@ class SinkNode:
         min_flows (list): List of minimum required flow rates [m³/s] for each timestep
         flow_history (list): Record of actual flows [m³/s] for each timestep
         flow_deficits (list): Record of flow requirement deficits [m³/s] for each timestep
-        weight (float): Weight factor for minimum flow violations in optimization
         inflow_edges (dict): A dictionary of inflow edges, keyed by the source node's id.
     """
     # Class variable to track all instances of SinkNode
@@ -218,7 +217,6 @@ class SinkNode:
         constant_min_flow: Optional[float] = None,
         easting: Optional[float] = None,
         northing: Optional[float] = None,
-        weight: float = 1.0,
         csv_file: Optional[str] = None,
         start_year: Optional[int] = None,
         start_month: Optional[int] = None,
@@ -232,14 +230,15 @@ class SinkNode:
             constant_min_flow (float, optional): Constant minimum required flow rate [m³/s]
             easting (float): Easting coordinate in UTM system
             northing (float): Northing coordinate in UTM system
-            weight (float): Weight factor for minimum flow violations in optimization objective function
             csv_file (str, optional): Path to CSV file containing minimum flow requirements
             start_year (int, optional): Starting year for CSV data import
             start_month (int, optional): Starting month (1-12) for CSV data import
             num_time_steps (int): Number of time steps to simulate
             
         Raises:
-            ValueError: If weight is non-positive
+            ValueError: If constant_min_flow is negative, or if the CSV file cannot be loaded properly
+            ValueError: If the CSV file does not contain valid data for the specified time period
+            ValueError: If the node ID is invalid or if coordinates are not provided
             
         Note:
             Minimum flow data priority: CSV file (if valid) > constant_min_flow > zeros.
@@ -249,15 +248,12 @@ class SinkNode:
         validate_node_id(id, "SinkNode")
         # Validate coordinates
         validate_coordinates(easting, northing, id)
-        # Validate weight
-        validate_positive_integer(weight, "SinkNode weight")
 
         self.id = id
         SinkNode.all_ids.append(id)  # Track all SinkNode instances
         self.easting = easting
         self.northing = northing
         self.inflow_edges = {}  # Dictionary of inflow edges
-        self.weight = weight
         
         # Initialize tracking lists
         self.flow_history = []

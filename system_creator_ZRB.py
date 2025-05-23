@@ -109,6 +109,7 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
             num_time_steps=num_time_steps,
             field_efficiency=row['field_efficiency'],
             conveyance_efficiency=row['conveyance_efficiency'],
+            priority=row['priority']
         )
         globals()[row['name']] = demand_node
         system.add_node(demand_node)
@@ -174,7 +175,6 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
                            start_year=start_year, 
                            start_month=start_month, 
                            num_time_steps=num_time_steps,
-                           weight=1, 
                            easting=376882.3, 
                            northing=4411307.9)
     
@@ -183,7 +183,6 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
                                start_year=start_year, 
                                start_month=start_month, 
                                num_time_steps=num_time_steps,
-                               weight=1, 
                                easting=272551, 
                                northing=4361872)
     
@@ -192,7 +191,6 @@ def create_ZRB_system(start_year: int,start_month: int,num_time_steps: int,syste
                          start_year=start_year, 
                          start_month=start_month, 
                          num_time_steps=num_time_steps,
-                         weight=1, 
                          easting=153771, 
                          northing=4454402)
     

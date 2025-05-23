@@ -78,7 +78,6 @@ def create_simple_system(start_year: int,start_month: int,num_time_steps: int, s
                      easting=30, 
                      northing=5, 
                      constant_min_flow=10,
-                     weight=1, 
                      num_time_steps=num_time_steps)
     system.add_node(sink)
     # Add Edge from Demand Node to Sink Node

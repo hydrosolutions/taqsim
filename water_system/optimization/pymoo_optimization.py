@@ -193,7 +193,7 @@ class PymooProblemSingleObjective(Problem):
                 sink_node = system.graph.nodes[node_id]['node']
                 deficit = np.array([sink_node.flow_deficits[t] for t in range(self.num_time_steps)])
                 required= np.array([sink_node.min_flows[t] for t in range(self.num_time_steps)])
-                total_penalty += np.sum(deficit)*system.dt * sink_node.weight
+                total_penalty += np.sum(deficit)*system.dt
             
             # Penalties for hydroworks spills
             for node_id in self.hydroworks_ids:
@@ -359,7 +359,7 @@ class PymooProblemTwoObjective(PymooProblemSingleObjective):
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
                 total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume #* sink_node.weight
+                min_flow_deficit += total_deficit_volume
             
             # Return both objectives
             return [float(demand_deficit)/num_years/1e9, float(min_flow_deficit)/num_years/1e9]
@@ -437,7 +437,7 @@ class PymooProblemThreeObjective(PymooProblemTwoObjective):
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
                 total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume #* sink_node.weight
+                min_flow_deficit += total_deficit_volume
             
             return [float(regular_demand_deficit)/num_years/1e9, 
                     float(priority_demand_deficit)/num_years/1e9, 
@@ -461,10 +461,10 @@ class PymooProblemFourObjective(PymooProblemTwoObjective):
         super().__init__(base_system, start_year, start_month, num_time_steps)
         self.n_obj = 4  # Four objectives
         
-        # Identify high priority demand nodes (those with weight > 1)
+        # high priority demands
         self.priority_demand_ids = DemandNode.high_priority_demand_ids
         
-        # Regular priority demands
+        # low priority demands
         self.regular_demand_ids = DemandNode.low_priority_demand_ids
     
     def _evaluate_individual_multi(self, x):

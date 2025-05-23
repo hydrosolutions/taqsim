@@ -543,7 +543,7 @@ class DeapSingleObjectiveOptimizer(DeapOptimizer):
             for node_id in self.sink_ids:
                 sink_node = system.graph.nodes[node_id]['node']
                 deficit = np.array([sink_node.flow_deficits[t] for t in range(self.num_time_steps)])
-                total_penalty += np.sum(deficit) * system.dt * sink_node.weight
+                total_penalty += np.sum(deficit) * system.dt
             
             # Hydroworks spills
             for node_id in self.hydroworks_ids:
