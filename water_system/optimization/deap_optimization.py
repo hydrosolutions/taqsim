@@ -9,7 +9,7 @@ from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkN
 from .objectives import (
     regular_demand_deficit,
     priority_demand_deficit,
-    min_flow_deficit,
+    sink_node_min_flow_deficit,
     total_spillage,
 )
 # --------------------- SHARED UTILITY FUNCTIONS ---------------------
@@ -538,7 +538,7 @@ class DeapSingleObjectiveOptimizer(DeapOptimizer):
             total_penalty = 0
             total_penalty += regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
             total_penalty += priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            total_penalty += min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            total_penalty += sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
             total_penalty += total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             return (total_penalty,)
@@ -767,29 +767,15 @@ class DeapTwoObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             # Run simulation
             system.simulate(self.num_time_steps)
 
-            # Calculate number of years for annual averaging
-            num_years = self.num_time_steps / 12
-            
-            # Objective 1: Demand deficit
-            demand_deficit = 0
-            for node_id in self.demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                demand_deficit += np.sum(deficit)
-            
-            # Objective 2: Minimum flow deficit
-            min_flow_deficit = 0
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume
+            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
+            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             # Convert to annual values in km³
             return (
-                float(demand_deficit) / num_years / 1e9,
-                float(min_flow_deficit) / num_years / 1e9
+                float(low_priority_demand_deficit+high_priority_demand_deficit+flooding_volume),
+                float(min_flow_deficit)
             )
             
         except Exception as e:
@@ -938,40 +924,24 @@ class DeapThreeObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             
             # Run simulation
             system.simulate(self.num_time_steps)
-
-            # Calculate number of years for annual averaging
-            num_years = self.num_time_steps / 12
             
             # Objective 1: Regular demand deficit
-            regular_demand_deficit = 0
-            for node_id in self.regular_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                regular_demand_deficit += np.sum(deficit)
+            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
             
             # Objective 2: Priority demand deficit
-            priority_demand_deficit = 0
-            for node_id in self.priority_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
-                priority_demand_deficit += np.sum(deficit)
+            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
             
             # Objective 3: Minimum flow deficit
-            min_flow_deficit = 0
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+
+            # Objective 4: Flooding volume (not used in this optimizer)
+            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             # Convert to annual values in km³
             return (
-                float(regular_demand_deficit) / num_years / 1e9,
-                float(priority_demand_deficit) / num_years / 1e9,
-                float(min_flow_deficit) / num_years / 1e9
+                float(low_priority_demand_deficit),
+                float(high_priority_demand_deficit),
+                float(min_flow_deficit)
             )
             
         except Exception as e:
@@ -1130,43 +1100,21 @@ class DeapFourObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             # Run simulation
             system.simulate(self.num_time_steps)
 
-            # Calculate number of years for annual averaging
-            num_years = self.num_time_steps / 12
-            
             # Objective 1: Regular demand deficit
-            regular_demand_deficit = 0
-            for node_id in self.regular_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                deficit = np.array(demand_node.unmet_demand)*self.dt
-                regular_demand_deficit += np.sum(deficit)
-            
+            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
             # Objective 2: Priority demand deficit
-            priority_demand_deficit = 0
-            for node_id in self.priority_demand_ids:
-                demand_node = system.graph.nodes[node_id]['node']
-                deficit = np.array(demand_node.unmet_demand)*self.dt
-                priority_demand_deficit += np.sum(deficit)
-            
+            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
             # Objective 3: Minimum flow deficit
-            min_flow_deficit = 0
-            for node_id in self.sink_ids:
-                sink_node = system.graph.nodes[node_id]['node']
-                total_deficit_volume = sum(deficit * system.dt for deficit in sink_node.flow_deficits)
-                min_flow_deficit += total_deficit_volume
-            
-            # Objective 4: Total spillage
-            total_spillage = 0
-            for node_id in self.hydroworks_ids:
-                total_spillage += np.sum(system.graph.nodes[node_id]['node'].spill_register)
-            for node_id in self.reservoir_ids:
-                total_spillage += np.sum(system.graph.nodes[node_id]['node'].spillway_register)
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            # Objective 4: Spillage
+            total_flooding = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             # Convert to annual values in km³
             return (
-                float(regular_demand_deficit) / num_years / 1e9,
-                float(priority_demand_deficit) / num_years / 1e9,
-                float(min_flow_deficit) / num_years / 1e9,
-                float(total_spillage) / num_years / 1e9
+                float(low_priority_demand_deficit),
+                float(high_priority_demand_deficit),
+                float(min_flow_deficit),
+                float(total_flooding)
             )
             
         except Exception as e:

@@ -132,7 +132,7 @@ if __name__ == "__main__":
     start = datetime.now()
 
     # Example of running the simulation with optimized parameters for a simplified ZRB system
-    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/unsga3.json")
+    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test.json")
     system = run_simulation(
         create_ZRB_system,
         loaded_results,

@@ -10,7 +10,7 @@ All objectives are returned as annualized values in cubic kilometers (km³/year)
 Functions:
     - regular_demand_deficit: Total annual regular demand deficit.
     - priority_demand_deficit: Total annual priority demand deficit.
-    - min_flow_deficit: Total annual minimum flow deficit at sink nodes.
+    - sink_node_min_flow_deficit: Total annual minimum flow deficit at sink nodes.
     - total_spillage: Total annual spillage from hydroworks and reservoirs.
 
 Arguments:
@@ -65,7 +65,7 @@ def priority_demand_deficit(system, priority_demand_ids, dt, num_years):
         total += np.sum(deficit)
     return total / num_years / 1e9
 
-def min_flow_deficit(system, sink_ids, dt, num_years):
+def sink_node_min_flow_deficit(system, sink_ids, dt, num_years):
     """
     Calculate the total annual minimum flow deficit at sink nodes.
 

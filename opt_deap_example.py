@@ -12,10 +12,10 @@ import optuna
 from optuna.visualization import plot_optimization_history, plot_param_importances, plot_contour, plot_intermediate_values, plot_timeline, plot_slice, plot_edf
 from system_creator_ZRB import create_ZRB_system
 
-def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]],filename: str) -> None:
+def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]], filename: str) -> None:
     """
     Save optimized parameters to a file for later use.
-    
+
     Args:
         optimization_results (dict): Results from the optimizer
         filename (str): Path to save the parameters
@@ -25,7 +25,7 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
     directory = os.path.dirname(filename)
     if not os.path.exists(directory):
         os.makedirs(directory)
-    
+
     # Convert all numeric values to floats for JSON serialization
     def convert_to_float(obj):
         if isinstance(obj, dict):
@@ -39,10 +39,10 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
         elif isinstance(obj, tuple):  # Handle tuples (for multi-objective values)
             return [float(x) for x in obj]
         return obj
-    
+
     # Check if we have multi-objective results
-    is_multi_objective = isinstance(optimization_results.get('objective_values', None), tuple)
-    
+    is_multi_objective = isinstance(optimization_results.get('objective_values', None), (tuple, list))
+
     # Prepare basic data for saving
     save_data = {
         'is_multi_objective': is_multi_objective,
@@ -51,53 +51,56 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
         'crossover_probability': optimization_results.get('crossover_probability', 0),
         'mutation_probability': optimization_results.get('mutation_probability', 0),
     }
-    
+
     # Add the recommended solution (weighted best)
     save_data['recommended_solution'] = {
         'reservoir_parameters': convert_to_float(optimization_results['optimal_reservoir_parameters']),
         'hydroworks_parameters': convert_to_float(optimization_results['optimal_hydroworks_parameters'])
     }
-    
+
     # Add objective values based on format
     if is_multi_objective:
-        save_data['recommended_solution']['objective_values'] = convert_to_float(optimization_results['objective_values'])
-        # Add the individual objective values separately
-        save_data['recommended_solution']['demand_deficit'] = float(optimization_results['objective_values'][0])
-        save_data['recommended_solution']['minflow_deficit'] = float(optimization_results['objective_values'][1])
-        
+        obj_values = convert_to_float(optimization_results['objective_values'])
+        save_data['recommended_solution']['objective_values'] = obj_values
+
+        # Add each objective value separately with generic keys
+        if isinstance(obj_values, (list, tuple)):
+            for i, val in enumerate(obj_values):
+                save_data['recommended_solution'][f'objective_{i+1}'] = float(val)
+
         # If pareto front exists, save all solutions
         if 'pareto_front' in optimization_results and optimization_results['pareto_front']:
             pareto_solutions = []
-            
-            # Process each solution in the Pareto front
             for i, ind in enumerate(optimization_results['pareto_front']):
-                # Decode this individual's parameters
-                reservoir_params, hydroworks_params = decode_individual.__get__(None, DeapThreeObjectiveOptimizer)(optimization_results['optimizer'], ind)
-                
+                # Try to decode parameters if possible, fallback to None if not available
+                try:
+                    reservoir_params, hydroworks_params = decode_individual.__get__(None, type(optimization_results['optimizer']))(optimization_results['optimizer'], ind)
+                except Exception:
+                    reservoir_params, hydroworks_params = None, None
+
                 # Create a solution entry
                 solution = {
                     'id': i,
                     'objective_values': convert_to_float(ind.fitness.values),
-                    'demand_deficit': float(ind.fitness.values[0]),
-                    'priority_demand_deficit': float(ind.fitness.values[1]),
-                    'minflow_deficit': float(ind.fitness.values[2]),
                     'reservoir_parameters': convert_to_float(reservoir_params),
                     'hydroworks_parameters': convert_to_float(hydroworks_params)
                 }
-                
+                # Add each objective value separately
+                for j, val in enumerate(ind.fitness.values):
+                    solution[f'objective_{j+1}'] = float(val)
                 pareto_solutions.append(solution)
-            
+
             # Add all Pareto solutions to the save data
             save_data['pareto_solutions'] = pareto_solutions
             save_data['num_pareto_solutions'] = len(pareto_solutions)
     else:
         # Single objective case
         save_data['recommended_solution']['objective_value'] = float(optimization_results.get('objective_value', 0))
-    
+
     # Save to file
     with open(filename, 'w') as f:
         json.dump(save_data, f, indent=2)
-    
+
     print(f"Optimization results saved to {filename}")
     if is_multi_objective and 'pareto_solutions' in save_data:
         print(f"Saved {save_data['num_pareto_solutions']} Pareto-optimal solutions")
@@ -163,7 +166,7 @@ def run_optimization(
     print(f"Generations: {results['generations']}")
     print(f"Corss-over probability: {results['crossover_probability']}")
     print(f"Mutation probability: {results['mutation_probability']}")
-    print(f"Final objective value: {results['objective_value']:,.0f} m³")
+    print(f"Final objective value: {results['objective_value']:,.3f} km³")
     
     print("\nOptimal Reservoir Parameters:")
     for res_id, params in results['optimal_reservoir_parameters'].items():
@@ -335,9 +338,10 @@ def run_multi_objective_optimization(
 if __name__ == "__main__":
 
     start = datetime.now()
+    number_of_objectives = 4
 
 
-    optimization = True
+    optimization = False
     multiobjective = True
     optunastudy = False
 
@@ -348,7 +352,7 @@ if __name__ == "__main__":
             create_ZRB_system,
             start_year=2017, 
             start_month=1, 
-            num_time_steps=12*2,
+            num_time_steps=12*6,
             system_type = 'simplified_ZRB',
             scenario = '', 
             period = '', 
@@ -389,20 +393,25 @@ if __name__ == "__main__":
             pop_size=100, 
             cxpb=0.65, 
             mutpb=0.32,
-            number_of_objectives=4
+            number_of_objectives=number_of_objectives
         )
 
-
-        save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
-
-        # Create dashboard for the Pareto front
-        dashboard = ParetoFrontDashboard4D(
-            pareto_solutions=results['pareto_front'],
-            output_dir=f"./model_output/deap/pareto_front/",
-        )
         
-        # Generate all visualizations
-        dashboard.generate_full_report()
+        save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
+        if number_of_objectives == 3:
+            dashboard = ParetoFrontDashboard3D(
+                pareto_solutions=results['pareto_front'],
+                output_dir=f"./model_output/deap/pareto_front/",
+            )
+            dashboard.generate_full_report()
+        if number_of_objectives == 4:
+            # Create dashboard for the Pareto front
+            dashboard = ParetoFrontDashboard4D(
+                pareto_solutions=results['pareto_front'],
+                output_dir=f"./model_output/deap/pareto_front/",
+            )      
+            # Generate all visualizations
+            dashboard.generate_full_report()
 
         '''with open("./model_output/deap/parameter/multiobjective_params.json", "r") as f:
             data = json.load(f)
@@ -417,8 +426,6 @@ if __name__ == "__main__":
         
         # Generate all visualizations
         dashboard.generate_full_report()'''
-        
-        print(f"Dashboard created at {dashboard.output_dir}/index.html")
    
     if optunastudy:
         # Making an Optuna study
@@ -475,4 +482,3 @@ if __name__ == "__main__":
 
     end = datetime.now()
     print(f"Execution time: {end - start}")
-    
