@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from deap import base, creator, tools, algorithms
 import random
 import copy
+import numpy as np
 import os
 from typing import Dict, List, Tuple, Union, Optional, Any
 from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
@@ -281,7 +282,8 @@ class DeapOptimizer:
         ngen: int = 50,
         cxpb: float = 0.65,
         mutpb: float = 0.32,
-        weights: tuple = (-1.0,)
+        weights: tuple = (-1.0,),
+        number_of_objectives: int = 1
     ) -> None:
         """
         Initialize the optimizer.
@@ -307,6 +309,7 @@ class DeapOptimizer:
         self.cxpb = cxpb
         self.mutpb = mutpb
         self.dt = base_system.dt
+        self.num_of_objectives = number_of_objectives
         
         # Extract node IDs from the system
         self.reservoir_ids = StorageNode.all_ids
@@ -375,129 +378,226 @@ class DeapOptimizer:
 
     def optimize(self):
         """
-        Run the optimization process.
-        
+        Shared multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
+        Handles any number of objectives.
         Returns:
-            dict: Results of the optimization
+            dict: Results of the optimization including Pareto front
         """
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
-        
-        # Set up statistics tracking
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("min", np.min)
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
-        
-        # Run genetic algorithm
-        final_pop, logbook = algorithms.eaSimple(
-            pop, self.toolbox, cxpb=self.cxpb, mutpb=self.mutpb, ngen=self.ngen,
-            stats=stats, verbose=True
-        )
-        
-        # Store convergence history
-        self.history['min'] = logbook.select("min")
-        self.history['avg'] = logbook.select("avg")
-        self.history['std'] = logbook.select("std")
-        
-        # Get best individual
-        best_ind = tools.selBest(final_pop, 1)[0]
-        
-        # Decode best individual parameters
+
+        # Evaluate initial population
+        fitnesses = list(map(self.toolbox.evaluate, pop))
+        for ind, fit in zip(pop, fitnesses):
+            ind.fitness.values = fit
+
+        # Determine number of objectives from the first individual's fitness
+        n_obj = len(pop[0].fitness.values)
+        # Initialize history keys for all objectives
+        for i in range(1, n_obj + 1):
+            self.history[f'min_obj{i}'] = []
+            self.history[f'avg_obj{i}'] = []
+            self.history[f'std_obj{i}'] = []
+
+        # Initialize statistics tracking for all objectives
+        stats_objs = []
+        for i in range(n_obj):
+            stats = tools.Statistics(lambda ind, idx=i: ind.fitness.values[idx])
+            stats.register("min", np.min)
+            stats.register("avg", np.mean)
+            stats.register("std", np.std)
+            stats_objs.append(stats)
+
+        # Combine statistics into a multi-statistics object
+        mstats = tools.MultiStatistics(**{f'obj{i+1}': stats_objs[i] for i in range(n_obj)})
+
+        # Create the logbook for statistics
+        logbook = tools.Logbook()
+        logbook.header = ['gen', 'nevals'] + mstats.fields
+
+        # Record the initial statistics
+        record = mstats.compile(pop)
+        logbook.record(gen=0, nevals=len(pop), **record)
+        print(logbook.stream)
+
+        # Begin the evolution
+        for gen in range(1, self.ngen + 1):
+            # Select the next generation individuals (using NSGA-II selection)
+            offspring = self.toolbox.select(pop, len(pop))
+
+            # Clone the selected individuals
+            offspring = list(map(self.toolbox.clone, offspring))
+
+            # Apply crossover and mutation
+            for i in range(1, len(offspring), 2):
+                if random.random() < self.cxpb:
+                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
+                    del offspring[i-1].fitness.values, offspring[i].fitness.values
+
+            for i in range(len(offspring)):
+                if random.random() < self.mutpb:
+                    offspring[i], = self.toolbox.mutate(offspring[i])
+                    del offspring[i].fitness.values
+
+            # Evaluate the individuals with an invalid fitness
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = map(self.toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+
+            # Select the survivors from the combined population of parents and offspring
+            pop = self.toolbox.select(pop + offspring, self.population_size)
+
+            # Record statistics
+            record = mstats.compile(pop)
+            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+            print(logbook.stream)
+
+            # Store the history for all objectives
+            for i in range(1, n_obj + 1):
+                self.history[f'min_obj{i}'].append(record[f'obj{i}']['min'])
+                self.history[f'avg_obj{i}'].append(record[f'obj{i}']['avg'])
+                self.history[f'std_obj{i}'].append(record[f'obj{i}']['std'])
+
+        # Extract the Pareto front
+        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
+
+        # Get the overall best individual based on a weighted sum of all objectives
+        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
         reservoir_params, hydroworks_params = decode_individual(self, best_ind)
-        
+
         # Return results in a format similar to pymoo
         return {
             'success': True,
-            'message': "Optimization completed successfully",
+            'message': f"{n_obj}-objective optimization completed successfully",
             'population_size': self.population_size,
             'generations': self.ngen,
             'crossover_probability': self.cxpb,
             'mutation_probability': self.mutpb,
-            'objective_value': best_ind.fitness.values[0] if len(best_ind.fitness.values) == 1 else None,
-            'objective_values': best_ind.fitness.values if len(best_ind.fitness.values) > 1 else None,
+            'objective_values': best_ind.fitness.values,
             'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params
+            'optimal_hydroworks_parameters': hydroworks_params,
+            'pareto_front': self.pareto_front,
+            'optimizer': self  # Include the optimizer instance for parameter decoding
         }
 
-    def plot_convergence(self, save_path=None):
+    def plot_convergence(self):
         """
-        Plot the convergence history.
-        
-        Args:
-            save_path: Optional path to save the plot
+        Plot convergence history for each objective as a separate subplot and save to a fixed path.
+        The figure is saved at '/model_output/deap/convergence/convergence.png'.
         """
-        if 'min' in self.history and 'avg' in self.history and 'std' in self.history:
-            # Single-objective
-            plt.figure(figsize=(10, 6))
-            gens = range(len(self.history['min']))
-            
-            # Plot minimum fitness
-            plt.plot(gens, self.history['min'], 'b-', label='Best Fitness')
-            
-            # Plot average fitness with standard deviation
-            plt.plot(gens, self.history['avg'], 'r-', label='Average Fitness')
-            plt.fill_between(gens,
-                             np.array(self.history['avg']) - np.array(self.history['std']),
-                             np.array(self.history['avg']) + np.array(self.history['std']),
-                             alpha=0.2, color='r')
-            
-            plt.xlabel('Generation')
-            plt.ylabel('Fitness')
-            plt.title('Genetic Algorithm Convergence')
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            
-            # Determine save path
-            if save_path is None:
-                directory = './model_output/deap/convergence/'
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
-                save_path = f'{directory}/convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png'
-            
-            plt.savefig(save_path)
-            plt.close()
-            return save_path
-        
-        elif any(key.startswith('min_obj') for key in self.history):
-            # Multi-objective
-            obj_nums = sorted(set(int(k[-1]) for k in self.history if k.startswith('min_obj')))
-            n_obj = len(obj_nums)
-            
-            plt.figure(figsize=(10, 4 * n_obj))
-            gens = range(len(self.history[f'min_obj{obj_nums[0]}']))
-            
-            for i, obj in enumerate(obj_nums):
-                plt.subplot(n_obj, 1, i + 1)
-                plt.plot(gens, self.history[f'min_obj{obj}'], 'b-', label='Best Fitness')
-                plt.plot(gens, self.history[f'avg_obj{obj}'], 'r-', label='Average Fitness')
-                plt.fill_between(gens,
-                                 np.array(self.history[f'avg_obj{obj}']) - np.array(self.history[f'std_obj{obj}']),
-                                 np.array(self.history[f'avg_obj{obj}']) + np.array(self.history[f'std_obj{obj}']),
-                                 alpha=0.2, color='r')
-                plt.xlabel('Generation')
-                plt.ylabel(f'Objective {obj}')
-                plt.title(f'Objective {obj} Convergence')
-                plt.legend()
-                plt.grid(True)
-            
-            plt.tight_layout()
-            
-            # Determine save path
-            if save_path is None:
-                directory = './model_output/deap/convergence/'
-                if not os.path.exists(directory):
-                    os.makedirs(directory)
-                save_path = f'{directory}/multiobj_convergence_pop{self.population_size}_ngen{self.ngen}_cxpb{self.cxpb}_mutpb{self.mutpb}.png'
-            
-            plt.savefig(save_path)
-            plt.close()
-            return save_path
-        else:
-            print("No convergence history available to plot.")
-            return None
+        if not self.history or not any(self.history.values()):
+            print("No convergence history to plot.")
+            return
 
+        n_obj = self.num_of_objectives
+        if n_obj == 0:
+            print("No objectives found in convergence history.")
+            return
+
+        fig, axes = plt.subplots(n_obj, 1, figsize=(8, 4 * n_obj), sharex=True)
+        if n_obj == 1:
+            axes = [axes]
+
+        generations = range(1, len(self.history.get('min_obj1', [])) + 1)
+
+        for i in range(n_obj):
+            ax = axes[i]
+            min_key = f'min_obj{i+1}'
+            avg_key = f'avg_obj{i+1}'
+            std_key = f'std_obj{i+1}'
+
+            min_vals = self.history.get(min_key, [])
+            avg_vals = self.history.get(avg_key, [])
+            std_vals = self.history.get(std_key, [])
+
+            if not min_vals:
+                continue
+
+            ax.plot(generations, min_vals, label='Best', color='blue')
+            ax.plot(generations, avg_vals, label='Average', color='orange')
+            ax.fill_between(
+                generations,
+                np.array(avg_vals) - np.array(std_vals),
+                np.array(avg_vals) + np.array(std_vals),
+                color='orange', alpha=0.2, label='Std Dev'
+            )
+            ax.set_ylabel(f'Objective {i+1}')
+            ax.legend()
+            ax.grid(True)
+
+        axes[-1].set_xlabel('Generation')
+        fig.suptitle('Convergence History per Objective', fontsize=16)
+        plt.tight_layout(rect=[0, 0, 1, 0.97])
+
+        # Ensure directory exists
+        save_path = os.path.join(os.getcwd(), 'model_output', 'deap', 'convergence')
+        os.makedirs(save_path, exist_ok=True)
+        file_path = os.path.join(save_path, 'convergence.png')
+        plt.savefig(file_path)
+        plt.close(fig)
+        print(f"Convergence plot saved to {file_path}")
+
+    def plot_total_objective_convergence(self):
+        """
+        Plot the convergence of the sum of all objectives over generations and save to a fixed path.
+        The figure is saved at '/model_output/deap/convergence/total_objective_convergence.png'.
+        """
+        if not self.history or not any(self.history.values()):
+            print("No convergence history to plot.")
+            return
+
+        n_obj = self.num_of_objectives
+        if n_obj == 0:
+            print("No objectives found in convergence history.")
+            return
+
+        min_sums = []
+        avg_sums = []
+        std_sums = []
+
+        num_gens = len(self.history.get('min_obj1', []))
+        generations = range(1, num_gens + 1)
+
+        for gen in range(num_gens):
+            min_sum = 0
+            avg_sum = 0
+            std_sum = 0
+            for i in range(n_obj):
+                min_vals = self.history.get(f'min_obj{i+1}', [])
+                avg_vals = self.history.get(f'avg_obj{i+1}', [])
+                std_vals = self.history.get(f'std_obj{i+1}', [])
+                if min_vals and avg_vals and std_vals:
+                    min_sum += min_vals[gen]
+                    avg_sum += avg_vals[gen]
+                    std_sum += std_vals[gen]
+            min_sums.append(min_sum)
+            avg_sums.append(avg_sum)
+            std_sums.append(std_sum)
+
+        plt.figure(figsize=(8, 5))
+        plt.plot(generations, min_sums, label='Best (Sum)', color='blue')
+        plt.plot(generations, avg_sums, label='Average (Sum)', color='orange')
+        plt.fill_between(
+            generations,
+            np.array(avg_sums) - np.array(std_sums),
+            np.array(avg_sums) + np.array(std_sums),
+            color='orange', alpha=0.2, label='Std Dev'
+        )
+        plt.xlabel('Generation')
+        plt.ylabel('Sum of Objectives')
+        plt.title('Convergence of Total Objective (Sum of All Objectives)')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+        # Ensure directory exists
+        save_path = os.path.join(os.getcwd(), 'model_output', 'deap', 'convergence')
+        os.makedirs(save_path, exist_ok=True)
+        file_path = os.path.join(save_path, 'total_objective_convergence.png')
+        plt.savefig(file_path)
+        plt.close()
+        print(f"Total objective convergence plot saved to {file_path}")
 
 class DeapSingleObjectiveOptimizer(DeapOptimizer):
     """
@@ -558,167 +658,107 @@ class DeapMultiObjectiveOptimizer(DeapOptimizer):
         super().__init__(*args, **kwargs)
         # Override selection to use NSGA-II for multi-objective optimization
         self.toolbox.register("select", tools.selNSGA2)
-        
+
     def _evaluate_individual(self, individual):
         """
         Multi-objective evaluation. Must be implemented by subclasses.
-        
-        Args:
-            individual: The individual to evaluate
-            
-        Returns:
-            tuple: Fitness values for each objective
         """
         raise NotImplementedError("Subclasses must implement this method.")
-        
+
     def optimize(self):
         """
-        Run multi-objective genetic algorithm optimization using NSGA-II selection.
-        Handles 2, 3, or 4 objectives with proper statistics tracking.
-        
+        Shared multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
+        Handles any number of objectives.
         Returns:
             dict: Results of the optimization including Pareto front
         """
-        # Determine number of objectives from weights
-        num_objectives = len(self.creator.FitnessMulti.weights)
-        
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
-        
+
         # Evaluate initial population
         fitnesses = list(map(self.toolbox.evaluate, pop))
         for ind, fit in zip(pop, fitnesses):
             ind.fitness.values = fit
 
+        # Determine number of objectives from the first individual's fitness
+        n_obj = len(pop[0].fitness.values)
         # Initialize history keys for all objectives
-        for i in range(1, num_objectives + 1):
+        for i in range(1, n_obj + 1):
             self.history[f'min_obj{i}'] = []
             self.history[f'avg_obj{i}'] = []
             self.history[f'std_obj{i}'] = []
-        
-        # Set up statistics tracking for each objective
-        multi_stats = tools.MultiStatistics()
-        for i in range(1, num_objectives + 1):
-            obj_stats = tools.Statistics(lambda ind, idx=i-1: ind.fitness.values[idx])
-            obj_stats.register("min", np.min)
-            obj_stats.register("avg", np.mean)
-            obj_stats.register("std", np.std)
-            multi_stats.register(f"obj{i}", obj_stats)
-        
+
+        # Initialize statistics tracking for all objectives
+        stats_objs = []
+        for i in range(n_obj):
+            stats = tools.Statistics(lambda ind, idx=i: ind.fitness.values[idx])
+            stats.register("min", np.min)
+            stats.register("avg", np.mean)
+            stats.register("std", np.std)
+            stats_objs.append(stats)
+
+        # Combine statistics into a multi-statistics object
+        mstats = tools.MultiStatistics(**{f'obj{i+1}': stats_objs[i] for i in range(n_obj)})
+
         # Create the logbook for statistics
         logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + multi_stats.fields
-        
+        logbook.header = ['gen', 'nevals'] + mstats.fields
+
         # Record the initial statistics
-        record = multi_stats.compile(pop)
+        record = mstats.compile(pop)
         logbook.record(gen=0, nevals=len(pop), **record)
         print(logbook.stream)
-        
+
         # Begin the evolution
         for gen in range(1, self.ngen + 1):
             # Select the next generation individuals (using NSGA-II selection)
             offspring = self.toolbox.select(pop, len(pop))
-            
+
             # Clone the selected individuals
             offspring = list(map(self.toolbox.clone, offspring))
-            
-            # Apply crossover
+
+            # Apply crossover and mutation
             for i in range(1, len(offspring), 2):
                 if random.random() < self.cxpb:
                     offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
                     del offspring[i-1].fitness.values, offspring[i].fitness.values
-            
-            # Apply mutation
+
             for i in range(len(offspring)):
                 if random.random() < self.mutpb:
                     offspring[i], = self.toolbox.mutate(offspring[i])
                     del offspring[i].fitness.values
-                
+
             # Evaluate the individuals with an invalid fitness
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = map(self.toolbox.evaluate, invalid_ind)
             for ind, fit in zip(invalid_ind, fitnesses):
                 ind.fitness.values = fit
-                
+
             # Select the survivors from the combined population of parents and offspring
             pop = self.toolbox.select(pop + offspring, self.population_size)
-                
+
             # Record statistics
-            record = multi_stats.compile(pop)
+            record = mstats.compile(pop)
             logbook.record(gen=gen, nevals=len(invalid_ind), **record)
             print(logbook.stream)
-                
+
             # Store the history for all objectives
-            for i in range(1, num_objectives + 1):
+            for i in range(1, n_obj + 1):
                 self.history[f'min_obj{i}'].append(record[f'obj{i}']['min'])
                 self.history[f'avg_obj{i}'].append(record[f'obj{i}']['avg'])
                 self.history[f'std_obj{i}'].append(record[f'obj{i}']['std'])
-        
+
         # Extract the Pareto front
         self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
-        
-        # Get the compromise solution (weighted equally across objectives)
-        if num_objectives > 1:
-            if num_objectives == 2:
-                # For 2 objectives, find knee point using perpendicular distance to utopia line
-                f_min = np.array([min(ind.fitness.values[i] for ind in self.pareto_front) for i in range(num_objectives)])
-                f_max = np.array([max(ind.fitness.values[i] for ind in self.pareto_front) for i in range(num_objectives)])
 
-                # Normalize objectives to [0,1]
-                normalized_fronts = []
-                for ind in self.pareto_front:
-                    normalized = (np.array(ind.fitness.values) - f_min) / (f_max - f_min)
-                    normalized_fronts.append((ind, normalized))
-
-                # Calculate distance to utopia line (y = x for minimization)
-                best_dist = float('inf')
-                best_ind = None
-
-                for ind, norm_obj in normalized_fronts:
-                    # Distance to line y = x is |norm_obj[0] - norm_obj[1]| / sqrt(2)
-                    dist = abs(norm_obj[0] - norm_obj[1]) / np.sqrt(2)
-                    # Distance to utopia point (0,0) is sqrt(norm_obj[0]^2 + norm_obj[1]^2)
-                    dist_to_utopia = np.sqrt(norm_obj[0]**2 + norm_obj[1]**2)
-
-                    # Combine both metrics
-                    combined_metric = 0.5 * dist + 0.5 * dist_to_utopia
-
-                    if combined_metric < best_dist:
-                        best_dist = combined_metric
-                        best_ind = ind
-            else:
-                # For 3+ objectives, find individual closest to utopia point in normalized space
-                f_min = np.array([min(ind.fitness.values[i] for ind in self.pareto_front) for i in range(num_objectives)])
-                f_max = np.array([max(ind.fitness.values[i] for ind in self.pareto_front) for i in range(num_objectives)])
-
-                # Handle division by zero
-                range_obj = f_max - f_min
-                range_obj[range_obj == 0] = 1.0  # Avoid division by zero
-
-                best_dist = float('inf')
-                best_ind = None
-
-                for ind in self.pareto_front:
-                    # Normalize fitness values to [0,1]
-                    norm_obj = (np.array(ind.fitness.values) - f_min) / range_obj
-                    
-                    # Distance to utopia point (origin in normalized space)
-                    dist = np.sqrt(np.sum(norm_obj**2))
-                    
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_ind = ind
-        else:
-            # For single objective, just get the best individual
-            best_ind = min(pop, key=lambda ind: ind.fitness.values[0])
-        
-        # Decode best individual parameters
+        # Get the overall best individual based on a weighted sum of all objectives
+        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
         reservoir_params, hydroworks_params = decode_individual(self, best_ind)
 
         # Return results in a format similar to pymoo
         return {
             'success': True,
-            'message': f"{num_objectives}-objective optimization completed successfully",
+            'message': f"{n_obj}-objective optimization completed successfully",
             'population_size': self.population_size,
             'generations': self.ngen,
             'crossover_probability': self.cxpb,
@@ -729,7 +769,6 @@ class DeapMultiObjectiveOptimizer(DeapOptimizer):
             'pareto_front': self.pareto_front,
             'optimizer': self  # Include the optimizer instance for parameter decoding
         }
-
 
 class DeapTwoObjectiveOptimizer(DeapMultiObjectiveOptimizer):
     """
@@ -781,113 +820,6 @@ class DeapTwoObjectiveOptimizer(DeapMultiObjectiveOptimizer):
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
             return (float('inf'), float('inf'))
-
-    def optimize(self):
-        """
-        Run multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
-        Returns:
-            dict: Results of the optimization including Pareto front
-        """
-        # Create initial population
-        pop = self.toolbox.population(n=self.population_size)
-        
-        # Evaluate initial population
-        fitnesses = list(map(self.toolbox.evaluate, pop))
-        for ind, fit in zip(pop, fitnesses):
-            ind.fitness.values = fit
-
-        # Initialize history keys for both objectives
-        for i in range(1, 3):
-            self.history[f'min_obj{i}'] = []
-            self.history[f'avg_obj{i}'] = []
-            self.history[f'std_obj{i}'] = []            
-
-        # Initialize statistics tracking for both objectives
-        stats_obj1 = tools.Statistics(lambda ind: ind.fitness.values[0])
-        stats_obj1.register("min", np.min)
-        stats_obj1.register("avg", np.mean)
-        stats_obj1.register("std", np.std)
-        
-        stats_obj2 = tools.Statistics(lambda ind: ind.fitness.values[1])
-        stats_obj2.register("min", np.min)
-        stats_obj2.register("avg", np.mean)
-        stats_obj2.register("std", np.std)
-        
-        # Combine statistics into a multi-statistics object
-        mstats = tools.MultiStatistics(obj1=stats_obj1, obj2=stats_obj2)
-        
-        # Create the logbook for statistics
-        logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + mstats.fields
-        
-        # Record the initial statistics
-        record = mstats.compile(pop)
-        logbook.record(gen=0, nevals=len(pop), **record)
-        print(logbook.stream)
-        
-        # Begin the evolution
-        for gen in range(1, self.ngen + 1):
-            # Select the next generation individuals (using NSGA-II selection)
-            offspring = self.toolbox.select(pop, len(pop))
-            
-            # Clone the selected individuals
-            offspring = list(map(self.toolbox.clone, offspring))
-            
-            # Apply crossover and mutation
-            for i in range(1, len(offspring), 2):
-                if random.random() < self.cxpb:
-                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
-                    del offspring[i-1].fitness.values, offspring[i].fitness.values
-                        
-            for i in range(len(offspring)):
-                if random.random() < self.mutpb:
-                    offspring[i], = self.toolbox.mutate(offspring[i])
-                    del offspring[i].fitness.values
-                
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-                
-            # Select the survivors from the combined population of parents and offspring
-            pop = self.toolbox.select(pop + offspring, self.population_size)
-                
-            # Record statistics
-            record = mstats.compile(pop)
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-            print(logbook.stream)
-                
-            # Store the history for both objectives
-            self.history['min_obj1'].append(record['obj1']['min'])
-            self.history['avg_obj1'].append(record['obj1']['avg'])
-            self.history['std_obj1'].append(record['obj1']['std'])
-            self.history['min_obj2'].append(record['obj2']['min'])
-            self.history['avg_obj2'].append(record['obj2']['avg'])
-            self.history['std_obj2'].append(record['obj2']['std'])
-        
-        # Extract the Pareto front
-        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
-        
-        # Get the overall best individual based on a weighted sum of both objectives
-        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
-        reservoir_params, hydroworks_params = decode_individual(self, best_ind)
-
-        # Return results in a format similar to pymoo
-        return {
-            'success': True,
-            'message': "Two-objective optimization completed successfully",
-            'population_size': self.population_size,
-            'generations': self.ngen,
-            'crossover_probability': self.cxpb,
-            'mutation_probability': self.mutpb,
-            'objective_values': best_ind.fitness.values,
-            'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params,
-            'pareto_front': self.pareto_front,
-            'optimizer': self  # Include the optimizer instance for parameter decoding
-        }
-
 
 class DeapThreeObjectiveOptimizer(DeapMultiObjectiveOptimizer):
     """
@@ -948,122 +880,6 @@ class DeapThreeObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             print(f"Error evaluating individual: {str(e)}")
             return (float('inf'), float('inf'), float('inf'))
 
-    def optimize(self):
-        """
-        Run multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
-        
-        Returns:
-            dict: Results of the optimization including Pareto front
-        """
-        # Create initial population
-        pop = self.toolbox.population(n=self.population_size)
-        
-        # Evaluate initial population
-        fitnesses = list(map(self.toolbox.evaluate, pop))
-        for ind, fit in zip(pop, fitnesses):
-            ind.fitness.values = fit
-
-        # Initialize history keys for all objectives
-        for i in range(1, 4):
-            self.history[f'min_obj{i}'] = []
-            self.history[f'avg_obj{i}'] = []
-            self.history[f'std_obj{i}'] = []            
-            
-        # Initialize statistics tracking for all three objectives
-        stats_obj1 = tools.Statistics(lambda ind: ind.fitness.values[0])
-        stats_obj1.register("min", np.min)
-        stats_obj1.register("avg", np.mean)
-        stats_obj1.register("std", np.std)
-        
-        stats_obj2 = tools.Statistics(lambda ind: ind.fitness.values[1])
-        stats_obj2.register("min", np.min)
-        stats_obj2.register("avg", np.mean)
-        stats_obj2.register("std", np.std)
-        
-        stats_obj3 = tools.Statistics(lambda ind: ind.fitness.values[2])
-        stats_obj3.register("min", np.min)
-        stats_obj3.register("avg", np.mean)
-        stats_obj3.register("std", np.std)
-        
-        # Combine statistics into a multi-statistics object
-        mstats = tools.MultiStatistics(obj1=stats_obj1, obj2=stats_obj2, obj3=stats_obj3)
-        
-        # Create the logbook for statistics
-        logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + mstats.fields
-        
-        # Record the initial statistics
-        record = mstats.compile(pop)
-        logbook.record(gen=0, nevals=len(pop), **record)
-        print(logbook.stream)
-        
-        # Begin the evolution
-        for gen in range(1, self.ngen + 1):
-            # Select the next generation individuals (using NSGA-II selection)
-            offspring = self.toolbox.select(pop, len(pop))
-            
-            # Clone the selected individuals
-            offspring = list(map(self.toolbox.clone, offspring))
-            
-            # Apply crossover and mutation
-            for i in range(1, len(offspring), 2):
-                if random.random() < self.cxpb:
-                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
-                    del offspring[i-1].fitness.values, offspring[i].fitness.values
-                        
-            for i in range(len(offspring)):
-                if random.random() < self.mutpb:
-                    offspring[i], = self.toolbox.mutate(offspring[i])
-                    del offspring[i].fitness.values
-                
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-                
-            # Select the survivors from the combined population of parents and offspring
-            pop = self.toolbox.select(pop + offspring, self.population_size)
-                
-            # Record statistics
-            record = mstats.compile(pop)
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-            print(logbook.stream)
-                
-            # Store the history for all three objectives
-            self.history['min_obj1'].append(record['obj1']['min'])
-            self.history['avg_obj1'].append(record['obj1']['avg'])
-            self.history['std_obj1'].append(record['obj1']['std'])
-            self.history['min_obj2'].append(record['obj2']['min'])
-            self.history['avg_obj2'].append(record['obj2']['avg'])
-            self.history['std_obj2'].append(record['obj2']['std'])
-            self.history['min_obj3'].append(record['obj3']['min'])
-            self.history['avg_obj3'].append(record['obj3']['avg'])
-            self.history['std_obj3'].append(record['obj3']['std'])
-        
-        # Extract the Pareto front
-        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
-        
-        # Get the overall best individual based on a weighted sum of all three objectives
-        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
-        reservoir_params, hydroworks_params = decode_individual(self, best_ind)
-
-        # Return results in a format similar to pymoo
-        return {
-            'success': True,
-            'message': "Three-objective optimization completed successfully",
-            'population_size': self.population_size,
-            'generations': self.ngen,
-            'crossover_probability': self.cxpb,
-            'mutation_probability': self.mutpb,
-            'objective_values': best_ind.fitness.values,
-            'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params,
-            'pareto_front': self.pareto_front,
-            'optimizer': self  # Include the optimizer instance for parameter decoding
-        }
-
-
 class DeapFourObjectiveOptimizer(DeapMultiObjectiveOptimizer):
     """
     Four-objective optimizer using DEAP.
@@ -1120,125 +936,3 @@ class DeapFourObjectiveOptimizer(DeapMultiObjectiveOptimizer):
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
             return (float('inf'), float('inf'), float('inf'), float('inf'))
-
-    def optimize(self):
-        """
-        Run multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
-        Returns:
-            dict: Results of the optimization including Pareto front
-        """
-        # Create initial population
-        pop = self.toolbox.population(n=self.population_size)
-        
-        # Evaluate initial population
-        fitnesses = list(map(self.toolbox.evaluate, pop))
-        for ind, fit in zip(pop, fitnesses):
-            ind.fitness.values = fit
-
-        # Initialize history keys for all objectives
-        for i in range(1, 5):
-            self.history[f'min_obj{i}'] = []
-            self.history[f'avg_obj{i}'] = []
-            self.history[f'std_obj{i}'] = []            
-
-        # Initialize statistics tracking for all four objectives
-        stats_obj1 = tools.Statistics(lambda ind: ind.fitness.values[0])
-        stats_obj1.register("min", np.min)
-        stats_obj1.register("avg", np.mean)
-        stats_obj1.register("std", np.std)
-        
-        stats_obj2 = tools.Statistics(lambda ind: ind.fitness.values[1])
-        stats_obj2.register("min", np.min)
-        stats_obj2.register("avg", np.mean)
-        stats_obj2.register("std", np.std)
-        
-        stats_obj3 = tools.Statistics(lambda ind: ind.fitness.values[2])
-        stats_obj3.register("min", np.min)
-        stats_obj3.register("avg", np.mean)
-        stats_obj3.register("std", np.std)
-        
-        stats_obj4 = tools.Statistics(lambda ind: ind.fitness.values[3])
-        stats_obj4.register("min", np.min)
-        stats_obj4.register("avg", np.mean)
-        stats_obj4.register("std", np.std)
-        
-        # Combine statistics into a multi-statistics object
-        mstats = tools.MultiStatistics(obj1=stats_obj1, obj2=stats_obj2, obj3=stats_obj3, obj4=stats_obj4)
-        
-        # Create the logbook for statistics
-        logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + mstats.fields
-        
-        # Record the initial statistics
-        record = mstats.compile(pop)
-        logbook.record(gen=0, nevals=len(pop), **record)
-        print(logbook.stream)
-        
-        # Begin the evolution
-        for gen in range(1, self.ngen + 1):
-            # Select the next generation individuals (using NSGA-II selection)
-            offspring = self.toolbox.select(pop, len(pop))
-            
-            # Clone the selected individuals
-            offspring = list(map(self.toolbox.clone, offspring))
-            
-            # Apply crossover and mutation
-            for i in range(1, len(offspring), 2):
-                if random.random() < self.cxpb:
-                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
-                    del offspring[i-1].fitness.values, offspring[i].fitness.values
-                        
-            for i in range(len(offspring)):
-                if random.random() < self.mutpb:
-                    offspring[i], = self.toolbox.mutate(offspring[i])
-                    del offspring[i].fitness.values
-                
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-                
-            # Select the survivors from the combined population of parents and offspring
-            pop = self.toolbox.select(pop + offspring, self.population_size)
-                
-            # Record statistics
-            record = mstats.compile(pop)
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-            print(logbook.stream)
-                
-            # Store the history for all four objectives
-            self.history['min_obj1'].append(record['obj1']['min'])
-            self.history['avg_obj1'].append(record['obj1']['avg'])
-            self.history['std_obj1'].append(record['obj1']['std'])
-            self.history['min_obj2'].append(record['obj2']['min'])
-            self.history['avg_obj2'].append(record['obj2']['avg'])
-            self.history['std_obj2'].append(record['obj2']['std'])
-            self.history['min_obj3'].append(record['obj3']['min'])
-            self.history['avg_obj3'].append(record['obj3']['avg'])
-            self.history['std_obj3'].append(record['obj3']['std'])
-            self.history['min_obj4'].append(record['obj4']['min'])
-            self.history['avg_obj4'].append(record['obj4']['avg'])
-            self.history['std_obj4'].append(record['obj4']['std'])
-        
-        # Extract the Pareto front
-        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
-        
-        # Get the overall best individual based on a weighted sum of all four objectives
-        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
-        reservoir_params, hydroworks_params = decode_individual(self, best_ind)
-
-        # Return results in a format similar to pymoo
-        return {
-            'success': True,
-            'message': "Four-objective optimization completed successfully",
-            'population_size': self.population_size,
-            'generations': self.ngen,
-            'crossover_probability': self.cxpb,
-            'mutation_probability': self.mutpb,
-            'objective_values': best_ind.fitness.values,
-            'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params,
-            'pareto_front': self.pareto_front,
-            'optimizer': self  # Include the optimizer instance for parameter decoding
-        }
