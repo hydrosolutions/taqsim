@@ -1152,18 +1152,14 @@ class DeapFourObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             regular_demand_deficit = 0
             for node_id in self.regular_demand_ids:
                 demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
+                deficit = np.array(demand_node.unmet_demand)*self.dt
                 regular_demand_deficit += np.sum(deficit)
             
             # Objective 2: Priority demand deficit
             priority_demand_deficit = 0
             for node_id in self.priority_demand_ids:
                 demand_node = system.graph.nodes[node_id]['node']
-                demand = np.array([demand_node.demand_rates[t] for t in range(self.num_time_steps)])
-                satisfied = np.array(demand_node.satisfied_demand_total)
-                deficit = (demand - satisfied) * system.dt
+                deficit = np.array(demand_node.unmet_demand)*self.dt
                 priority_demand_deficit += np.sum(deficit)
             
             # Objective 3: Minimum flow deficit

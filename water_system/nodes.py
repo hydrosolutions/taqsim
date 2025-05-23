@@ -414,6 +414,7 @@ class DemandNode:
         self.satisfied_consumptive_demand = []
         self.satisfied_non_consumptive_demand = []
         self.satisfied_demand_total = []
+        self.unmet_demand = []
 
         # Try to import time series data first
         imported_data = None
@@ -507,6 +508,10 @@ class DemandNode:
             # Calculate excess after satisfying both demands
             total_satisfied = satisfied_consumptive + satisfied_non_consumptive
             self.satisfied_demand_total.append(total_satisfied)
+
+            # Calculate unmet demand and store it
+            unmet = max(0, current_demand - total_satisfied)
+            self.unmet_demand.append(unmet)
 
             # Forward flow to outflow edge (excess + satisfied non-consumptive)
             total_forward_flow = remaining_flow
