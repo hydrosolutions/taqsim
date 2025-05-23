@@ -283,7 +283,13 @@ class DeapOptimizer:
         cxpb: float = 0.65,
         mutpb: float = 0.32,
         weights: tuple = (-1.0,),
-        number_of_objectives: int = 1
+        number_of_objectives: int = 1,
+        objective_weights: dict[str,List[float]] = {
+        'objective_1': [1,0,0,0],
+        'objective_2': [0,1,0,0],
+        'objective_3': [0,0,1,0],
+        'objective_4': [0,0,0,1],
+    },
     ) -> None:
         """
         Initialize the optimizer.
@@ -310,6 +316,7 @@ class DeapOptimizer:
         self.mutpb = mutpb
         self.dt = base_system.dt
         self.num_of_objectives = number_of_objectives
+        self.objective_weights = objective_weights
         
         # Extract node IDs from the system
         self.reservoir_ids = StorageNode.all_ids
@@ -413,11 +420,20 @@ class DeapOptimizer:
 
         # Create the logbook for statistics
         logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + mstats.fields
+        # Show gen, nevals, and only avg, min, std for each objective
+        logbook.header = ['gen', 'nevals']
+        for i in range(n_obj):
+            logbook.header += [f'obj{i+1}_avg', f'obj{i+1}_min', f'obj{i+1}_std']
 
         # Record the initial statistics
         record = mstats.compile(pop)
-        logbook.record(gen=0, nevals=len(pop), **record)
+        # Flatten the record for custom header
+        flat_record = {'gen': 0, 'nevals': len(pop)}
+        for i in range(n_obj):
+            flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
+            flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
+            flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
+        logbook.record(**flat_record)
         print(logbook.stream)
 
         # Begin the evolution
@@ -450,7 +466,12 @@ class DeapOptimizer:
 
             # Record statistics
             record = mstats.compile(pop)
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+            flat_record = {'gen': gen, 'nevals': len(offspring)}
+            for i in range(n_obj):
+                flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
+                flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
+                flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
+            logbook.record(**flat_record)
             print(logbook.stream)
 
             # Store the history for all objectives
@@ -635,13 +656,16 @@ class DeapSingleObjectiveOptimizer(DeapOptimizer):
             system.simulate(self.num_time_steps)
             
             # Calculate total penalty
-            total_penalty = 0
-            total_penalty += regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
-            total_penalty += priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            total_penalty += sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
-            total_penalty += total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
+
+            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
+            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
+            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
-            return (total_penalty,)
+            return (  self.objective_weights['objective_1'][0]*low_priority_demand_deficit 
+                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_1'][2]*min_flow_deficit
+                    + self.objective_weights['objective_1'][3]*flooding_volume,)
         
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -702,11 +726,20 @@ class DeapMultiObjectiveOptimizer(DeapOptimizer):
 
         # Create the logbook for statistics
         logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + mstats.fields
+        # Show gen, nevals, and only avg, min, std for each objective
+        logbook.header = ['gen', 'nevals']
+        for i in range(n_obj):
+            logbook.header += [f'obj{i+1}_avg', f'obj{i+1}_min', f'obj{i+1}_std']
 
         # Record the initial statistics
         record = mstats.compile(pop)
-        logbook.record(gen=0, nevals=len(pop), **record)
+        # Flatten the record for custom header
+        flat_record = {'gen': 0, 'nevals': len(pop)}
+        for i in range(n_obj):
+            flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
+            flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
+            flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
+        logbook.record(**flat_record)
         print(logbook.stream)
 
         # Begin the evolution
@@ -739,7 +772,12 @@ class DeapMultiObjectiveOptimizer(DeapOptimizer):
 
             # Record statistics
             record = mstats.compile(pop)
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+            flat_record = {'gen': gen, 'nevals': len(offspring)}
+            for i in range(n_obj):
+                flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
+                flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
+                flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
+            logbook.record(**flat_record)
             print(logbook.stream)
 
             # Store the history for all objectives
@@ -812,9 +850,14 @@ class DeapTwoObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             # Convert to annual values in km³
-            return (
-                float(low_priority_demand_deficit+high_priority_demand_deficit+flooding_volume),
-                float(min_flow_deficit)
+            return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_1'][2]*min_flow_deficit
+                    + self.objective_weights['objective_1'][3]*flooding_volume,
+                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_2'][2]*min_flow_deficit
+                    + self.objective_weights['objective_2'][3]*flooding_volume
             )
             
         except Exception as e:
@@ -870,10 +913,18 @@ class DeapThreeObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             # Convert to annual values in km³
-            return (
-                float(low_priority_demand_deficit),
-                float(high_priority_demand_deficit),
-                float(min_flow_deficit)
+            return ( self.objective_weights['objective_1'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_1'][2]*min_flow_deficit
+                    + self.objective_weights['objective_1'][3]*flooding_volume,
+                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_2'][2]*min_flow_deficit
+                    + self.objective_weights['objective_2'][3]*flooding_volume,
+                    self.objective_weights['objective_3'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_3'][2]*min_flow_deficit
+                    + self.objective_weights['objective_3'][3]*flooding_volume
             )
             
         except Exception as e:
@@ -923,14 +974,25 @@ class DeapFourObjectiveOptimizer(DeapMultiObjectiveOptimizer):
             # Objective 3: Minimum flow deficit
             min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
             # Objective 4: Spillage
-            total_flooding = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
+            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
             
             # Convert to annual values in km³
-            return (
-                float(low_priority_demand_deficit),
-                float(high_priority_demand_deficit),
-                float(min_flow_deficit),
-                float(total_flooding)
+            return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_1'][2]*min_flow_deficit
+                    + self.objective_weights['objective_1'][3]*flooding_volume,
+                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_2'][2]*min_flow_deficit
+                    + self.objective_weights['objective_2'][3]*flooding_volume,
+                    self.objective_weights['objective_3'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_3'][2]*min_flow_deficit
+                    + self.objective_weights['objective_3'][3]*flooding_volume,
+                    self.objective_weights['objective_4'][0]*low_priority_demand_deficit
+                    + self.objective_weights['objective_4'][1]*high_priority_demand_deficit
+                    + self.objective_weights['objective_4'][2]*min_flow_deficit
+                    + self.objective_weights['objective_4'][3]*flooding_volume
             )
             
         except Exception as e:

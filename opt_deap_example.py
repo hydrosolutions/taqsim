@@ -114,7 +114,8 @@ def run_optimization(
     pop_size:int,
     cxpb: float,
     mutpb: float, 
-    number_of_objectives: int
+    number_of_objectives: int,
+    objective_weights: dict[str, list[float]],
 ) -> Dict[str, Union[Dict, List]]:
     """
     Run a multi-objective optimization for the ZRB water system.
@@ -152,10 +153,11 @@ def run_optimization(
             population_size=pop_size,
             cxpb=cxpb,
             mutpb=mutpb,
-            number_of_objectives=number_of_objectives
+            number_of_objectives=number_of_objectives,
+            objective_weights=objective_weights
         )
     
-    if number_of_objectives == 2:
+    elif number_of_objectives == 2:
         optimizer = DeapTwoObjectiveOptimizer(
             base_system=water_system,
             start_year=start_year,
@@ -165,7 +167,8 @@ def run_optimization(
             population_size=pop_size,
             cxpb=cxpb,
             mutpb=mutpb, 
-            number_of_objectives=number_of_objectives
+            number_of_objectives=number_of_objectives,
+            objective_weights=objective_weights
         )
 
     elif number_of_objectives == 3:
@@ -179,8 +182,10 @@ def run_optimization(
             population_size=pop_size,
             cxpb=cxpb,
             mutpb=mutpb,
-            number_of_objectives=number_of_objectives
+            number_of_objectives=number_of_objectives,
+            objective_weights=objective_weights
         )
+    
     elif number_of_objectives == 4:
         # Initialize the multi-objective optimizer
         optimizer = DeapFourObjectiveOptimizer(
@@ -192,9 +197,12 @@ def run_optimization(
             population_size=pop_size,
             cxpb=cxpb,
             mutpb=mutpb,
-            number_of_objectives=number_of_objectives
+            number_of_objectives=number_of_objectives,
+            objective_weights=objective_weights
         )
 
+    else:
+        raise ValueError("number_of_objectives must be 1, 2, 3, or 4.")
     # Run the optimization
     results = optimizer.optimize()
 
@@ -229,57 +237,67 @@ def run_optimization(
 if __name__ == "__main__":
 
     start = datetime.now()
-    number_of_objectives = 4
+    
+    number_of_objectives = 1
+    number_of_generations = 50
+    population_size = 100
 
 
-    optimization = True
-    optunastudy = False
+    if number_of_objectives == 1:
+        objective_weights ={
+            'objective_1': [1.0,1.0,1.0,1.0]
+        }
+    if number_of_objectives == 2:
+        objective_weights ={
+            'objective_1': [1.0,1.0,0.0,0.0],
+            'objective_2': [0.0,0.0,1.0,1.0]
+        }
+    if number_of_objectives == 3:
+        objective_weights ={
+            'objective_1': [1.0,1.0,0.0,0.0],
+            'objective_2': [0.0,0.0,1.0,0.0],
+            'objective_3': [0.0,0.0,0.0,1.0]
+        }
+    if number_of_objectives == 4:
+        objective_weights ={
+            'objective_1': [1.0,0.0,0.0,0.0],
+            'objective_2': [0.0,1.0,0.0,0.0],
+            'objective_3': [0.0,0.0,1.0,0.0],
+            'objective_4': [0.0,0.0,0.0,1.0]
+        }
 
-    if optimization:
-        # Example of running the multi-objective optimization for a baseline system
-        results = run_optimization(
-            create_simplified_ZRB_system,
-            start_year=2017, 
-            start_month=1, 
-            num_time_steps=12*6,
-            ngen=10, 
-            pop_size=10, 
-            cxpb=0.65, 
-            mutpb=0.32,
-            number_of_objectives=number_of_objectives
-        )
+    # Example of running the multi-objective optimization for a baseline system
+    results = run_optimization(
+        create_simplified_ZRB_system,
+        start_year=2017, 
+        start_month=1, 
+        num_time_steps=12*6,
+        ngen=number_of_generations, 
+        pop_size=population_size, 
+        cxpb=0.65, 
+        mutpb=0.32,
+        number_of_objectives=number_of_objectives,
+        objective_weights=objective_weights
+    )
 
-        
-        save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
-        if number_of_objectives == 3:
-            dashboard = ParetoFrontDashboard3D(
-                pareto_solutions=results['pareto_front'],
-                output_dir=f"./model_output/deap/pareto_front/",
-            )
-            dashboard.generate_full_report()
-        if number_of_objectives == 4:
-            # Create dashboard for the Pareto front
-            dashboard = ParetoFrontDashboard4D(
-                pareto_solutions=results['pareto_front'],
-                output_dir=f"./model_output/deap/pareto_front/",
-            )      
-            # Generate all visualizations
-            dashboard.generate_full_report()
-
-        '''with open("./model_output/deap/parameter/multiobjective_params.json", "r") as f:
-            data = json.load(f)
-        
-        pareto_solutions = data.get('pareto_solutions', [])
-        
-        # Create dashboard
+    
+    save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
+    if number_of_objectives == 3:
         dashboard = ParetoFrontDashboard3D(
-            pareto_solutions=pareto_solutions,
-            output_dir="./model_output/deap/pareto_front/",
+            pareto_solutions=results['pareto_front'],
+            output_dir=f"./model_output/deap/pareto_front/",
         )
-        
+        dashboard.generate_full_report()
+    if number_of_objectives == 4:
+        # Create dashboard for the Pareto front
+        dashboard = ParetoFrontDashboard4D(
+            pareto_solutions=results['pareto_front'],
+            output_dir=f"./model_output/deap/pareto_front/",
+        )      
         # Generate all visualizations
-        dashboard.generate_full_report()'''
-   
+        dashboard.generate_full_report()
+
+    optunastudy = False
     if optunastudy:
         # Making an Optuna study
         def objective(trial):
