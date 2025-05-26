@@ -266,7 +266,7 @@ def create_individual(optimizer):
 
     return optimizer.creator.Individual(genes)
 
-# --------------------- BASE OPTIMIZER CLASS -------------------------
+# --------------------- OPTIMIZER CLASS -----------------------------
 class DeapOptimizer:
     """
     Base class for DEAP-based water system optimizers.
@@ -283,7 +283,7 @@ class DeapOptimizer:
         ngen: int = 50,
         cxpb: float = 0.65,
         mutpb: float = 0.32,
-        objective_weights: dict[str,List[float]] = {
+        objective_weights: dict[str,list[float]] = {
         'objective_1': [1,0,0,0,0],
         'objective_2': [0,1,0,0,0],
         'objective_3': [0,0,1,0,0],
