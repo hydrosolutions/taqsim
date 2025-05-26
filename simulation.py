@@ -1,7 +1,7 @@
 from typing import Callable, Dict, List, Optional, Union
 from water_system import WaterSystem, WaterSystemVisualizer
 from datetime import datetime
-from system_creator_ZRB import create_ZRB_system
+from system_creator_ZRB import create_simplified_ZRB_system
 
 
 def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str, Union[Dict, List]]) -> WaterSystem:
@@ -105,7 +105,7 @@ def run_simulation(
         WaterSystem: Simulated water system
     """
     # Create new system
-    system = system_creator(start_year, start_month, num_time_steps,system_type, scenario, period, agr_scenario, efficiency)
+    system = system_creator(start_year, start_month, num_time_steps)
     
     # Load optimized parameters
     system = load_optimized_parameters(system, optimization_results)
@@ -132,9 +132,9 @@ if __name__ == "__main__":
     start = datetime.now()
 
     # Example of running the simulation with optimized parameters for a simplified ZRB system
-    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test.json")
+    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test4.json")
     system = run_simulation(
-        create_ZRB_system,
+        create_simplified_ZRB_system,
         loaded_results,
         start_year=2017,
         start_month=1,

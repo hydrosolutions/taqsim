@@ -12,6 +12,7 @@ Functions:
     - priority_demand_deficit: Total annual priority demand deficit.
     - sink_node_min_flow_deficit: Total annual minimum flow deficit at sink nodes.
     - total_spillage: Total annual spillage from hydroworks and reservoirs.
+    - total_unmet_ecological_flow: Total annual unmet ecological flow for all edges with ecological flow requirements.
 
 Arguments:
     system: The water system object containing the network graph and simulation results.
@@ -104,3 +105,23 @@ def total_spillage(system, hydroworks_ids, reservoir_ids, num_years):
     for node_id in reservoir_ids:
         total += np.sum(system.graph.nodes[node_id]['node'].spillway_register)
     return total / num_years / 1e9
+
+def total_unmet_ecological_flow(system, dt, num_years):
+    """
+    Calculate the total annual unmet ecological flow for all edges with ecological_flow > 0.
+
+    Args:
+        system: The water system object.
+        dt: Time step duration (seconds).
+        num_years: Number of years in the simulation.
+
+    Returns:
+        float: Annualized total unmet ecological flow (km³/year).
+    """
+    total_unmet = 0
+    for _, _, edge_data in system.graph.edges(data=True):
+        edge = edge_data['edge']
+        if getattr(edge, 'ecological_flow', 0) > 0:
+            # Sum unmet ecological flow for this edge
+            total_unmet += sum(edge.unmet_ecological_flow) * dt
+    return total_unmet / num_years / 1e9

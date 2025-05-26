@@ -12,6 +12,7 @@ from .objectives import (
     priority_demand_deficit,
     sink_node_min_flow_deficit,
     total_spillage,
+    total_unmet_ecological_flow
 )
 # --------------------- SHARED UTILITY FUNCTIONS ---------------------
 
@@ -284,10 +285,10 @@ class DeapOptimizer:
         mutpb: float = 0.32,
         number_of_objectives: int = 1,
         objective_weights: dict[str,List[float]] = {
-        'objective_1': [1,0,0,0],
-        'objective_2': [0,1,0,0],
-        'objective_3': [0,0,1,0],
-        'objective_4': [0,0,0,1],
+        'objective_1': [1,0,0,0,0],
+        'objective_2': [0,1,0,0,0],
+        'objective_3': [0,0,1,0,0],
+        'objective_4': [0,0,0,1,0],
     },
     ) -> None:
         """
@@ -344,20 +345,23 @@ class DeapOptimizer:
             hydrowork = self.base_system.graph.nodes[node_id]['node']
             self.hydroworks_targets[node_id] = list(hydrowork.outflow_edges.keys())
 
+        self._setup_toolbox()
+
+    def _setup_toolbox(self):
         # Remove any existing Fitness/Individual to avoid DEAP errors
         if 'FitnessMulti' in creator.__dict__:
             del creator.FitnessMulti
         if 'Individual' in creator.__dict__:
             del creator.Individual
-            
+
         # Set up DEAP types
-        if number_of_objectives == 1:
+        if self.num_of_objectives == 1:
             weights = (-1.0,)
-        elif number_of_objectives == 2:
+        elif self.num_of_objectives == 2:
             weights = (-1.0, -1.0)
-        elif number_of_objectives == 3:
+        elif self.num_of_objectives == 3:
             weights = (-1.0, -1.0, -1.0)
-        elif number_of_objectives == 4:
+        elif self.num_of_objectives == 4:
             weights = (-1.0, -1.0, -1.0, -1.0)
         creator.create("FitnessMulti", base.Fitness, weights=weights)
         creator.create("Individual", list, fitness=creator.FitnessMulti)
@@ -370,8 +374,7 @@ class DeapOptimizer:
         self.toolbox.register("evaluate", self._evaluate_individual)
         self.toolbox.register("mate", crossover, self)
         self.toolbox.register("mutate", mutate_individual, self)
-        if number_of_objectives == 1:
-            # Single-objective optimization uses tournament selection
+        if self.num_of_objectives == 1:
             self.toolbox.register("select", tools.selTournament, tournsize=3)
         else:
             self.toolbox.register("select", tools.selNSGA2)
@@ -400,56 +403,86 @@ class DeapOptimizer:
             # Objective 2: Priority demand deficit
             high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
             # Objective 3: Minimum flow deficit
-            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
+            sink_min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
             # Objective 4: Spillage
             flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
-            
+            # Objective 5: Unmet ecological flow at edges
+            edge_ecological_flow_deficit = total_unmet_ecological_flow(system, self.dt, self.num_years)
 
-            if self.num_of_objectives == 1:
+            # Collect all base objectives in a fixed order
+            base_objectives = np.array([
+                low_priority_demand_deficit,
+                high_priority_demand_deficit,
+                flooding_volume,
+                sink_min_flow_deficit,
+                edge_ecological_flow_deficit
+            ])
+
+            # Prepare the weights for each objective as a list of arrays
+            weights_list = []
+            for i in range(1, self.num_of_objectives + 1):
+                weights = np.array(self.objective_weights[f'objective_{i}'])
+                weights_list.append(weights)
+
+            # Calculate the weighted sum for each objective
+            results = tuple(np.dot(weights, base_objectives) for weights in weights_list)
+            return results
+
+            '''if self.num_of_objectives == 1:
                 return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
                         + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                        + self.objective_weights['objective_1'][2]*min_flow_deficit
-                        + self.objective_weights['objective_1'][3]*flooding_volume,)
+                        + self.objective_weights['objective_1'][2]*flooding_volume
+                        + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
+                        + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,)
             elif self.num_of_objectives == 2:
                 return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,
+                    + self.objective_weights['objective_1'][2]*flooding_volume
+                    + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,
                     self.objective_weights['objective_2'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*min_flow_deficit
-                    + self.objective_weights['objective_2'][3]*flooding_volume)
+                    + self.objective_weights['objective_2'][2]*flooding_volume
+                    + self.objective_weights['objective_2'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_2'][4]*edge_ecological_flow_deficit)
             elif self.num_of_objectives == 3:
                 return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,
+                    + self.objective_weights['objective_1'][2]*flooding_volume
+                    + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,
                     self.objective_weights['objective_2'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*min_flow_deficit
-                    + self.objective_weights['objective_2'][3]*flooding_volume,
+                    + self.objective_weights['objective_2'][2]*flooding_volume
+                    + self.objective_weights['objective_2'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_2'][4]*edge_ecological_flow_deficit,
                     self.objective_weights['objective_3'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_3'][2]*min_flow_deficit
-                    + self.objective_weights['objective_3'][3]*flooding_volume)
+                    + self.objective_weights['objective_3'][2]*flooding_volume
+                    + self.objective_weights['objective_3'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_3'][4]*edge_ecological_flow_deficit)
             elif self.num_of_objectives == 4:
                 return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,
+                    + self.objective_weights['objective_1'][2]*flooding_volume
+                    + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,
                     self.objective_weights['objective_2'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*min_flow_deficit
-                    + self.objective_weights['objective_2'][3]*flooding_volume,
+                    + self.objective_weights['objective_2'][2]*flooding_volume
+                    + self.objective_weights['objective_2'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_2'][4]*edge_ecological_flow_deficit,
                     self.objective_weights['objective_3'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_3'][2]*min_flow_deficit
-                    + self.objective_weights['objective_3'][3]*flooding_volume,
+                    + self.objective_weights['objective_3'][2]*flooding_volume
+                    + self.objective_weights['objective_3'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_3'][4]*edge_ecological_flow_deficit,
                     self.objective_weights['objective_4'][0]*low_priority_demand_deficit
                     + self.objective_weights['objective_4'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_4'][2]*min_flow_deficit
-                    + self.objective_weights['objective_4'][3]*flooding_volume
-            )
+                    + self.objective_weights['objective_4'][2]*flooding_volume
+                    + self.objective_weights['objective_4'][3]*sink_min_flow_deficit
+                    + self.objective_weights['objective_4'][4]*edge_ecological_flow_deficit
+            )'''
             
         except Exception as e:
             print(f"Error evaluating individual: {str(e)}")
@@ -691,263 +724,3 @@ class DeapOptimizer:
         plt.savefig(file_path)
         plt.close()
         print(f"Total objective convergence plot saved to {file_path}")
-
-'''class DeapSingleObjectiveOptimizer(DeapOptimizer):
-    """
-    Single-objective optimizer using DEAP.
-    Minimizes total deficit (demand shortfall + minimum flow deficit).
-    """
-    def __init__(self, *args, **kwargs):
-        """Initialize with single-objective fitness weights (-1.0 for minimization)"""
-        super().__init__(*args, weights=(-1.0,), **kwargs)
-
-    def _evaluate_individual(self, individual):
-        """
-        Evaluate an individual to get the single-objective fitness value.
-        
-        Args:
-            individual: The individual to evaluate
-            
-        Returns:
-            tuple: Single fitness value as a 1-element tuple
-        """
-        try:
-            # Decode the individual's genes into parameters
-            reservoir_params, hydroworks_params = decode_individual(self, individual)
-            
-            # Create a copy of the base system to evaluate
-            system = copy.deepcopy(self.base_system)
-            
-            # Apply parameters to the system
-            for res_id, params in reservoir_params.items():
-                system.graph.nodes[res_id]['node'].set_release_params(params)
-            for hw_id, params in hydroworks_params.items():
-                system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
-            
-            # Run simulation
-            system.simulate(self.num_time_steps)
-            
-            # Calculate total penalty
-
-            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
-            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
-            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
-            
-            return (  self.objective_weights['objective_1'][0]*low_priority_demand_deficit 
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,)
-        
-        except Exception as e:
-            print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'),)
-
-
-class DeapMultiObjectiveOptimizer(DeapOptimizer):
-    """
-    Base class for multi-objective optimizers.
-    Subclasses should specify the number of objectives.
-    """
-    def __init__(self, *args, **kwargs):
-        """Initialize with proper selection algorithm for multi-objective optimization"""
-        super().__init__(*args, **kwargs)
-        # Override selection to use NSGA-II for multi-objective optimization
-        self.toolbox.register("select", tools.selNSGA2)
-
-    def _evaluate_individual(self, individual):
-        """
-        Multi-objective evaluation. Must be implemented by subclasses.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
-class DeapTwoObjectiveOptimizer(DeapMultiObjectiveOptimizer):
-    """
-    Two-objective optimizer using DEAP.
-    Objectives: demand deficit and minimum flow deficit.
-    """
-    def __init__(self, *args, **kwargs):
-        """Initialize with two-objective fitness weights (-1.0, -1.0 for minimization)"""
-        kwargs["weights"] = (-1.0, -1.0)
-        super().__init__(*args, **kwargs)
-
-    def _evaluate_individual(self, individual):
-        """
-        Evaluate an individual for two objectives.
-        
-        Args:
-            individual: The individual to evaluate
-            
-        Returns:
-            tuple: Fitness values for demand deficit and minimum flow deficit
-        """
-        try:
-            # Decode the individual's genes into parameters
-            reservoir_params, hydroworks_params = decode_individual(self, individual)
-            
-            # Create a copy of the base system to evaluate
-            system = copy.deepcopy(self.base_system)
-            
-            # Apply parameters to the system
-            for res_id, params in reservoir_params.items():
-                system.graph.nodes[res_id]['node'].set_release_params(params)
-            for hw_id, params in hydroworks_params.items():
-                system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
-            
-            # Run simulation
-            system.simulate(self.num_time_steps)
-
-            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
-            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
-            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
-            
-            # Convert to annual values in km³
-            return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,
-                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*min_flow_deficit
-                    + self.objective_weights['objective_2'][3]*flooding_volume
-            )
-            
-        except Exception as e:
-            print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'), float('inf'))
-
-class DeapThreeObjectiveOptimizer(DeapMultiObjectiveOptimizer):
-    """
-    Three-objective optimizer using DEAP.
-    Objectives: regular demand deficit, priority demand deficit, and minimum flow deficit.
-    """
-    def __init__(self, *args, **kwargs):
-        """Initialize with three-objective fitness weights (-1.0, -1.0, -1.0 for minimization)"""
-        kwargs["weights"] = (-1.0, -1.0, -1.0)
-        super().__init__(*args, **kwargs)
-
-    def _evaluate_individual(self, individual):
-        """
-        Evaluate an individual for three objectives.
-        
-        Args:
-            individual: The individual to evaluate
-            
-        Returns:
-            tuple: Fitness values for regular demand deficit, priority demand deficit, and minimum flow deficit
-        """
-        try:
-            # Decode the individual's genes into parameters
-            reservoir_params, hydroworks_params = decode_individual(self, individual)
-            
-            # Create a copy of the base system to evaluate
-            system = copy.deepcopy(self.base_system)
-            
-            # Apply parameters to the system
-            for res_id, params in reservoir_params.items():
-                system.graph.nodes[res_id]['node'].set_release_params(params)
-            for hw_id, params in hydroworks_params.items():
-                system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
-            
-            # Run simulation
-            system.simulate(self.num_time_steps)
-            
-            # Objective 1: Regular demand deficit
-            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
-            
-            # Objective 2: Priority demand deficit
-            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            
-            # Objective 3: Minimum flow deficit
-            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
-
-            # Objective 4: Flooding volume (not used in this optimizer)
-            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
-            
-            # Convert to annual values in km³
-            return ( self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,
-                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*min_flow_deficit
-                    + self.objective_weights['objective_2'][3]*flooding_volume,
-                    self.objective_weights['objective_3'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_3'][2]*min_flow_deficit
-                    + self.objective_weights['objective_3'][3]*flooding_volume
-            )
-            
-        except Exception as e:
-            print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'), float('inf'), float('inf'))
-
-class DeapFourObjectiveOptimizer(DeapMultiObjectiveOptimizer):
-    """
-    Four-objective optimizer using DEAP.
-    Objectives: regular demand deficit, priority demand deficit, minimum flow deficit, and spillage.
-    """
-    def __init__(self, *args, **kwargs):
-        """Initialize with four-objective fitness weights (-1.0, -1.0, -1.0, -1.0 for minimization)"""
-        kwargs["weights"] = (-1.0, -1.0, -1.0, -1.0)
-        super().__init__(*args, **kwargs)
-
-    def _evaluate_individual(self, individual):
-        """
-        Evaluate an individual for four objectives.
-        
-        Args:
-            individual: The individual to evaluate
-            
-        Returns:
-            tuple: Fitness values for regular demand deficit, priority demand deficit, minimum flow deficit, and spillage
-        """
-        try:
-            # Decode the individual's genes into parameters
-            reservoir_params, hydroworks_params = decode_individual(self, individual)
-            
-            # Create a copy of the base system to evaluate
-            system = copy.deepcopy(self.base_system)
-            
-            # Apply parameters to the system
-            for res_id, params in reservoir_params.items():
-                system.graph.nodes[res_id]['node'].set_release_params(params)
-            for hw_id, params in hydroworks_params.items():
-                system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
-            
-            # Run simulation
-            system.simulate(self.num_time_steps)
-
-            # Objective 1: Regular demand deficit
-            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
-            # Objective 2: Priority demand deficit
-            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            # Objective 3: Minimum flow deficit
-            min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
-            # Objective 4: Spillage
-            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
-            
-            # Convert to annual values in km³
-            return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*min_flow_deficit
-                    + self.objective_weights['objective_1'][3]*flooding_volume,
-                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*min_flow_deficit
-                    + self.objective_weights['objective_2'][3]*flooding_volume,
-                    self.objective_weights['objective_3'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_3'][2]*min_flow_deficit
-                    + self.objective_weights['objective_3'][3]*flooding_volume,
-                    self.objective_weights['objective_4'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_4'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_4'][2]*min_flow_deficit
-                    + self.objective_weights['objective_4'][3]*flooding_volume
-            )
-            
-        except Exception as e:
-            print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'), float('inf'), float('inf'), float('inf'))'''

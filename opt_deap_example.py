@@ -199,25 +199,25 @@ if __name__ == "__main__":
 
     if number_of_objectives == 1:
         objective_weights ={
-            'objective_1': [1.0,1.0,1.0,1.0]
+            'objective_1': [1,1,1,1,1]
         }
     if number_of_objectives == 2:
         objective_weights ={
-            'objective_1': [1.0,1.0,0.0,0.0],
-            'objective_2': [0.0,0.0,1.0,1.0]
+            'objective_1': [1,1,0,0,0],
+            'objective_2': [0,0,1,1,0]
         }
     if number_of_objectives == 3:
         objective_weights ={
-            'objective_1': [1.0,1.0,0.0,0.0],
-            'objective_2': [0.0,0.0,1.0,0.0],
-            'objective_3': [0.0,0.0,0.0,1.0]
+            'objective_1': [1,1,0,0,0],
+            'objective_2': [0,0,1,0,0],
+            'objective_3': [0,0,0,1,0]
         }
     if number_of_objectives == 4:
         objective_weights ={
-            'objective_1': [1.0,0.0,0.0,0.0],
-            'objective_2': [0.0,1.0,0.0,0.0],
-            'objective_3': [0.0,0.0,1.0,0.0],
-            'objective_4': [0.0,0.0,0.0,1.0]
+            'objective_1': [1,0,0,0,0],
+            'objective_2': [0,1,0,0,0],
+            'objective_3': [0,0,1,0,0],
+            'objective_4': [0,0,0,1,0]
         }
 
     # Example of running the multi-objective optimization for a baseline system
@@ -251,6 +251,8 @@ if __name__ == "__main__":
         # Generate all visualizations
         dashboard.generate_full_report()
 
+
+    # Option for an Optuna study in order to find best GA parameters (cxpb, mutpb, ngen, pop_size)
     optunastudy = False
     if optunastudy:
         # Making an Optuna study
