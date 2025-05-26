@@ -113,7 +113,6 @@ def run_optimization(
     pop_size:int,
     cxpb: float,
     mutpb: float, 
-    number_of_objectives: int,
     objective_weights: dict[str, list[float]],
 ) -> Dict[str, Union[Dict, List]]:
     """
@@ -141,22 +140,19 @@ def run_optimization(
     # Create the base water system
     water_system = system_creator(start_year, start_month, num_time_steps)
 
-    if number_of_objectives in range(1, 5):
-        # Initialize the single-objective optimizer
-        optimizer = DeapOptimizer(
-            base_system=water_system,
-            start_year=start_year,
-            start_month=start_month,
-            num_time_steps=num_time_steps,
-            ngen=ngen,
-            population_size=pop_size,
-            cxpb=cxpb,
-            mutpb=mutpb,
-            number_of_objectives=number_of_objectives,
-            objective_weights=objective_weights
-        )
-    else:
-        raise ValueError("number_of_objectives must be 1, 2, 3, or 4.")
+    # Initialize the single-objective optimizer
+    optimizer = DeapOptimizer(
+        base_system=water_system,
+        start_year=start_year,
+        start_month=start_month,
+        num_time_steps=num_time_steps,
+        ngen=ngen,
+        population_size=pop_size,
+        cxpb=cxpb,
+        mutpb=mutpb,
+        objective_weights=objective_weights
+    )
+
     # Run the optimization
     results = optimizer.optimize()
 
@@ -174,13 +170,8 @@ def run_optimization(
     print(f"Crossover probability:  {results['crossover_probability']}")
     print(f"Mutation probability:   {results['mutation_probability']}")
     print(f"Final objective values: {results['objective_values']}")
-    print(f"  - Objective 1:    {results['objective_values'][0]:,.3f} km³/a")
-    if number_of_objectives >= 2:
-        print(f"  - Objective 2:    {results['objective_values'][1]:,.3f} km³/a")
-    if number_of_objectives >= 3:
-        print(f"  - Objective 3:    {results['objective_values'][2]:,.3f} km³/a")
-    if number_of_objectives == 4:
-        print(f"  - Objective 4:    {results['objective_values'][3]:,.3f} km³/a")
+    for i, value in enumerate(results['objective_values'], 1):
+        print(f"  - Objective {i}:    {value:,.3f} km³/a")
     
     # Print the number of solutions in the Pareto front
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
@@ -193,13 +184,13 @@ if __name__ == "__main__":
     start = datetime.now()
     
     number_of_objectives = 4
-    number_of_generations = 20
+    number_of_generations = 10
     population_size = 50
 
 
     if number_of_objectives == 1:
         objective_weights ={
-            'objective_1': [1,1,1,1,1]
+            'objective_1': [1,1,1,1,0]
         }
     if number_of_objectives == 2:
         objective_weights ={
@@ -219,7 +210,18 @@ if __name__ == "__main__":
             'objective_3': [0,0,1,0,0],
             'objective_4': [0,0,0,1,0]
         }
+    
+    objective_weights ={
+            'objective_1': [1,0,0,0,0],
+            'objective_2': [0,1,0,0,0],
+            'objective_3': [0,0,1,0,0],
+            'objective_4': [0,0,0,1,0], 
+            'objective_5': [0,0,0,0,1], 
+            'objective_6': [1,1,1,1,1], 
+            'objective_7': [2,0,0,0,0],
+        }
 
+    print(len(objective_weights), "objectives selected for optimization")
     # Example of running the multi-objective optimization for a baseline system
     results = run_optimization(
         create_simplified_ZRB_system,
@@ -230,7 +232,6 @@ if __name__ == "__main__":
         pop_size=population_size, 
         cxpb=0.65, 
         mutpb=0.32,
-        number_of_objectives=number_of_objectives,
         objective_weights=objective_weights
     )
 

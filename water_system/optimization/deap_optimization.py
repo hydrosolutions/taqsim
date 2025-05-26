@@ -283,7 +283,6 @@ class DeapOptimizer:
         ngen: int = 50,
         cxpb: float = 0.65,
         mutpb: float = 0.32,
-        number_of_objectives: int = 1,
         objective_weights: dict[str,List[float]] = {
         'objective_1': [1,0,0,0,0],
         'objective_2': [0,1,0,0,0],
@@ -303,7 +302,7 @@ class DeapOptimizer:
             ngen: Number of generations
             cxpb: Crossover probability
             mutpb: Mutation probability
-            weights: Fitness weights (negative for minimization)
+            objective_weights: Weights for each objective in the optimization
         """
         self.base_system = base_system
         self.start_year = start_year
@@ -316,8 +315,8 @@ class DeapOptimizer:
         self.ngen = ngen
         self.cxpb = cxpb
         self.mutpb = mutpb
-        self.num_of_objectives = number_of_objectives
         self.objective_weights = objective_weights
+        self.num_of_objectives = len(objective_weights)
         
         # Extract node IDs from the system
         self.priority_demand_ids = DemandNode.high_priority_demand_ids
@@ -363,6 +362,9 @@ class DeapOptimizer:
             weights = (-1.0, -1.0, -1.0)
         elif self.num_of_objectives == 4:
             weights = (-1.0, -1.0, -1.0, -1.0)
+        elif self.num_of_objectives > 4:
+            weights = (-1.0,) * self.num_of_objectives
+
         creator.create("FitnessMulti", base.Fitness, weights=weights)
         creator.create("Individual", list, fitness=creator.FitnessMulti)
         self.creator = creator
