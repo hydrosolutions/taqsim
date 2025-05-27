@@ -19,13 +19,15 @@ import multiprocessing
 
 def normalize_distribution(values: np.ndarray) -> np.ndarray:
     """
-    Normalize a list of values to sum to 1.0 using numpy for efficiency.
-    
+    Normalize a list or array of values so that their sum equals 1.0.
+
+    If the sum of the input values is zero, returns an array of equal values that sum to 1.0.
+
     Args:
-        values (list or ndarray): List of values to normalize
-        
+        values (np.ndarray): Array or list of values to normalize.
+
     Returns:
-        ndarray: Normalized values that sum to 1.0
+        np.ndarray: Normalized array with the same shape as input, summing to 1.0.
     """
     values = np.array(values)
     total = np.sum(values)
@@ -37,6 +39,20 @@ def normalize_distribution(values: np.ndarray) -> np.ndarray:
 def decode_individual(
     reservoir_ids, hydroworks_ids, hydroworks_targets, individual
 ):
+    """
+    Decode a flat list of genes into structured reservoir and hydroworks parameters.
+
+    Args:
+        reservoir_ids (list): List of reservoir node IDs.
+        hydroworks_ids (list): List of hydroworks node IDs.
+        hydroworks_targets (dict): Mapping from hydroworks ID to list of target node IDs.
+        individual (list or np.ndarray): Flat list of genes representing an individual.
+
+    Returns:
+        tuple: (reservoir_params, hydroworks_params)
+            - reservoir_params (dict): Reservoir release parameters per month.
+            - hydroworks_params (dict): Hydroworks distribution parameters per month.
+    """
     genes_per_reservoir_month = 3
     reservoir_params = {}
     hydroworks_params = {}
@@ -74,216 +90,46 @@ def decode_individual(
 
     return reservoir_params, hydroworks_params
 
-def mutate_individual(optimizer, individual, indpb=0.5):
-    """
-    Custom mutation operator with enforced parameter bounds for monthly parameters
-    
-    Args:
-        optimizer: The optimizer instance
-        individual: The individual to mutate
-        indpb: Independent probability for each gene to be mutated
-        
-    Returns:
-        tuple: Containing the mutated individual
-    """
-    genes_per_reservoir_month = 3
-    
-    individual = np.array(individual)
-    # Track which months need renormalization for each hydroworks
-    hw_updates = set()
-    
-    # Mutate reservoir parameters for each month
-    for res_idx, res_id in enumerate(optimizer.reservoir_ids):
-        for month in range(12):
-            start_idx = (res_idx * 12 * genes_per_reservoir_month) + (month * genes_per_reservoir_month)
-            
-            for param_idx, param_name in enumerate(['Vr', 'V1', 'V2']):
-                if random.random() < indpb:
-                    bounds = optimizer.reservoir_bounds[res_id][param_name]
-                    value = np.random.uniform(bounds[0], bounds[1])
-                    
-                    # Special handling for volume relationships
-                    if param_name == 'V2':
-                        # Ensure V2 > V1
-                        min_bound = max(bounds[0], individual[start_idx + 1])  # V1 index is 1, V2 must be > V1
-                        value = np.random.uniform(min_bound, bounds[1])
-                    elif param_name == 'V1':
-                        # Ensure V1 < V2 and V1 > dead_storage
-                        dead_storage = optimizer.base_system.graph.nodes[res_id]['node'].dead_storage
-                        min_bound = max(bounds[0], dead_storage)
-                        max_bound = min(bounds[1], individual[start_idx + 2])  # V2 index is 2
-                        value = np.random.uniform(min_bound, max_bound)
-                    
-                    individual[start_idx + param_idx] = value
-
-    # Mutate hydroworks parameters
-    hw_genes_start = len(optimizer.reservoir_ids) * 12 * genes_per_reservoir_month
-    current_idx = hw_genes_start
-    
-    for hw_idx, hw_id in enumerate(optimizer.hydroworks_ids):
-        n_targets = len(optimizer.hydroworks_targets[hw_id])
-        if random.random() < indpb:
-            hw_updates.add(hw_id)
-            for month in range(12):
-                start_idx = current_idx + (month * n_targets)
-                end_idx = start_idx + n_targets
-                if end_idx <= len(individual):  # Check array bounds
-                    individual[start_idx:end_idx] = np.random.random(n_targets)
-        current_idx += 12 * n_targets  # Update index for next hydroworks
-
-    # Normalize hydroworks distributions that were modified
-    current_idx = hw_genes_start
-    for hw_id in hw_updates:
-        n_targets = len(optimizer.hydroworks_targets[hw_id])
-        for month in range(12):
-            start_idx = current_idx + (month * n_targets)
-            end_idx = start_idx + n_targets
-            if end_idx <= len(individual):  # Check array bounds
-                individual[start_idx:end_idx] = normalize_distribution(individual[start_idx:end_idx])
-        current_idx += 12 * n_targets  # Update index for next hydroworks
-
-    # Return the creator.Individual type appropriate for the specific optimizer
-    return optimizer.creator.Individual(individual.tolist()),
-
-def crossover(optimizer, ind1, ind2):
-    """
-    Custom crossover that treats monthly parameters as packages.
-    For each month, all parameters of a reservoir or hydrowork for that specific month
-    are swapped as a complete unit between parents.
-    
-    Args:
-        optimizer: The optimizer instance 
-        ind1, ind2: The two individuals to cross
-        
-    Returns:
-        tuple: (crossed_ind1, crossed_ind2) containing the crossed individuals
-    """
-    ind1, ind2 = np.array(ind1), np.array(ind2)
-    
-    # Handle reservoirs month by month
-    genes_per_month = 3 
-    num_reservoirs = len(optimizer.reservoir_ids)
-    
-    # For each month
-    for month in range(12):
-        # For each reservoir, decide whether to swap this month's parameters
-        for res_idx in range(num_reservoirs):
-            if random.random() < 0.5:
-                # Calculate indices for this month's parameters
-                start_idx = (res_idx * 12 * genes_per_month) + (month * genes_per_month)
-                end_idx = start_idx + genes_per_month
-                
-                # Swap parameters for this month
-                ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
-                    ind2[start_idx:end_idx].copy(), ind1[start_idx:end_idx].copy()
-
-    
-    # Handle hydroworks month by month
-    hw_start = num_reservoirs * 12 * genes_per_month
-    current_idx = hw_start
-    
-    # For each month
-    for month in range(12):
-        # For each hydrowork
-        hw_current_idx = current_idx
-        for hw_id in optimizer.hydroworks_ids:
-            n_targets = len(optimizer.hydroworks_targets[hw_id])
-            
-            if random.random() < 0.5:
-                # Calculate indices for this month's distribution parameters
-                start_idx = hw_current_idx + (month * n_targets)
-                end_idx = start_idx + n_targets
-                
-                # Swap distribution parameters for this month
-                tmp1 = ind1[start_idx:end_idx].copy()
-                tmp2 = ind2[start_idx:end_idx].copy()
-                
-                # Normalize the distributions before swapping
-                ind1[start_idx:end_idx] = normalize_distribution(tmp2)
-                ind2[start_idx:end_idx] = normalize_distribution(tmp1)
-            
-            hw_current_idx += 12 * n_targets  # Move to next hydrowork's base index
-    
-    # Return individuals using the appropriate creator.Individual type
-    return optimizer.creator.Individual(ind1.tolist()), optimizer.creator.Individual(ind2.tolist())
-
-def create_individual(optimizer):
-    """
-    Create an individual with parameters for all reservoirs and hydroworks
-    
-    Args:
-        optimizer: The optimizer instance
-        
-    Returns:
-        Individual: A new individual with randomly initialized genes
-    """
-    genes = []
-
-    # Add reservoir genes
-    for res_id in optimizer.reservoir_ids:
-        bounds = optimizer.reservoir_bounds[res_id]
-        for month in range(12):
-            # Generate parameters ensuring proper relationships
-            Vr = np.random.uniform(bounds['Vr'][0], bounds['Vr'][1])
-            
-            # Ensure V1 is properly bounded
-            V1_min = bounds['V1'][0]
-            V1_max = bounds['V1'][1]
-            V1 = np.random.uniform(V1_min, V1_max)
-            
-            # Ensure V2 > V1
-            V2_min = max(bounds['V2'][0], V1)
-            V2_max = bounds['V2'][1]
-            V2 = np.random.uniform(V2_min, V2_max)
-            
-            genes.extend([Vr, V1, V2])
-
-    # Add hydroworks genes
-    for hw_id in optimizer.hydroworks_ids:
-        n_targets = len(optimizer.hydroworks_targets[hw_id])
-        for month in range(12):
-            # Create random distribution that sums to 1
-            dist = np.random.random(n_targets)
-            normalized_dist = normalize_distribution(dist)
-            genes.extend(normalized_dist)
-
-    return optimizer.creator.Individual(genes)
-
 # --------------------- OPTIMIZER CLASS -----------------------------
 class DeapOptimizer:
     """
-    Base class for DEAP-based water system optimizers.
-    Handles setup of system, bounds, IDs, and DEAP toolbox.
-    Subclasses must implement _evaluate_individual and set fitness weights.
+    DEAP-based multi-objective optimizer for water system management.
+
+    Handles setup of the water system, genetic algorithm configuration, and optimization process.
+    Supports multiple objectives and parallel evaluation.
+
+    Attributes:
+        base_system (WaterSystem): The water system to optimize.
+        num_time_steps (int): Number of time steps in the simulation.
+        population_size (int): Number of individuals in the population.
+        ngen (int): Number of generations to run the algorithm.
+        cxpb (float): Probability of crossover.
+        mutpb (float): Probability of mutation.
+        objective_weights (dict): Mapping of objective names to their weight vectors.
+        num_of_objectives (int): Number of objectives in the optimization.
+        history (dict): Stores convergence statistics for each objective.
     """
     def __init__(
         self,
         base_system: WaterSystem,
         num_time_steps: int,
-        population_size: int = 50,
-        ngen: int = 50,
-        cxpb: float = 0.65,
-        mutpb: float = 0.32,
-        objective_weights: dict[str,list[float]] = {
-        'objective_1': [1,0,0,0,0],
-        'objective_2': [0,1,0,0,0],
-        'objective_3': [0,0,1,0,0],
-        'objective_4': [0,0,0,1,0],
-    },
+        population_size: int,
+        ngen: int,
+        cxpb: float,
+        mutpb: float,
+        objective_weights: dict[str, list[float]]
     ) -> None:
         """
-        Initialize the optimizer.
-        
+        Initialize the DEAP optimizer for the water system.
+
         Args:
-            base_system: Water system to optimize
-            start_year: Starting year for simulation
-            start_month: Starting month (1-12)
-            num_time_steps: Number of time steps to simulate
-            population_size: Size of the population
-            ngen: Number of generations
-            cxpb: Crossover probability
-            mutpb: Mutation probability
-            objective_weights: Weights for each objective in the optimization
+            base_system (WaterSystem): The water system to optimize.
+            num_time_steps (int): Number of time steps to simulate.
+            population_size (int): Size of the population. Defaults to 50.
+            ngen (int): Number of generations. Defaults to 50.
+            cxpb (float): Crossover probability. Defaults to 0.65.
+            mutpb (float): Mutation probability. Defaults to 0.32.
+            objective_weights (dict): Weights for each objective. Defaults to 4 objectives.
         """
         self.base_system = base_system
         self.num_time_steps = num_time_steps
@@ -326,6 +172,12 @@ class DeapOptimizer:
         self._setup_toolbox()
 
     def _setup_toolbox(self):
+        """
+        Set up the DEAP toolbox, including custom individual and fitness classes,
+        genetic operators, and selection method.
+
+        This method also initializes the multiprocessing pool and convergence history.
+        """
         # Remove any existing Fitness/Individual to avoid DEAP errors
         if 'FitnessMulti' in creator.__dict__:
             del creator.FitnessMulti
@@ -350,11 +202,11 @@ class DeapOptimizer:
 
         # Configure toolbox
         self.toolbox = base.Toolbox()
-        self.toolbox.register("individual", create_individual, self)
+        self.toolbox.register("individual", self.create_individual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
         # Do NOT register "evaluate" with self._evaluate_individual for multiprocessing!
-        self.toolbox.register("mate", crossover, self)
-        self.toolbox.register("mutate", mutate_individual, self)
+        self.toolbox.register("mate", self.crossover)
+        self.toolbox.register("mutate", self.mutate_individual)
         if self.num_of_objectives == 1:
             self.toolbox.register("select", tools.selTournament, tournsize=3)
         else:
@@ -364,12 +216,193 @@ class DeapOptimizer:
         # Initialize convergence history
         self.history = {}
 
+    def create_individual(self):
+        """
+        Create a new individual with randomly initialized genes for all reservoirs and hydroworks.
+
+        Returns:
+            Individual: A DEAP Individual object with genes for all parameters.
+        """
+        genes = []
+
+        # Add reservoir genes
+        for res_id in self.reservoir_ids:
+            bounds = self.reservoir_bounds[res_id]
+            for month in range(12):
+                Vr = np.random.uniform(bounds['Vr'][0], bounds['Vr'][1])
+                V1_min = bounds['V1'][0]
+                V1_max = bounds['V1'][1]
+                V1 = np.random.uniform(V1_min, V1_max)
+                V2_min = max(bounds['V2'][0], V1)
+                V2_max = bounds['V2'][1]
+                V2 = np.random.uniform(V2_min, V2_max)
+                genes.extend([Vr, V1, V2])
+
+        # Add hydroworks genes
+        for hw_id in self.hydroworks_ids:
+            n_targets = len(self.hydroworks_targets[hw_id])
+            for month in range(12):
+                dist = np.random.random(n_targets)
+                normalized_dist = normalize_distribution(dist)
+                genes.extend(normalized_dist)
+
+        return self.creator.Individual(genes)
+
+    def crossover(self, ind1, ind2):
+        """
+        Custom crossover operator for individuals.
+
+        Swaps all parameters for each month as a package between two individuals,
+        separately for reservoirs and hydroworks. Hydroworks distributions are normalized after swapping.
+
+        Args:
+            ind1 (Individual): First parent individual.
+            ind2 (Individual): Second parent individual.
+
+        Returns:
+            tuple: (child1, child2) - Two new individuals after crossover.
+        """
+        ind1, ind2 = np.array(ind1), np.array(ind2)
+        
+        # Handle reservoirs month by month
+        genes_per_month = 3 
+        num_reservoirs = len(self.reservoir_ids)
+        
+        # For each month
+        for month in range(12):
+            # For each reservoir, decide whether to swap this month's parameters
+            for res_idx in range(num_reservoirs):
+                if random.random() < 0.5:
+                    # Calculate indices for this month's parameters
+                    start_idx = (res_idx * 12 * genes_per_month) + (month * genes_per_month)
+                    end_idx = start_idx + genes_per_month
+                    
+                    # Swap parameters for this month
+                    ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
+                        ind2[start_idx:end_idx].copy(), ind1[start_idx:end_idx].copy()
+
+        # Handle hydroworks month by month
+        hw_start = num_reservoirs * 12 * genes_per_month
+        current_idx = hw_start
+        
+        # For each month
+        for month in range(12):
+            # For each hydrowork
+            hw_current_idx = current_idx
+            for hw_id in self.hydroworks_ids:
+                n_targets = len(self.hydroworks_targets[hw_id])
+                
+                if random.random() < 0.5:
+                    # Calculate indices for this month's distribution parameters
+                    start_idx = hw_current_idx + (month * n_targets)
+                    end_idx = start_idx + n_targets
+                    
+                    # Swap distribution parameters for this month
+                    tmp1 = ind1[start_idx:end_idx].copy()
+                    tmp2 = ind2[start_idx:end_idx].copy()
+                    
+                    # Normalize the distributions before swapping
+                    ind1[start_idx:end_idx] = normalize_distribution(tmp2)
+                    ind2[start_idx:end_idx] = normalize_distribution(tmp1)
+                
+                hw_current_idx += 12 * n_targets  # Move to next hydrowork's base index
+        
+        # Return individuals using the appropriate creator.Individual type
+        return self.creator.Individual(ind1.tolist()), self.creator.Individual(ind2.tolist())
+
+    def mutate_individual(self, individual, indpb=0.5):
+        """
+        Custom mutation operator for individuals.
+
+        Mutates reservoir and hydroworks parameters with independent probability,
+        enforcing parameter bounds and relationships (e.g., V2 > V1).
+        Hydroworks distributions are renormalized after mutation.
+
+        Args:
+            individual (Individual): The individual to mutate.
+            indpb (float, optional): Probability of mutating each gene. Defaults to 0.5.
+
+        Returns:
+            tuple: (mutated_individual,)
+        """
+        genes_per_reservoir_month = 3
+
+        individual = np.array(individual)
+        # Track which months need renormalization for each hydroworks
+        hw_updates = set()
+
+        # Mutate reservoir parameters for each month
+        for res_idx, res_id in enumerate(self.reservoir_ids):
+            for month in range(12):
+                start_idx = (res_idx * 12 * genes_per_reservoir_month) + (month * genes_per_reservoir_month)
+
+                for param_idx, param_name in enumerate(['Vr', 'V1', 'V2']):
+                    if random.random() < indpb:
+                        bounds = self.reservoir_bounds[res_id][param_name]
+                        value = np.random.uniform(bounds[0], bounds[1])
+
+                        # Special handling for volume relationships
+                        if param_name == 'V2':
+                            # Ensure V2 > V1
+                            min_bound = max(bounds[0], individual[start_idx + 1])  # V1 index is 1, V2 must be > V1
+                            value = np.random.uniform(min_bound, bounds[1])
+                        elif param_name == 'V1':
+                            # Ensure V1 < V2 and V1 > dead_storage
+                            dead_storage = self.base_system.graph.nodes[res_id]['node'].dead_storage
+                            min_bound = max(bounds[0], dead_storage)
+                            max_bound = min(bounds[1], individual[start_idx + 2])  # V2 index is 2
+                            value = np.random.uniform(min_bound, max_bound)
+
+                        individual[start_idx + param_idx] = value
+
+        # Mutate hydroworks parameters
+        hw_genes_start = len(self.reservoir_ids) * 12 * genes_per_reservoir_month
+        current_idx = hw_genes_start
+
+        for hw_idx, hw_id in enumerate(self.hydroworks_ids):
+            n_targets = len(self.hydroworks_targets[hw_id])
+            if random.random() < indpb:
+                hw_updates.add(hw_id)
+                for month in range(12):
+                    start_idx = current_idx + (month * n_targets)
+                    end_idx = start_idx + n_targets
+                    if end_idx <= len(individual):  # Check array bounds
+                        individual[start_idx:end_idx] = np.random.random(n_targets)
+            current_idx += 12 * n_targets  # Update index for next hydroworks
+
+        # Normalize hydroworks distributions that were modified
+        current_idx = hw_genes_start
+        for hw_id in hw_updates:
+            n_targets = len(self.hydroworks_targets[hw_id])
+            for month in range(12):
+                start_idx = current_idx + (month * n_targets)
+                end_idx = start_idx + n_targets
+                if end_idx <= len(individual):  # Check array bounds
+                    individual[start_idx:end_idx] = normalize_distribution(individual[start_idx:end_idx])
+            current_idx += 12 * n_targets  # Update index for next hydroworks
+
+        # Return the creator.Individual type appropriate for the specific optimizer
+        return self.creator.Individual(individual.tolist()),
+
     def optimize(self):
         """
-        Shared multi-objective genetic algorithm optimization using mu+lambda with NSGA-II selection.
-        Handles any number of objectives.
+        Run the multi-objective genetic algorithm optimization using NSGA-II selection.
+
+        Handles parallel evaluation, statistics tracking, and Pareto front extraction.
+
         Returns:
-            dict: Results of the optimization including Pareto front
+            dict: Results of the optimization, including:
+                - 'success' (bool): Whether optimization completed successfully.
+                - 'message' (str): Status message.
+                - 'population_size' (int): Population size used.
+                - 'generations' (int): Number of generations run.
+                - 'crossover_probability' (float): Crossover probability used.
+                - 'mutation_probability' (float): Mutation probability used.
+                - 'objective_values' (tuple): Fitness values of the best individual.
+                - 'optimal_reservoir_parameters' (dict): Best reservoir parameters.
+                - 'optimal_hydroworks_parameters' (dict): Best hydroworks parameters.
+                - 'pareto_front' (list): List of Pareto-optimal individuals.
+                - 'optimizer' (DeapOptimizer): Reference to the optimizer instance.
         """
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
@@ -506,8 +539,10 @@ class DeapOptimizer:
 
     def plot_convergence(self):
         """
-        Plot convergence history for each objective as a separate subplot and save to a fixed path.
-        The figure is saved at '/model_output/deap/convergence/convergence.png'.
+        Plot and save the convergence history for each objective.
+
+        Each objective is plotted in a separate subplot, showing best, average, and standard deviation
+        per generation. The plot is saved to '/model_output/deap/convergence/convergence.png'.
         """
         if not self.history or not any(self.history.values()):
             print("No convergence history to plot.")
@@ -563,8 +598,10 @@ class DeapOptimizer:
 
     def plot_total_objective_convergence(self):
         """
-        Plot the convergence of the sum of all objectives over generations and save to a fixed path.
-        The figure is saved at '/model_output/deap/convergence/total_objective_convergence.png'.
+        Plot and save the convergence of the sum of all objectives over generations.
+
+        Shows best, average, and standard deviation of the total objective value per generation.
+        The plot is saved to '/model_output/deap/convergence/total_objective_convergence.png'.
         """
         if not self.history or not any(self.history.values()):
             print("No convergence history to plot.")
@@ -622,8 +659,23 @@ class DeapOptimizer:
         plt.close()
         print(f"Total objective convergence plot saved to {file_path}")
 
-
+# --------------------- EVALUATION FUNCTION -----------------------------
+# This function is used to evaluate an individual in parallel.
+# It is outside the DeapOptimizer class to allow multiprocessing.
 def evaluate_individual(args):
+    """
+    Evaluate a single individual for the genetic algorithm (for multiprocessing).
+
+    Decodes the individual's genes, applies them to a copy of the water system,
+    runs the simulation, and computes all objectives. Returns a tuple of weighted
+    objective values.
+
+    Args:
+        args (tuple): All static and individual-specific arguments required for evaluation.
+
+    Returns:
+        tuple: Weighted objective values for the individual.
+    """
     (
         base_system,
         num_time_steps,
