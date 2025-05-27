@@ -14,6 +14,7 @@ from .objectives import (
     total_spillage,
     total_unmet_ecological_flow
 )
+import multiprocessing
 # --------------------- SHARED UTILITY FUNCTIONS ---------------------
 
 def normalize_distribution(values: np.ndarray) -> np.ndarray:
@@ -369,122 +370,17 @@ class DeapOptimizer:
         self.toolbox = base.Toolbox()
         self.toolbox.register("individual", create_individual, self)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
-        self.toolbox.register("evaluate", self._evaluate_individual)
+        # Do NOT register "evaluate" with self._evaluate_individual for multiprocessing!
         self.toolbox.register("mate", crossover, self)
         self.toolbox.register("mutate", mutate_individual, self)
         if self.num_of_objectives == 1:
             self.toolbox.register("select", tools.selTournament, tournsize=3)
         else:
             self.toolbox.register("select", tools.selNSGA2)
+        # Do NOT register a parallel map function here; use self.pool.map directly in optimize
+        self.pool = multiprocessing.Pool(processes=4)
         # Initialize convergence history
         self.history = {}
-
-    def _evaluate_individual(self, individual):
-        try:
-            # Decode the individual's genes into parameters
-            reservoir_params, hydroworks_params = decode_individual(self, individual)
-            
-            # Create a copy of the base system to evaluate
-            system = copy.deepcopy(self.base_system)
-            
-            # Apply parameters to the system
-            for res_id, params in reservoir_params.items():
-                system.graph.nodes[res_id]['node'].set_release_params(params)
-            for hw_id, params in hydroworks_params.items():
-                system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
-            
-            # Run simulation
-            system.simulate(self.num_time_steps)
-
-            # Objective 1: Regular demand deficit
-            low_priority_demand_deficit = regular_demand_deficit(system, self.regular_demand_ids, self.dt, self.num_years)
-            # Objective 2: Priority demand deficit
-            high_priority_demand_deficit = priority_demand_deficit(system, self.priority_demand_ids, self.dt, self.num_years)
-            # Objective 3: Minimum flow deficit
-            sink_min_flow_deficit = sink_node_min_flow_deficit(system, self.sink_ids, self.dt, self.num_years)
-            # Objective 4: Spillage
-            flooding_volume = total_spillage(system, self.hydroworks_ids, self.reservoir_ids, self.num_years)
-            # Objective 5: Unmet ecological flow at edges
-            edge_ecological_flow_deficit = total_unmet_ecological_flow(system, self.dt, self.num_years)
-
-            # Collect all base objectives in a fixed order
-            base_objectives = np.array([
-                low_priority_demand_deficit,
-                high_priority_demand_deficit,
-                flooding_volume,
-                sink_min_flow_deficit,
-                edge_ecological_flow_deficit
-            ])
-
-            # Prepare the weights for each objective as a list of arrays
-            weights_list = []
-            for i in range(1, self.num_of_objectives + 1):
-                weights = np.array(self.objective_weights[f'objective_{i}'])
-                weights_list.append(weights)
-
-            # Calculate the weighted sum for each objective
-            results = tuple(np.dot(weights, base_objectives) for weights in weights_list)
-            return results
-
-            '''if self.num_of_objectives == 1:
-                return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                        + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                        + self.objective_weights['objective_1'][2]*flooding_volume
-                        + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
-                        + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,)
-            elif self.num_of_objectives == 2:
-                return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*flooding_volume
-                    + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,
-                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*flooding_volume
-                    + self.objective_weights['objective_2'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_2'][4]*edge_ecological_flow_deficit)
-            elif self.num_of_objectives == 3:
-                return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*flooding_volume
-                    + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,
-                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*flooding_volume
-                    + self.objective_weights['objective_2'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_2'][4]*edge_ecological_flow_deficit,
-                    self.objective_weights['objective_3'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_3'][2]*flooding_volume
-                    + self.objective_weights['objective_3'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_3'][4]*edge_ecological_flow_deficit)
-            elif self.num_of_objectives == 4:
-                return (self.objective_weights['objective_1'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_1'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_1'][2]*flooding_volume
-                    + self.objective_weights['objective_1'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_1'][4]*edge_ecological_flow_deficit,
-                    self.objective_weights['objective_2'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_2'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_2'][2]*flooding_volume
-                    + self.objective_weights['objective_2'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_2'][4]*edge_ecological_flow_deficit,
-                    self.objective_weights['objective_3'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_3'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_3'][2]*flooding_volume
-                    + self.objective_weights['objective_3'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_3'][4]*edge_ecological_flow_deficit,
-                    self.objective_weights['objective_4'][0]*low_priority_demand_deficit
-                    + self.objective_weights['objective_4'][1]*high_priority_demand_deficit
-                    + self.objective_weights['objective_4'][2]*flooding_volume
-                    + self.objective_weights['objective_4'][3]*sink_min_flow_deficit
-                    + self.objective_weights['objective_4'][4]*edge_ecological_flow_deficit
-            )'''
-            
-        except Exception as e:
-            print(f"Error evaluating individual: {str(e)}")
-            return (float('inf'), float('inf'), float('inf'), float('inf'))
 
     def optimize(self):
         """
@@ -496,8 +392,28 @@ class DeapOptimizer:
         # Create initial population
         pop = self.toolbox.population(n=self.population_size)
 
-        # Evaluate initial population
-        fitnesses = list(map(self.toolbox.evaluate, pop))
+        # Prepare static arguments for evaluation (everything except the individual)
+        static_eval_args = (
+            self.base_system,
+            self.num_time_steps,
+            self.num_years,
+            self.dt,
+            self.objective_weights,
+            self.num_of_objectives,
+            self.reservoir_ids,
+            self.reservoir_bounds,
+            self.hydroworks_ids,
+            self.hydroworks_targets,
+            self.regular_demand_ids,
+            self.priority_demand_ids,
+            self.sink_ids
+        )
+
+        # Evaluate initial population in parallel
+        fitnesses = list(self.pool.map(
+            evaluate_individual_static,
+            [static_eval_args + (ind,) for ind in pop]
+        ))
         for ind, fit in zip(pop, fitnesses):
             ind.fitness.values = fit
 
@@ -523,14 +439,12 @@ class DeapOptimizer:
 
         # Create the logbook for statistics
         logbook = tools.Logbook()
-        # Show gen, nevals, and only avg, min, std for each objective
         logbook.header = ['gen', 'nevals']
         for i in range(n_obj):
             logbook.header += [f'obj{i+1}_avg', f'obj{i+1}_min', f'obj{i+1}_std']
 
         # Record the initial statistics
         record = mstats.compile(pop)
-        # Flatten the record for custom header
         flat_record = {'gen': 0, 'nevals': len(pop)}
         for i in range(n_obj):
             flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
@@ -541,10 +455,7 @@ class DeapOptimizer:
 
         # Begin the evolution
         for gen in range(1, self.ngen + 1):
-            # Select the next generation individuals (using NSGA-II selection or tournament)
             offspring = self.toolbox.select(pop, len(pop))
-
-            # Clone the selected individuals
             offspring = list(map(self.toolbox.clone, offspring))
 
             # Apply crossover and mutation
@@ -560,9 +471,13 @@ class DeapOptimizer:
 
             # Evaluate the individuals with an invalid fitness
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
+            if invalid_ind:
+                fitnesses = list(self.pool.map(
+                    evaluate_individual_static,
+                    [static_eval_args + (ind,) for ind in invalid_ind]
+                ))
+                for ind, fit in zip(invalid_ind, fitnesses):
+                    ind.fitness.values = fit
 
             # Select the survivors from the combined population of parents and offspring
             pop = self.toolbox.select(pop + offspring, self.population_size)
@@ -590,6 +505,8 @@ class DeapOptimizer:
         best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
         reservoir_params, hydroworks_params = decode_individual(self, best_ind)
 
+        self.pool.close()
+        self.pool.join()
         # Return results in a format similar to pymoo
         return {
             'success': True,
@@ -722,3 +639,126 @@ class DeapOptimizer:
         plt.savefig(file_path)
         plt.close()
         print(f"Total objective convergence plot saved to {file_path}")
+
+
+def evaluate_individual_static(args):
+    (
+        base_system,
+        num_time_steps,
+        num_years,
+        dt,
+        objective_weights,
+        num_of_objectives,
+        reservoir_ids,
+        reservoir_bounds,
+        hydroworks_ids,
+        hydroworks_targets,
+        regular_demand_ids,
+        priority_demand_ids,
+        sink_ids,
+        individual
+    ) = args
+
+    import copy
+    import numpy as np
+
+    # Helper: decode_individual (copy from your code, but use arguments instead of optimizer)
+    def decode_individual_static(
+        reservoir_ids, hydroworks_ids, hydroworks_targets, individual
+    ):
+        genes_per_reservoir_month = 3
+        reservoir_params = {}
+        hydroworks_params = {}
+
+        individual = np.array(individual)
+        current_idx = 0
+        for res_id in reservoir_ids:
+            params = {'Vr': [], 'V1': [], 'V2': []}
+            for month in range(12):
+                start_idx = current_idx + month * genes_per_reservoir_month
+                params['Vr'].append(individual[start_idx])
+                params['V1'].append(individual[start_idx + 1])
+                params['V2'].append(individual[start_idx + 2])
+            reservoir_params[res_id] = params
+            current_idx += 12 * genes_per_reservoir_month
+
+        for hw_id in hydroworks_ids:
+            n_targets = len(hydroworks_targets[hw_id])
+            dist_params = {}
+            for target in hydroworks_targets[hw_id]:
+                dist_params[target] = np.zeros(12)
+            for month in range(12):
+                start_idx = current_idx + month * n_targets
+                end_idx = start_idx + n_targets
+                dist_values = individual[start_idx:end_idx]
+                total = np.sum(dist_values)
+                if total == 0:
+                    normalized_dist = np.full_like(dist_values, 1.0 / len(dist_values))
+                else:
+                    normalized_dist = dist_values / total
+                for target, value in zip(hydroworks_targets[hw_id], normalized_dist):
+                    dist_params[target][month] = value
+            hydroworks_params[hw_id] = dist_params
+            current_idx += 12 * n_targets
+
+        return reservoir_params, hydroworks_params
+
+    try:
+        # Decode the individual's genes into parameters
+        reservoir_params, hydroworks_params = decode_individual_static(
+            reservoir_ids, hydroworks_ids, hydroworks_targets, individual
+        )
+
+        # Create a copy of the base system to evaluate
+        system = copy.deepcopy(base_system)
+
+        # Apply parameters to the system
+        for res_id, params in reservoir_params.items():
+            system.graph.nodes[res_id]['node'].set_release_params(params)
+        for hw_id, params in hydroworks_params.items():
+            system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
+
+        # Run simulation
+        system.simulate(num_time_steps)
+
+        # Import objectives here to avoid pickling issues
+        from .objectives import (
+            regular_demand_deficit,
+            priority_demand_deficit,
+            sink_node_min_flow_deficit,
+            total_spillage,
+            total_unmet_ecological_flow
+        )
+
+        # Objective 1: Regular demand deficit
+        low_priority_demand_deficit = regular_demand_deficit(system, regular_demand_ids, dt, num_years)
+        # Objective 2: Priority demand deficit
+        high_priority_demand_deficit = priority_demand_deficit(system, priority_demand_ids, dt, num_years)
+        # Objective 3: Minimum flow deficit
+        sink_min_flow_deficit = sink_node_min_flow_deficit(system, sink_ids, dt, num_years)
+        # Objective 4: Spillage
+        flooding_volume = total_spillage(system, hydroworks_ids, reservoir_ids, num_years)
+        # Objective 5: Unmet ecological flow at edges
+        edge_ecological_flow_deficit = total_unmet_ecological_flow(system, dt, num_years)
+
+        base_objectives = np.array([
+            low_priority_demand_deficit,
+            high_priority_demand_deficit,
+            flooding_volume,
+            sink_min_flow_deficit,
+            edge_ecological_flow_deficit
+        ])
+
+        # Prepare the weights for each objective as a list of arrays
+        weights_list = []
+        for i in range(1, num_of_objectives + 1):
+            weights = np.array(objective_weights[f'objective_{i}'])
+            weights_list.append(weights)
+
+        # Calculate the weighted sum for each objective
+        results = tuple(np.dot(weights, base_objectives) for weights in weights_list)
+        return results
+
+    except Exception as e:
+        print(f"Error evaluating individual (static): {str(e)}")
+        return (float('inf'),) * num_of_objectives
