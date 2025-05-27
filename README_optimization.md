@@ -1,6 +1,6 @@
-# How-To Guide: Running Water System Optimizaiton 
+# How-To Guide: Running an Optimizaiton 
 
-This guide explains how to use [`deap_optimization.py`](./water_system/optimization/deap_optimization.py) to optimize the water alloaction in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
+This guide explains how to use [`deap_optimization.py`](./water_system/optimization/deap_optimization.py) to optimize water alloaction in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
 
 In order to use the optimizaiton framework a `WaterSystem` has to be created first according to **XX**.
 
@@ -8,10 +8,8 @@ In order to use the optimizaiton framework a `WaterSystem` has to be created fir
 ## 1. Introduction to the `DeapOptimizer` Class
 A `DeapOptimizer`has to be initialised using the following arguments: 
 - water_system: the `WaterSystem` to optimize
-- start_year (int): Start year for optimization
-- start_month (int): Start month for optimization (1-12)
 - num_time_steps (int): Number of time steps to optimize (monthly timesteps)
-- objective_weihts(dict[str, list[float]]): A dictionary mapping weights to the objective functions(keys)
+- objective_weights(dict[str, list[float]]): A dictionary mapping weights to the objective functions(keys)
 - ngen (int): Number of generations for the Genetic Algorithm
 - pop_size (int): Population size for the Genetic Algoritm
 - cxpb (float): Crossover probability for the Genetic Algorithhm
@@ -23,8 +21,6 @@ from water_system import DeapOptimizer
 
 optimizer = DeapOptimizer(
             base_system=water_system,
-            start_year=start_year,
-            start_month=start_month,
             num_time_steps=num_time_steps,
             objective_weights=objective_weights
             ngen=ngen,
@@ -33,6 +29,7 @@ optimizer = DeapOptimizer(
             mutpb=mutpb,
 )
 ```
+>**Note:** The start year and start month of the optimization are defined when setting up the `WaterSystem`
 
 ## 2. Customize your Objective Functions
 In order to choose the number of objective functions and its compontents to be optimised the user has to define an objective weigth dictionary.
@@ -55,11 +52,11 @@ The five available Objective Function Components:
    *Goal*: Minimize the amount of water that regular users do not receive.
 
 2. **Priority Demand Deficit**  
-   *Definition*: The total annual unmet water demand for high-priority users, such as municipal or critical infrastructure.  
+   *Definition*: The total annual unmet water demand for high-priority users/demand nodes, such as municipal or critical infrastructure.  
    *Goal*: Minimize the deficit for users with higher priority.
 
 3. **Spillage (Flooding)**  
-   *Definition*: The total annual volume of water that is spilled from reservoirs or hydropower plants because it cannot be stored or used.  
+   *Definition*: The total annual volume of water that is spilled from reservoirs or hydroworks because it cannot be stored or used.  
    *Goal*: Minimize spillage in order to enforce the water system to comply with capacity constraints.
 
 4. **Minimum Flow Deficit at Sinks**  
@@ -83,7 +80,7 @@ objective_weights = {
 }
 ```
 
-An optimization run with this `objective_weights` would return a single value. This value is the sum of all five components (Regular Demand Deficits, Priority Demand Deficits, Spillages, Minimum Flow Deficits at Sink Nodes, and Unmet Ecological Flows along Edges), each multiplied by its corresponding weight (in this case, 1 for all components).
+An optimization run with this `objective_weights` would return a single value. This value is the sum of all five components (Regular Demand Deficits, Priority Demand Deficits, Spillages, Minimum Flow Deficits at Sink Nodes, and Unmet Ecological Flows along Edges), each multiplied by its corresponding weight (in this case, 1 for all components). The goal of the optimization is to find the minimum for this single value. 
 
 **Example for a single-objective with different weights:**
 ```python
@@ -139,14 +136,14 @@ The performance and outcome of the optimization depend strongly on the settings 
 **Example:**
 ```python
 ngen = 50           # Number of generations
-pop_size = 50       # Population size
+pop_size = 500      # Population size
 cxpb = 0.7          # Crossover probability
 mutpb = 0.2         # Mutation probability
 ```
 
 ### Guidelines for Choosing Settings
 
-- **Start with default values** (e.g., `ngen=50`, `pop_size=50`, `cxpb=0.7`, `mutpb=0.2`) and adjust based on your results and available computation time.
+- **Start with default values** (e.g., `ngen=50`, `pop_size=500`, `cxpb=0.7`, `mutpb=0.2`) and adjust based on your results and available computation time.
 - **Increase population size** if you have many decision variables or notice premature convergence.
 - **Increase number of generations** for more thorough optimization, especially for complex problems.
 - **Adjust mutation probability** if the algorithm gets stuck (increase) or if solutions are too random (decrease).
@@ -162,14 +159,17 @@ Once you have defined your objective weights, genetic algorithm settings and cre
 
 **Example usage:**
 ```python
+from water_system import DeapOptimizer
+
+# Define objective weights
+two_objectives = {'objective_1':[1,1,1,0,0], 
+                  'objective_2':[0,0,0,1,1]} 
+
 # Initialize the Optimizer
 MyProblem = DeapOptimizer(
                 base_system=my_water_system,
-                start_year=2017,    # Start year set to 2017
-                start_month=1,      # Starting in January
                 num_time_steps=12,  # 12 month are optimized
-                objective_weights={'objective_1':[1,1,1,0,0], 
-                                   'objective_2':[0,0,0,1,1]} #Two objective functions
+                objective_weights=two_objectives,
                 ngen=50,        # Optimizing over 50 generations
                 population_size=100, # A Population consists of 100 individuals
                 cxpb=0.6,       # 0.6 probability for crossover
@@ -208,10 +208,10 @@ After the optimization completes, the `results` dictionary contains:
 - **optimizer**: The optimizer instance (for advanced use).
 
 ### Convergence Plots
-The convergence plots are saved in the [model_output](./model_output/) folder. The plot_convergence() method creates a subplot for each objective function, showing its convergence over generations. The plot_total_objective_convergence() method plots the sum of all objectives (useful for multi-objective optimization).
+The convergence plots are saved in the [model_output](./model_output/) folder. The plot_convergence() method creates a subplot for each objective function, showing its convergence over generations. The plot_total_objective_convergence() method plots the sum of all objectives.
 
 ### Save results
-The `save_optimized_parameters` function allows you to save the results of your optimization run to a JSON file. The function takes a filename(str) containing a path and the optimization results dictinary as input. The saved optimization results can then be used to simulate the `WaterSystem` (further explanations in **XX**)
+The `save_optimized_parameters` function allows you to save the results of your optimization run to a JSON file. The function takes a filename(str) containing a path and the optimization results dictionary as input. The saved optimization results can then be used to simulate the `WaterSystem` (further explanations in **XX**)
 
 ```python
 from water_system/io_utily.py import save_optimized_parameters

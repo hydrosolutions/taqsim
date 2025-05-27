@@ -14,8 +14,8 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12 * 6  # 6 years of monthly data
 
-    number_of_generations = 50
-    population_size = 400
+    number_of_generations = 20
+    population_size = 40
     crossover_probability = 0.65
     mutation_probability = 0.3
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     objective_weights ={
             'objective_1': [1.0,0.0,0.0,0.0,0.0],
             'objective_2': [0.0,1.0,0.0,0.0,0.0],
-            'objective_3': [0.0,0.0,1.0,0.0,0.0],
+            #'objective_3': [0.0,0.0,1.0,0.0,0.0],
 
         }
 
@@ -57,8 +57,6 @@ if __name__ == "__main__":
     # Initialize the single-objective optimizer
     optimizer = DeapOptimizer(
         base_system=water_system,
-        start_year=start_year,
-        start_month=start_month,
         num_time_steps=num_time_steps,
         ngen=number_of_generations,
         population_size=population_size,

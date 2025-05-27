@@ -276,8 +276,6 @@ class DeapOptimizer:
     def __init__(
         self,
         base_system: WaterSystem,
-        start_year: int,
-        start_month: int,
         num_time_steps: int,
         population_size: int = 50,
         ngen: int = 50,
@@ -305,8 +303,6 @@ class DeapOptimizer:
             objective_weights: Weights for each objective in the optimization
         """
         self.base_system = base_system
-        self.start_year = start_year
-        self.start_month = start_month
         self.num_time_steps = num_time_steps
         self.num_years = num_time_steps / 12
         self.dt = base_system.dt
