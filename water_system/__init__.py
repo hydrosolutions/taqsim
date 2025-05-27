@@ -23,12 +23,12 @@ from .nodes import SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks, Ru
 from .edge import Edge
 from .visualization import WaterSystemVisualizer
 from .optimization.optimizer import DeapOptimizer
-from .optimization.pareto_dashboard import ParetoFrontDashboard3D, ParetoFrontDashboard4D
+from .optimization.pareto_visualization import ParetoVisualizer
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'SupplyNode', 'SinkNode', 'DemandNode', 
            'StorageNode', 'HydroWorks','RunoffNode', 'Edge', 'WaterSystemVisualizer', 
-           'ParetoFrontDashboard3D','ParetoFrontDashboard4D', 'DeapOptimizer']
+           'ParetoVisualizer', 'DeapOptimizer']
 
 # Package version
 __version__ = '0.2.0'

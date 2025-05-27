@@ -1,5 +1,5 @@
 import os
-from water_system import (DeapOptimizer, ParetoFrontDashboard3D, ParetoFrontDashboard4D)
+from water_system import (DeapOptimizer, ParetoVisualizer)
 from water_system.io_utils import save_optimized_parameters
 from datetime import datetime
 import optuna
@@ -15,39 +15,15 @@ if __name__ == "__main__":
     num_time_steps = 12 * 6  # 6 years of monthly data
 
     number_of_generations = 50
-    population_size = 200
+    population_size = 3000
     crossover_probability = 0.65
     mutation_probability = 0.3
 
-    number_of_objectives = 1
-    if number_of_objectives == 1:
-        objective_weights ={
-            'objective_1': [1.0,1.0,1.0,1.0,0.0]
-        }
-    if number_of_objectives == 2:
-        objective_weights ={
-            'objective_1': [1.0,1.0,0.0,0.0,0.0],
-            'objective_2': [0.0,0.0,1.0,1.0,0.0]
-        }
-    if number_of_objectives == 3:
-        objective_weights ={
-            'objective_1': [1.0,1.0,0.0,0.0,0.0],
-            'objective_2': [0.0,0.0,1.0,0.0,0.0],
-            'objective_3': [0.0,0.0,0.0,1.0,0.0]
-        }
-    if number_of_objectives == 4:
-        objective_weights ={
-            'objective_1': [1.0,0.0,0.0,0.0,0.0],
-            'objective_2': [0.0,1.0,0.0,0.0,0.0],
-            'objective_3': [0.0,0.0,1.0,0.0,0.0],
-            'objective_4': [0.0,0.0,0.0,1.0,0.0]
-        }
-    
     objective_weights ={
             'objective_1': [1.0,0.0,0.0,0.0,0.0],
             'objective_2': [0.0,1.0,0.0,0.0,0.0],
-            #'objective_3': [0.0,0.0,1.0,0.0,0.0],
-
+            'objective_3': [0.0,0.0,1.0,0.0,0.0],
+            'objective_4': [0.0,0.0,0.0,1.0,0.0],
         }
 
 
@@ -84,23 +60,11 @@ if __name__ == "__main__":
     # Print the number of solutions in the Pareto front
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
 
-    save_optimized_parameters(results, f"./model_output/deap/parameter/multiobjective_params.json")
+    save_optimized_parameters(results, f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
     
     
-    if len(objective_weights) == 3:
-        dashboard = ParetoFrontDashboard3D(
-            pareto_solutions=results['pareto_front'],
-            output_dir=f"./model_output/deap/pareto_front/",
-        )
-        dashboard.generate_full_report()
-    if len(objective_weights) == 4:
-        # Create dashboard for the Pareto front
-        dashboard = ParetoFrontDashboard4D(
-            pareto_solutions=results['pareto_front'],
-            output_dir=f"./model_output/deap/pareto_front/",
-        )      
-        # Generate all visualizations
-        dashboard.generate_full_report()
+    dashboard = ParetoVisualizer(results['pareto_front'])
+    dashboard.generate_full_report()
 
 
     # Option for an Optuna study in order to find best GA parameters (cxpb, mutpb, ngen, pop_size)

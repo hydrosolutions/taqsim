@@ -1,6 +1,6 @@
-# How-To Guide: Running an Optimizaiton 
+# How-To Guide: Running an Optimization 
 
-This guide explains how to use [`optimizer.py`](./water_system/optimization/optimizer.py) to optimize water alloaction in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
+This guide explains how to use [`optimizer.py`](./water_system/optimization/optimizer.py) to optimize water allocation in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
 
 In order to use the optimizaiton framework a `WaterSystem` has to be created first according to **XX**.
 
@@ -11,7 +11,7 @@ A `DeapOptimizer`has to be initialised using the following arguments:
 - num_time_steps (int): Number of time steps to optimize (monthly timesteps)
 - objective_weights(dict[str, list[float]]): A dictionary mapping weights to the objective functions(keys)
 - ngen (int): Number of generations for the Genetic Algorithm
-- pop_size (int): Population size for the Genetic Algoritm
+- population_size (int): Population size for the Genetic Algoritm
 - cxpb (float): Crossover probability for the Genetic Algorithhm
 - mutpb (float): Mutation probability for the Genetic Algorithm
 
@@ -19,20 +19,20 @@ A `DeapOptimizer`has to be initialised using the following arguments:
 ```python 
 from water_system import DeapOptimizer
 
-optimizer = DeapOptimizer(
-            base_system=water_system,
-            num_time_steps=num_time_steps,
-            objective_weights=objective_weights
-            ngen=ngen,
-            population_size=pop_size,
-            cxpb=cxpb,
-            mutpb=mutpb,
+MyProblem = DeapOptimizer(
+              base_system=water_system,
+              num_time_steps=num_time_steps,
+              objective_weights=objective_weights,
+              ngen=ngen,
+              population_size=pop_size,
+              cxpb=cxpb,
+              mutpb=mutpb,
 )
 ```
 >**Note:** The start year and start month of the optimization are defined when setting up the `WaterSystem`
 
 ## 2. Customize your Objective Functions
-In order to choose the number of objective functions and its compontents to be optimised the user has to define an objective weigth dictionary.
+In order to choose the number of objective functions and its components to be optimised the user has to define an objective weight dictionary.
 
 Example: 
 ```python
@@ -129,21 +129,21 @@ This setup allows you to analyze and visualize the trade-offs between different 
 The performance and outcome of the optimization depend strongly on the settings of the genetic algorithm. The most important parameters you need to define are:
 
 - **Number of generations (`ngen`)**: How many iterations the algorithm will run. More generations allow for more thorough searching but increase computation time.
-- **Population size (`pop_size`)**: The number of candidate solutions in each generation. Larger populations improve diversity and solution quality but require more computation per generation.
+- **Population size (`population_size`)**: The number of candidate solutions in each generation. Larger populations improve diversity and solution quality but require more computation per generation.
 - **Crossover probability (`cxpb`)**: The likelihood (between 0 and 1) that two solutions will be combined to create new solutions. Typical values are between 0.6 and 0.9.
 - **Mutation probability (`mutpb`)**: The likelihood (between 0 and 1) that a solution will be randomly changed. Typical values are between 0.01 and 0.3.
 
 **Example:**
 ```python
 ngen = 50           # Number of generations
-pop_size = 500      # Population size
+population_size = 500      # Population size
 cxpb = 0.7          # Crossover probability
 mutpb = 0.2         # Mutation probability
 ```
 
 ### Guidelines for Choosing Settings
 
-- **Start with default values** (e.g., `ngen=50`, `pop_size=500`, `cxpb=0.7`, `mutpb=0.2`) and adjust based on your results and available computation time.
+- **Start with default values** (e.g., `ngen=50`, `population_size=500`, `cxpb=0.7`, `mutpb=0.2`) and adjust based on your results and available computation time.
 - **Increase population size** if you have many decision variables or notice premature convergence.
 - **Increase number of generations** for more thorough optimization, especially for complex problems.
 - **Adjust mutation probability** if the algorithm gets stuck (increase) or if solutions are too random (decrease).
@@ -155,7 +155,7 @@ For more advanced tuning, consider using automated hyperparameter optimization t
 
 ## 4. Run Optimization
 
-Once you have defined your objective weights, genetic algorithm settings and created a `DeapOptimizer` object you are ready to run the optimization. This is typically done by calling the `optimize` method of the `DeapOptimizer` Calss as shown in the example below.
+Once you have defined your objective weights, genetic algorithm settings and created a `DeapOptimizer` object you are ready to run the optimization. This is typically done by calling the `optimize` method of the `DeapOptimizer` Class as shown in the example below.
 
 **Example usage:**
 ```python
@@ -210,17 +210,54 @@ After the optimization completes, the `results` dictionary contains:
 ### Convergence Plots
 The convergence plots are saved in the [model_output](./model_output/) folder. The plot_convergence() method creates a subplot for each objective function, showing its convergence over generations. The plot_total_objective_convergence() method plots the sum of all objectives.
 
+> **Tip:** Review the convergence plots and Pareto front visualizations to understand the trade-offs and performance of your solutions. If the optimization does not converge or the solutions are unsatisfactory, consider adjusting your genetic algorithm settings or objective weights.
+
 ### Save results
 The `save_optimized_parameters` function allows you to save the results of your optimization run to a JSON file. The function takes a filename(str) containing a path and the optimization results dictionary as input. The saved optimization results can then be used to simulate the `WaterSystem` (further explanations in **XX**)
 
 ```python
-from water_system/io_utily.py import save_optimized_parameters
+from water_system/io_utils.py import save_optimized_parameters
 
 save_optimized_parameters(results, filename)
 ```
 
-### Visualization of Pareto Front!!
-
-> **Tip:** Review the convergence plots and Pareto front visualizations to understand the trade-offs and performance of your solutions. If the optimization does not converge or the solutions are unsatisfactory, consider adjusting your genetic algorithm settings or objective weights.
-
+...
 ---
+
+## 5. Visualizing the Pareto Front
+
+Understanding the trade-offs between objectives is crucial in multi-objective optimization. The Pareto front represents the set of non-dominated solutions, where improving one objective would worsen at least one other. Visualizing this front helps you interpret the results and select solutions that best fit your management priorities.
+
+The `ParetoVisualizer` Class defined in [`pareto_visualization.py`](./water_system/optimization/pareto_visualization.py) allows to visualize different features for optimizations with more than one objective function. These allow you to explore the relationships between objectives and analyze the distribution of optimal solutions. All possible visualizations can be run with the method generate_full_report() and are saved in
+[visualization](./model_output/visualization)
+
+### Possible visualizations
+
+- **Pareto Front Scatter Plots:**  
+  All objective values in the pareto front are plotted for all possible combinations of two objective functions. This allows to visualize trade-offs between two objectives at a time.
+
+- **Parallel Coordinates Plot:**  
+  Possibility to display high-dimensional Pareto fronts by plotting each objective as a vertical axis. Each solution is shown as a line crossing all axes, making it easier to spot patterns and outliers.
+
+- **Table with representative solutions:**  
+  A table with the best solution for each objective as well as a balanced solution is shown. The balanced solution is defined as the Pareto-optimal solution with the lowest composite score, calculated as the average of all normalized objective values for each solution. This approach identifies the solution that achieves the best overall compromise across all objectives, rather than excelling in just one.
+
+#### Example Usage
+
+After running your optimization and obtaining results, you can visualize the Pareto front as follows:
+
+```python
+from water_system import ParetoVisualizer
+
+# Assuming 'results' is the output from your optimizer
+pareto_solutions = results['pareto_front']
+
+# Pareto Visualization for a 2 objective optimization
+pareto_visualization = ParetoVisualizer(pareto_solutions, objective_labels=['Demand Deficit', 'Spillage'])
+pareto_visualization.generate_full_report() #Generates all 3 visualizations
+
+```
+
+> **Tip:**  
+> Adjust the `objective_labels` to match the meaning of your objectives as defined in your `objective_weights` dictionary.
+

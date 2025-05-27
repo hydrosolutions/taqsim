@@ -211,7 +211,7 @@ class DeapOptimizer:
         else:
             self.toolbox.register("select", tools.selNSGA2)
         # Do NOT register a parallel map function here; use self.pool.map directly in optimize
-        self.pool = multiprocessing.Pool(processes=4)
+        self.pool = multiprocessing.Pool()
         # Initialize convergence history
         self.history = {}
 
@@ -541,7 +541,7 @@ class DeapOptimizer:
         Plot and save the convergence history for each objective.
 
         Each objective is plotted in a separate subplot, showing best, average, and standard deviation
-        per generation. The plot is saved to '/model_output/deap/convergence/convergence.png'.
+        per generation. The plot is saved to '/model_output/optimization/convergence.png'.
         """
         if not self.history or not any(self.history.values()):
             print("No convergence history to plot.")
@@ -588,7 +588,7 @@ class DeapOptimizer:
         plt.tight_layout(rect=[0, 0, 1, 0.97])
 
         # Ensure directory exists
-        save_path = os.path.join(os.getcwd(), 'model_output', 'deap', 'convergence')
+        save_path = os.path.join(os.getcwd(), 'model_output', 'optimization')
         os.makedirs(save_path, exist_ok=True)
         file_path = os.path.join(save_path, 'convergence.png')
         plt.savefig(file_path)
@@ -600,7 +600,7 @@ class DeapOptimizer:
         Plot and save the convergence of the sum of all objectives over generations.
 
         Shows best, average, and standard deviation of the total objective value per generation.
-        The plot is saved to '/model_output/deap/convergence/total_objective_convergence.png'.
+        The plot is saved to '/model_output/optimization/total_objective_convergence.png'.
         """
         if not self.history or not any(self.history.values()):
             print("No convergence history to plot.")
@@ -651,7 +651,7 @@ class DeapOptimizer:
         plt.tight_layout()
 
         # Ensure directory exists
-        save_path = os.path.join(os.getcwd(), 'model_output', 'deap', 'convergence')
+        save_path = os.path.join(os.getcwd(), 'model_output', 'optimization')
         os.makedirs(save_path, exist_ok=True)
         file_path = os.path.join(save_path, 'total_objective_convergence.png')
         plt.savefig(file_path)

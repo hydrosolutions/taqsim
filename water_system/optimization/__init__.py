@@ -32,10 +32,10 @@ water system model calibration and analysis.
 """
 
 from .optimizer import DeapOptimizer
-from .pareto_dashboard import (
-    ParetoFrontDashboard3D, ParetoFrontDashboard4D
+from .pareto_visualization import (
+    ParetoVisualizer,
 )
 
 __all__ = [
-    'ParetoFrontDashboard3D', 'ParetoFrontDashboard4D', 'DeapOptimizer'
+    'ParetoVisualizer', 'DeapOptimizer'
 ]
