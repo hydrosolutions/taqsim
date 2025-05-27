@@ -15,7 +15,7 @@ if __name__ == "__main__":
     num_time_steps = 12 * 6  # 6 years of monthly data
 
     number_of_generations = 50
-    population_size = 200
+    population_size = 20
     crossover_probability = 0.65
     mutation_probability = 0.3
 

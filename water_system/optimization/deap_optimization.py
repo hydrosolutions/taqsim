@@ -34,62 +34,44 @@ def normalize_distribution(values: np.ndarray) -> np.ndarray:
         return np.full_like(values, 1.0 / len(values))
     return values / total
 
-def decode_individual(optimizer, individual: List[float]) -> Tuple[Dict[str, Dict[str, List[float]]], Dict[str, Dict[str, np.ndarray]]]:
-    """
-    Decode individual genes into monthly reservoir and hydroworks parameters
-    
-    Args:
-        optimizer: The optimizer instance (single or multi objective)
-        individual: The individual to decode
-        
-    Returns:
-        tuple: (reservoir_params, hydroworks_params) containing the decoded parameters
-    """
+def decode_individual(
+    reservoir_ids, hydroworks_ids, hydroworks_targets, individual
+):
     genes_per_reservoir_month = 3
     reservoir_params = {}
     hydroworks_params = {}
-    
-    # Convert individual to numpy array for efficient slicing
+
     individual = np.array(individual)
-    
-    # Decode reservoir parameters
     current_idx = 0
-    for res_id in optimizer.reservoir_ids:
-        params = {
-            'Vr': [], 'V1': [], 'V2': []
-        }
-        
-        # Get parameters for each month
+    for res_id in reservoir_ids:
+        params = {'Vr': [], 'V1': [], 'V2': []}
         for month in range(12):
             start_idx = current_idx + month * genes_per_reservoir_month
             params['Vr'].append(individual[start_idx])
             params['V1'].append(individual[start_idx + 1])
             params['V2'].append(individual[start_idx + 2])
-        
         reservoir_params[res_id] = params
         current_idx += 12 * genes_per_reservoir_month
-    
-    # Decode hydroworks parameters
-    for hw_id in optimizer.hydroworks_ids:
-        n_targets = len(optimizer.hydroworks_targets[hw_id])
+
+    for hw_id in hydroworks_ids:
+        n_targets = len(hydroworks_targets[hw_id])
         dist_params = {}
-        
-        for target in optimizer.hydroworks_targets[hw_id]:
+        for target in hydroworks_targets[hw_id]:
             dist_params[target] = np.zeros(12)
-        
         for month in range(12):
             start_idx = current_idx + month * n_targets
             end_idx = start_idx + n_targets
-            
             dist_values = individual[start_idx:end_idx]
-            normalized_dist = normalize_distribution(dist_values)
-            
-            for target, value in zip(optimizer.hydroworks_targets[hw_id], normalized_dist):
+            total = np.sum(dist_values)
+            if total == 0:
+                normalized_dist = np.full_like(dist_values, 1.0 / len(dist_values))
+            else:
+                normalized_dist = dist_values / total
+            for target, value in zip(hydroworks_targets[hw_id], normalized_dist):
                 dist_params[target][month] = value
-        
         hydroworks_params[hw_id] = dist_params
         current_idx += 12 * n_targets
-    
+
     return reservoir_params, hydroworks_params
 
 def mutate_individual(optimizer, individual, indpb=0.5):
@@ -411,7 +393,7 @@ class DeapOptimizer:
 
         # Evaluate initial population in parallel
         fitnesses = list(self.pool.map(
-            evaluate_individual_static,
+            evaluate_individual,
             [static_eval_args + (ind,) for ind in pop]
         ))
         for ind, fit in zip(pop, fitnesses):
@@ -473,7 +455,7 @@ class DeapOptimizer:
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             if invalid_ind:
                 fitnesses = list(self.pool.map(
-                    evaluate_individual_static,
+                    evaluate_individual,
                     [static_eval_args + (ind,) for ind in invalid_ind]
                 ))
                 for ind, fit in zip(invalid_ind, fitnesses):
@@ -503,7 +485,7 @@ class DeapOptimizer:
 
         # Get the overall best individual based on a weighted sum of all objectives
         best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
-        reservoir_params, hydroworks_params = decode_individual(self, best_ind)
+        reservoir_params, hydroworks_params = decode_individual(self.reservoir_ids, self.hydroworks_ids, self.hydroworks_targets, best_ind)
 
         self.pool.close()
         self.pool.join()
@@ -641,7 +623,7 @@ class DeapOptimizer:
         print(f"Total objective convergence plot saved to {file_path}")
 
 
-def evaluate_individual_static(args):
+def evaluate_individual(args):
     (
         base_system,
         num_time_steps,
@@ -659,53 +641,10 @@ def evaluate_individual_static(args):
         individual
     ) = args
 
-    import copy
-    import numpy as np
-
-    # Helper: decode_individual (copy from your code, but use arguments instead of optimizer)
-    def decode_individual_static(
-        reservoir_ids, hydroworks_ids, hydroworks_targets, individual
-    ):
-        genes_per_reservoir_month = 3
-        reservoir_params = {}
-        hydroworks_params = {}
-
-        individual = np.array(individual)
-        current_idx = 0
-        for res_id in reservoir_ids:
-            params = {'Vr': [], 'V1': [], 'V2': []}
-            for month in range(12):
-                start_idx = current_idx + month * genes_per_reservoir_month
-                params['Vr'].append(individual[start_idx])
-                params['V1'].append(individual[start_idx + 1])
-                params['V2'].append(individual[start_idx + 2])
-            reservoir_params[res_id] = params
-            current_idx += 12 * genes_per_reservoir_month
-
-        for hw_id in hydroworks_ids:
-            n_targets = len(hydroworks_targets[hw_id])
-            dist_params = {}
-            for target in hydroworks_targets[hw_id]:
-                dist_params[target] = np.zeros(12)
-            for month in range(12):
-                start_idx = current_idx + month * n_targets
-                end_idx = start_idx + n_targets
-                dist_values = individual[start_idx:end_idx]
-                total = np.sum(dist_values)
-                if total == 0:
-                    normalized_dist = np.full_like(dist_values, 1.0 / len(dist_values))
-                else:
-                    normalized_dist = dist_values / total
-                for target, value in zip(hydroworks_targets[hw_id], normalized_dist):
-                    dist_params[target][month] = value
-            hydroworks_params[hw_id] = dist_params
-            current_idx += 12 * n_targets
-
-        return reservoir_params, hydroworks_params
 
     try:
         # Decode the individual's genes into parameters
-        reservoir_params, hydroworks_params = decode_individual_static(
+        reservoir_params, hydroworks_params = decode_individual(
             reservoir_ids, hydroworks_ids, hydroworks_targets, individual
         )
 
@@ -720,15 +659,6 @@ def evaluate_individual_static(args):
 
         # Run simulation
         system.simulate(num_time_steps)
-
-        # Import objectives here to avoid pickling issues
-        from .objectives import (
-            regular_demand_deficit,
-            priority_demand_deficit,
-            sink_node_min_flow_deficit,
-            total_spillage,
-            total_unmet_ecological_flow
-        )
 
         # Objective 1: Regular demand deficit
         low_priority_demand_deficit = regular_demand_deficit(system, regular_demand_ids, dt, num_years)
