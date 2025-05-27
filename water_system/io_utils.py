@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 from typing import Callable, Dict, List, Optional, Union
-from water_system.optimization.deap_optimization import decode_individual
+from water_system.optimization.optimizer import decode_individual
 
 def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]], filename: str) -> None:
     """

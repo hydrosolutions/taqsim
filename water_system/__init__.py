@@ -22,15 +22,13 @@ from .water_system import WaterSystem
 from .nodes import SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks, RunoffNode
 from .edge import Edge
 from .visualization import WaterSystemVisualizer
-from .optimization.deap_optimization import DeapOptimizer
+from .optimization.optimizer import DeapOptimizer
 from .optimization.pareto_dashboard import ParetoFrontDashboard3D, ParetoFrontDashboard4D
-from .optimization.pymoo_optimization import PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer
 
 # Define what should be imported with "from water_system import *"
 __all__ = ['WaterSystem', 'SupplyNode', 'SinkNode', 'DemandNode', 
            'StorageNode', 'HydroWorks','RunoffNode', 'Edge', 'WaterSystemVisualizer', 
-           'ParetoFrontDashboard3D','ParetoFrontDashboard4D', 'DeapOptimizer',
-           'PymooSingleObjectiveOptimizer', 'PymooMultiObjectiveOptimizer']
+           'ParetoFrontDashboard3D','ParetoFrontDashboard4D', 'DeapOptimizer']
 
 # Package version
 __version__ = '0.2.0'

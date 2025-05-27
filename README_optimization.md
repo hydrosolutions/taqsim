@@ -1,6 +1,6 @@
 # How-To Guide: Running an Optimizaiton 
 
-This guide explains how to use [`deap_optimization.py`](./water_system/optimization/deap_optimization.py) to optimize water alloaction in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
+This guide explains how to use [`optimizer.py`](./water_system/optimization/optimizer.py) to optimize water alloaction in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
 
 In order to use the optimizaiton framework a `WaterSystem` has to be created first according to **XX**.
 
