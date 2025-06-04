@@ -919,9 +919,7 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
-        from .nodes import StorageNode
         
-        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         # Find storage nodes in the system
         storage_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True) 
                         if isinstance(data['node'], StorageNode)]
@@ -940,20 +938,8 @@ class WaterSystemVisualizer:
             start_year = self.system.start_year
             start_month = self.system.start_month
         
-        # Create date labels for x-axis
-        date_labels = []
-        if start_year is not None and start_month is not None:
-            for t in range(self.system.time_steps):
-                # Calculate year and month
-                month = start_month + t
-                year = start_year + (month - 1) // 12
-                month = ((month - 1) % 12) + 1  # Adjust month to be between 1-12
-                
-                # Format as year-month
-                date_labels.append(f"{month_names[month-1]}-{year}")
-        else:
-            # Fall back to timestep numbers
-            date_labels = list(range(self.system.time_steps))
+        # Create date labels for x-axis (just use time step numbers, no month names)
+        date_labels = list(range(self.system.time_steps))
             
         # Create figure with subplots - one per reservoir
         n_nodes = len(storage_nodes)
@@ -967,15 +953,15 @@ class WaterSystemVisualizer:
             ax1 = axes[idx]
             
             # Get volume data - handle potential length mismatches
-            volumes = np.array(node.storage[1:]) if len(node.storage) > 1 else np.array([])
+            volumes = np.array(node.storage) if len(node.storage) > 1 else np.array([])
             volumes = volumes / 1e6  # Convert to million m³
             
             # Ensure volumes array matches time_steps length
-            if len(volumes) < self.system.time_steps:
+            if len(volumes) < self.system.time_steps + 1:
                 # Extend with the last value
                 volumes = np.append(volumes, [volumes[-1] if len(volumes) > 0 else 0] * 
                                   (self.system.time_steps - len(volumes)))
-            elif len(volumes) > self.system.time_steps:
+            elif len(volumes) > self.system.time_steps + 1:
                 volumes = volumes[:self.system.time_steps]
                 
             time_steps = range(len(volumes))
@@ -999,14 +985,14 @@ class WaterSystemVisualizer:
             labels = [l.get_label() for l in lines]
             ax1.legend(lines, labels, loc='upper right')
 
-            # Set custom x-ticks with year-month labels if there are date labels
+            # Set custom x-ticks with time step numbers only
             tick_positions = list(time_steps)
             
             # If we have many time steps, use fewer ticks to avoid crowding
             if len(tick_positions) > 12 and len(date_labels) >= len(tick_positions):
                 tick_spacing = max(1, len(tick_positions) // 12)
                 tick_positions = tick_positions[::tick_spacing]
-                tick_labels = [date_labels[i] for i in tick_positions]
+                tick_labels = [str(date_labels[i]) for i in tick_positions]
                 
                 ax1.set_xticks(tick_positions)
                 ax1.set_xticklabels(tick_labels, rotation=45, ha='right')

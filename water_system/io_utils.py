@@ -3,6 +3,7 @@ import json
 import numpy as np
 from typing import Callable, Dict, List, Optional, Union
 from water_system.optimization.optimizer import decode_individual
+from water_system import WaterSystem
 
 def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]], filename: str) -> None:
     """
@@ -96,3 +97,73 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
     print(f"Optimization results saved to {filename}")
     if is_multi_objective and 'pareto_solutions' in save_data:
         print(f"Saved {save_data['num_pareto_solutions']} Pareto-optimal solutions")
+
+def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str, Union[Dict, List]]) -> WaterSystem:
+    """
+    Load optimized parameters into an existing water system.
+    
+    Args:
+        system (WaterSystem): The water system to update
+        optimization_results (dict): Results from the optimizer containing:
+            - optimal_reservoir_parameters (dict): Parameters for each reservoir
+            - optimal_hydroworks_parameters (dict): Parameters for each hydroworks
+            
+    Returns:
+        WaterSystem: Updated system with optimized parameters
+    """
+    try:
+        # Check if the results have the recommended_solution structure or direct parameters
+        if 'recommended_solution' in optimization_results:
+            # Use the recommended solution structure
+            reservoir_params = optimization_results['recommended_solution']['reservoir_parameters'] 
+            hydroworks_params = optimization_results['recommended_solution']['hydroworks_parameters']
+        else:
+            # Use the direct structure from the optimizer
+            reservoir_params = optimization_results['optimal_reservoir_parameters']
+            hydroworks_params = optimization_results['optimal_hydroworks_parameters']
+        
+        # Load reservoir parameters
+        for res_id, params in reservoir_params.items():
+            reservoir_node = system.graph.nodes[res_id]['node']
+            if not hasattr(reservoir_node, 'set_release_params'):
+                raise ValueError(f"Node {res_id} does not appear to be a StorageNode")
+            reservoir_node.set_release_params(params)
+            print(f"Successfully updated parameters for reservoir {res_id}")
+            
+        # Load hydroworks parameters
+        for hw_id, params in hydroworks_params.items():
+            hydroworks_node = system.graph.nodes[hw_id]['node']
+            if not hasattr(hydroworks_node, 'set_distribution_parameters'):
+                raise ValueError(f"Node {hw_id} does not appear to be a HydroWorks")
+            hydroworks_node.set_distribution_parameters(params)
+            print(f"Successfully updated parameters for hydroworks {hw_id}")
+            
+        return system
+        
+    except Exception as e:
+        raise ValueError(f"Failed to load optimized parameters: {str(e)}")  
+
+def load_parameters_from_file(filename: str) -> Dict[str, Union[Dict, List]]:
+    """
+    Load previously saved optimized parameters from a file.
+    
+    Args:
+        filename (str): Path to the parameter file
+        
+    Returns:
+        dict: Dictionary containing the optimization results
+    """
+    import json
+    
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    
+    # Extract relevant data from the JSON structure
+    return {
+        'success': True,
+        'message': "Parameters loaded from file",
+        'recommended_solution': {
+            'reservoir_parameters': data['recommended_solution']['reservoir_parameters'],
+            'hydroworks_parameters': data['recommended_solution']['hydroworks_parameters']
+        }
+    }

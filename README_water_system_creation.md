@@ -31,6 +31,8 @@ A water system is modeled as a network of nodes (representing the different infr
 
 ```python
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
+from water_system import DeapOptimizer, WaterSystemVisualizer
+from water_system.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters
 ```
 
 ---
@@ -41,7 +43,7 @@ You must specify the time step duration (`dt` in seconds), start year, and start
 
 ```python
 dt = 30.44 * 24 * 3600  # Average month in seconds
-water_system = WaterSystem(dt=dt, start_year=2020, start_month=1)
+my_water_system = WaterSystem(dt=dt, start_year=2020, start_month=1)
 ```
 
 ---
@@ -75,13 +77,13 @@ Example for constant supply rate:
 supply1 = SupplyNode(
     id="Source1",
     easting=100,
-    northing=200,
+    northing=600,
     constant_supply_rate=100,  # m³/time step
     start_year=2020,
     start_month=1,
     num_time_steps=12
 )
-water_system.add_node(supply1)
+my_water_system.add_node(supply1)
 ```
 
 Example for time-varying supply data from a csv file:
@@ -89,13 +91,13 @@ Example for time-varying supply data from a csv file:
 supply2 = SupplyNode(
     id="Source2",
     easting=100,
-    northing=300,
-    csv_file='./path_to_csv_file/filename.csv',
+    northing=200,
+    csv_file='./data/dummy_data/supply_timeseries.csv',
     start_year=2020,
     start_month=1,
     num_time_steps=12
 )
-water_system.add_node(supply2)
+my_water_system.add_node(supply2)
 ```
 **CSV Format:**
 ```csv
@@ -115,16 +117,16 @@ RunoffNodes are used to represent distributed surface runoff from sub-catchments
 ```python
 runoff = RunoffNode(
     id="SurfaceRunoff",
-    easting=140,
-    northing=240,
+    easting=300,
+    northing=500,
     area=50,  # km²
     runoff_coefficient=0.3,
-    rainfall_csv="/path_to_data/rainfall_timeseries.csv", # in mm
+    rainfall_csv="./data/dummy_data/rainfall_timeseries.csv", # in mm
     start_year=2020,
     start_month=1,
     num_time_steps=12
 )
-water_system.add_node(runoff)
+my_water_system.add_node(runoff)
 ```
 
 **Rainfall CSV Format:**
@@ -144,26 +146,26 @@ Represents endpoints where water leaves the system (e.g., river mouth). Every `W
 # Constant minimum flow
 sink1 = SinkNode(
     id="RiverMouth",
-    easting=130,
-    northing=230,
-    constant_min_flow=20,
+    easting=500,
+    northing=200,
+    constant_min_flow=10,
     start_year=2020,
     start_month=1,
     num_time_steps=12
 )
-water_system.add_node(sink1)
+my_water_system.add_node(sink1)
 
 # Time-varying minimum flow from CSV
 sink2 = SinkNode(
     id="EnvFlow",
-    easting=135,
-    northing=235,
-    csv_file='./path_to_csv_file/min_flow.csv',
+    easting=400,
+    northing=400,
+    csv_file='./data/dummy_data/sink_min_flow.csv',
     start_year=2020,
     start_month=1,
     num_time_steps=12
 )
-water_system.add_node(sink2)
+my_water_system.add_node(sink2)
 ```
 
 ---
@@ -175,10 +177,10 @@ Represents diversions, confluences, or other structures. These are the only node
 ```python
 hydrowork = HydroWorks(
     id="HydroWorks1",
-    easting=115,
-    northing=215
+    easting=300,
+    northing=300
 )
-water_system.add_node(hydrowork)
+my_water_system.add_node(hydrowork)
 ```
 
 ---
@@ -201,9 +203,9 @@ For example, if a demand node has a net demand of 10 m³/s, a field efficiency
 ```python
 demand1 = DemandNode(
     id="agriculture",
-    easting=220,
-    northing=320,
-    csv_file='./path_to_demand_data/demand.csv',
+    easting=300,
+    northing=400,
+    csv_file='./data/dummy_data/demand_timeseries.csv',
     start_year=2020,
     start_month=1,
     num_time_steps=12,
@@ -211,20 +213,20 @@ demand1 = DemandNode(
     conveyance_efficiency=0.7,
     priority=2
 )
-water_system.add_node(demand1)
+my_water_system.add_node(demand1)
 
 demand2 = DemandNode(
     id="Industry",
-    easting=120,
-    northing=220,
-    constant_demand_rate=10,   # m³/s
-    non_consumptive_rate=4,   # m³/s (returns to system)
+    easting=400,
+    northing=200,
+    constant_demand_rate=60,   # m³/s
+    non_consumptive_rate=10,   # m³/s (returns to system)
     start_year=2020,
     start_month=1,
     num_time_steps=12,
     priority=1
 )
-water_system.add_node(demand2)
+my_water_system.add_node(demand2)
 ```
 
 ---
@@ -236,10 +238,10 @@ Represents reservoirs in a `WaterSystem`. Storage nodes store water, manage rele
 ```python
 storage = StorageNode(
     id="Reservoir",
-    easting=110,
-    northing=210,
-    hv_file='./path_to_hv_data/reservoir_hv.csv',  # Height-volume relationship
-    evaporation_file='./path_to_ev_data/reservoir_ev.csv', # Monthly reservoir evaporation in mm
+    easting=200,
+    northing=300,
+    hv_file='./data/dummy_data/reservoir_hv.csv',  # Height-volume relationship
+    evaporation_file='./data/dummy_data/reservoir_ev_timeseries.csv', # Monthly reservoir evaporation in mm
     start_year=2020,
     start_month=1,
     num_time_steps=12,
@@ -247,7 +249,7 @@ storage = StorageNode(
     dead_storage=1e5,                 # m³
     buffer_coef=0.5
 )
-water_system.add_node(storage)
+my_water_system.add_node(storage)
 ```
 
 In order to understand the function of the buffer_coefficient, the reservoir's release policy must be understood. This policy can be predefined if known or best parameters found during optimization. 
@@ -268,20 +270,19 @@ These parameters define operational zones:
 **Buffer Coefficient (`buffer_coefficient`):**  
 The `buffer_coefficient` (0–1) controls how much water is released when the reservoir is in the buffer zone (between dead storage and V1). A lower value means more conservative releases (less water released), while a higher value allows more water to be released even at low storage. This helps to prevent the reservoir from being depleted too quickly during dry periods.
 
-
 ### Step 4: Add Edges
 
 Edges connect nodes and define flow capacities and optional ecological flow requirements.
 
 ```python
-# From supply to storage
-water_system.add_edge(Edge(supply, storage, capacity=120))
-
-# From storage to demand
-water_system.add_edge(Edge(storage, demand, capacity=100))
-
-# From demand to sink (with ecological flow)
-water_system.add_edge(Edge(demand, sink, capacity=100, ecological_flow=10))
+my_water_system.add_edge(Edge(supply1, storage, 100))
+my_water_system.add_edge(Edge(supply2, storage, 80))
+my_water_system.add_edge(Edge(storage, hydrowork, 140))
+my_water_system.add_edge(Edge(hydrowork, demand1, 80))
+my_water_system.add_edge(Edge(hydrowork, demand2, 80))
+my_water_system.add_edge(Edge(runoff, demand1, 60))
+my_water_system.add_edge(Edge(demand1, sink2, 100))
+my_water_system.add_edge(Edge(demand2, sink1, 100))
 ```
 
 ---
@@ -289,25 +290,129 @@ water_system.add_edge(Edge(demand, sink, capacity=100, ecological_flow=10))
 ## 3. Example: Simple Water System
 
 ```python
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, Edge
+from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
+from water_system import DeapOptimizer, WaterSystemVisualizer
+from water_system.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters
 
 dt = 30.44 * 24 * 3600
-system = WaterSystem(dt=dt, start_year=2020, start_month=1)
+my_water_system = WaterSystem(dt=dt, start_year=2020, start_month=1)
 
-# Nodes
-source = SupplyNode("Source", easting=0, northing=0, constant_supply_rate=100, start_year=2020, start_month=1, num_time_steps=12)
-reservoir = StorageNode("Reservoir", easting=10, northing=0, hv_file='data/reservoir_hv.csv', initial_storage=50000, dead_storage=5000, start_year=2020, start_month=1, num_time_steps=12)
-demand = DemandNode("Irrigation", easting=20, northing=0, constant_demand_rate=80, non_consumptive_rate=10, num_time_steps=12, priority=1)
-sink = SinkNode("Sink", easting=30, northing=0, constant_min_flow=10, num_time_steps=12)
+supply1 = SupplyNode(
+    id="Source1",
+    easting=100,
+    northing=600,
+    constant_supply_rate=100,  # m³/time step
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12
+)
+my_water_system.add_node(supply1)
 
-# Add nodes
-for node in [source, reservoir, demand, sink]:
-    system.add_node(node)
+supply2 = SupplyNode(
+    id="Source2",
+    easting=100,
+    northing=200,
+    csv_file='./data/dummy_data/supply_timeseries.csv',
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12
+)
+my_water_system.add_node(supply2)
 
-# Edges
-system.add_edge(Edge(source, reservoir, capacity=100))
-system.add_edge(Edge(reservoir, demand, capacity=90))
-system.add_edge(Edge(demand, sink, capacity=100, ecological_flow=10))
+runoff = RunoffNode(
+    id="SurfaceRunoff",
+    easting=300,
+    northing=500,
+    area=50,  # km²
+    runoff_coefficient=0.3,
+    rainfall_csv="./data/dummy_data/rainfall_timeseries.csv", # in mm
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12
+)
+my_water_system.add_node(runoff)
+
+sink1 = SinkNode(
+    id="RiverMouth",
+    easting=500,
+    northing=200,
+    constant_min_flow=10,
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12
+)
+my_water_system.add_node(sink1)
+
+sink2 = SinkNode(
+    id="EnvFlow",
+    easting=400,
+    northing=400,
+    csv_file='./data/dummy_data/sink_min_flow.csv',
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12
+)
+my_water_system.add_node(sink2)
+
+hydrowork = HydroWorks(
+    id="HydroWorks1",
+    easting=300,
+    northing=300
+)
+my_water_system.add_node(hydrowork)
+
+demand1 = DemandNode(
+    id="agriculture",
+    easting=300,
+    northing=400,
+    csv_file='./data/dummy_data/demand_timeseries.csv',
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12,
+    field_efficiency=0.8,
+    conveyance_efficiency=0.7,
+    priority=2
+)
+my_water_system.add_node(demand1)
+
+demand2 = DemandNode(
+    id="Industry",
+    easting=400,
+    northing=200,
+    constant_demand_rate=60,   # m³/s
+    non_consumptive_rate=10,   # m³/s (returns to system)
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12,
+    priority=1
+)
+my_water_system.add_node(demand2)
+
+storage = StorageNode(
+    id="Reservoir",
+    easting=200,
+    northing=300,
+    hv_file='./data/dummy_data/reservoir_hv.csv',  # Height-volume relationship
+    evaporation_file='./data/dummy_data/reservoir_ev_timeseries.csv', # Monthly reservoir evaporation in mm
+    start_year=2020,
+    start_month=1,
+    num_time_steps=12,
+    initial_storage=5e6,              # m³
+    dead_storage=1e5,                 # m³
+    buffer_coef=0.5
+)
+my_water_system.add_node(storage)
+
+my_water_system.add_edge(Edge(supply1, storage, 100))
+my_water_system.add_edge(Edge(supply2, storage, 80))
+my_water_system.add_edge(Edge(storage, hydrowork, 140))
+my_water_system.add_edge(Edge(hydrowork, demand1, 80))
+my_water_system.add_edge(Edge(hydrowork, demand2, 80))
+my_water_system.add_edge(Edge(runoff, demand1, 60))
+my_water_system.add_edge(Edge(demand1, sink2, 100))
+my_water_system.add_edge(Edge(demand2, sink1, 100))
+
+my_water_system._check_network()
 ```
 
 ---
@@ -342,7 +447,7 @@ water_system = create_baseline_ZRB_system(start_year=2020, start_month=1, num_ti
 After adding all nodes and edges, you can check the network for consistency:
 
 ```python
-system._check_network()
+my_water_system._check_network()
 ```
 
 ---
@@ -352,21 +457,55 @@ system._check_network()
 Once your system is set up:
 
 ```python
-system.simulate(num_time_steps=12)
+two_objectives = {'objective_1':[1,2,3,0,0.0]} 
+
+MyProblem = DeapOptimizer(
+    base_system=my_water_system,
+    num_time_steps=12,  # 12 month are optimized
+    objective_weights=two_objectives,
+    ngen=100,        # Optimizing over 100 generations
+    population_size=500, # A Population consists of 500 individuals
+    cxpb=0.6,       # 0.6 probability for crossover
+    mutpb=0.2,      # 0.2 probability for mutation 
+)
+
+# Run the optimization
+results = MyProblem.optimize()
+save_optimized_parameters(
+    results, 
+    filename="./data/dummy_data/optimization_results.json"
+)
+
+# Plot convergence and Pareto front
+MyProblem.plot_convergence()
+MyProblem.plot_total_objective_convergence()
 ```
 
 ---
 
 ## 7. Visualizing the System
 
-The system is now ready for optimization. Consider [README_optimization.md](README_optimization.md).
+```python
+results = load_parameters_from_file("./data/dummy_data/optimization_results.json")
+my_water_system = load_optimized_parameters(my_water_system, results)
+my_water_system.simulate(time_steps=12)
+
+vis = WaterSystemVisualizer(my_water_system, name='Dummy_Water_System_Visualization')
+vis.plot_network_overview()
+vis.plot_minimum_flow_compliance()
+vis.plot_spills()
+vis.plot_reservoir_volumes()
+vis.plot_system_demands_vs_inflow()
+vis.plot_demand_deficit_heatmap()
+vis.print_water_balance_summary()
+```
 
 ## 8. Water Balance and Output
 
 Get water balance tables and save to CSV:
 
 ```python
-balance_table = system.get_water_balance_table()
+balance_table = my_water_system.get_water_balance_table()
 balance_table.to_csv("water_balance_table.csv", index=False)
 ```
 

@@ -633,7 +633,8 @@ class StorageNode:
             raise ValueError(f"Initial storage ({initial_storage} m³) exceeds maximum capacity ({self.capacity} m³)")
         
         # Initialize storage attributes
-        self.storage = [initial_storage]
+        self.storage = []
+        self.storage.append(initial_storage)  # Start with initial storage
         self.spillway_register = []
         self.water_level = [self._volume_to_level(initial_storage)]
 
