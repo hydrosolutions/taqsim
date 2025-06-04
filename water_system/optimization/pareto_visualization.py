@@ -236,9 +236,9 @@ class ParetoVisualizer:
         representatives.insert(0, 'Solution Type', labels)
         # Format for display
         for name in self.objective_names:
-            representatives[f'{name} (value)'] = representatives[name].map('{:,.3f}'.format)
+            representatives[f'{name}'] = representatives[name].map('{:,.3f}'.format)
         # Remove the Solution column from display
-        display_columns = ['Solution Type'] + [f'{name} (value)' for name in self.objective_names]
+        display_columns = ['Solution Type'] + [f'{name}' for name in self.objective_names]
         fig = go.Figure(data=[go.Table(
             header=dict(
                 values=display_columns,

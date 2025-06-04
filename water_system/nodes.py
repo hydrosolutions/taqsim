@@ -95,9 +95,9 @@ class SupplyNode:
     def __init__(
         self,
         id: str,
+        easting: float,
+        northing: float,
         constant_supply_rate: Optional[float] = None,
-        easting: Optional[float] = None,
-        northing: Optional[float] = None,
         csv_file: Optional[str] = None,
         start_year: Optional[int] = None,
         start_month: Optional[int] = None,
@@ -214,9 +214,9 @@ class SinkNode:
     def __init__(
         self,
         id: str,
+        easting: float,
+        northing: float,
         constant_min_flow: Optional[float] = None,
-        easting: Optional[float] = None,
-        northing: Optional[float] = None,
         csv_file: Optional[str] = None,
         start_year: Optional[int] = None,
         start_month: Optional[int] = None,

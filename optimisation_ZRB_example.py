@@ -14,16 +14,15 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12 * 6  # 6 years of monthly data
 
-    number_of_generations = 50
-    population_size = 3000
+    number_of_generations = 10
+    population_size = 30
     crossover_probability = 0.65
     mutation_probability = 0.3
 
     objective_weights ={
             'objective_1': [1.0,0.0,0.0,0.0,0.0],
-            'objective_2': [0.0,1.0,0.0,0.0,0.0],
-            'objective_3': [0.0,0.0,1.0,0.0,0.0],
-            'objective_4': [0.0,0.0,0.0,1.0,0.0],
+            'objective_2': [0.0,1.0,1.0,0.0,0.0],
+            'objective_3': [0.0,0.0,0.0,1.0,1.0]
         }
 
 
@@ -63,13 +62,13 @@ if __name__ == "__main__":
     save_optimized_parameters(results, f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
     
     
-    dashboard = ParetoVisualizer(results['pareto_front'])
+    dashboard = ParetoVisualizer(results['pareto_front'], objective_names=['Normal Demand', 'Priority Demand & Flooding', 'Min Flow Sinks' ])
     dashboard.generate_full_report()
 
 
     # Option for an Optuna study in order to find best GA parameters (cxpb, mutpb, ngen, pop_size)
     optunastudy = False
-    if optunastudy:
+    '''if optunastudy:
         # Making an Optuna study
         def objective(trial):
             # Define the hyperparameters to optimize
@@ -117,7 +116,7 @@ if __name__ == "__main__":
         plot_timeline(study).write_html(f"model_output/optuna/{study_name}_timeline.html")
         plot_slice(study).write_html(f"model_output/optuna/{study_name}_slice.html")
         plot_edf(study).write_html(f"model_output/optuna/{study_name}_edf.html")
-
+'''
 
     end = datetime.now()
     print(f"Execution time: {end - start}")
