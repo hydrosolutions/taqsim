@@ -369,4 +369,4 @@ vis.plot_demand_deficit_heatmap()
 vis.print_water_balance_summary()
 ```
 
->**Note:** Different Figures, Optimization results and water balance tables can be found in the [model_output](/model_output/) folder. 
+>**Note:** Different Figures, Optimization results and water balance tables can be found in the [model_output](../model_output/) folder. 
