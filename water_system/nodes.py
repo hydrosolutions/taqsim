@@ -807,7 +807,7 @@ class StorageNode:
         """
         try:
             # Read and validate CSV
-            df = pd.read_csv(csv_path, sep=';')
+            df = pd.read_csv(csv_path, sep=',')
             
             # Check required columns
             required_cols = ['h', 'v']

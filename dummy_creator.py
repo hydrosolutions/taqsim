@@ -12,7 +12,7 @@ if __name__ == "__main__":
         id="Source1",
         easting=100,
         northing=600,
-        constant_supply_rate=100,  # m³/time step
+        constant_supply_rate=100,  # m³/s
         start_year=2020,
         start_month=1,
         num_time_steps=12
@@ -131,12 +131,12 @@ if __name__ == "__main__":
     ## Setting up an Optimization problem
 
 
-    two_objectives = {'objective_1':[1,2,3,0,0.0]} 
+    objectives = {'objective_1':[1,1,1,0,0]} 
 
     MyProblem = DeapOptimizer(
                     base_system=my_water_system,
                     num_time_steps=12,  # 12 month are optimized
-                    objective_weights=two_objectives,
+                    objective_weights=objectives,
                     ngen=100,        # Optimizing over 50 generations
                     population_size=500, # A Population consists of 100 individuals
                     cxpb=0.6,       # 0.6 probability for crossover

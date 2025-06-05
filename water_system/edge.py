@@ -43,9 +43,9 @@ class Edge:
         source: NodeType,
         target: NodeType,
         capacity: float,
+        ecological_flow: float = 0,
         length: Optional[float] = None,
         loss_factor: float = 0, 
-        ecological_flow: float = 0,
     ) -> None:
         """
         Initialize an Edge object.

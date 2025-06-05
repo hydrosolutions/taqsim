@@ -154,7 +154,9 @@ cython_debug/
 # Images and Folders
 *.png
 model_output/
+data
 data/
+data_old/
 
 *.csv
 .DS_Store

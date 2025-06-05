@@ -116,7 +116,7 @@ class DeapOptimizer:
         ngen: int,
         cxpb: float,
         mutpb: float,
-        objective_weights: dict[str, list[float]]
+        objective_weights: dict[str, list[int]]
     ) -> None:
         """
         Initialize the DEAP optimizer for the water system.

@@ -20,9 +20,9 @@ if __name__ == "__main__":
     mutation_probability = 0.3
 
     objective_weights ={
-            'objective_1': [1.0,0.0,0.0,0.0,0.0],
-            'objective_2': [0.0,1.0,1.0,0.0,0.0],
-            'objective_3': [0.0,0.0,0.0,1.0,1.0]
+            'objective_1': [1,0,0,0,0],
+            'objective_2': [0,1,1,0,0],
+            'objective_3': [0,0,0,1,1]
         }
 
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     save_optimized_parameters(results, f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
     
     
-    dashboard = ParetoVisualizer(results['pareto_front'], objective_names=['Normal Demand', 'Priority Demand & Flooding', 'Min Flow Sinks' ])
+    dashboard = ParetoVisualizer(results['pareto_front'])
     dashboard.generate_full_report()
 
 
