@@ -1,8 +1,8 @@
 # How-To Guide: Creating a Water System
 
-This guide explains how to create and configure a water system for simulation and optimization using the classes and utilities provided in this project. It covers the main steps, node and edge types, configuration options, and provides code examples for each step. For futhrer details on the node types the reader is reffered to ['README_node_types.md](/README_node_types.md) or the source code ['water_system/nodes.py](/water_system/nodes.py).
+This guide explains how to create and configure a water system for simulation and optimization using the classes and utilities provided in this project. It covers the main steps, node and edge types, configuration options, and provides code examples for each step. For futhrer details on the node types the reader is reffered to ['README_node_types.md](/README_node_types.md) or the source code ['water_system/nodes.py](../water_system/nodes.py).
 
->**Note:** The creation of the system explained below can be found in ['dummy_creator.py'](./dummy_creator.py) with input data in ['data/dummy_data/'](/data/dummy_data/).
+>**Note:** The creation of the system explained below can be found in ['dummy_creator.py'](../dummy_creator.py) with input data in ['data/dummy_data/'](../data/dummy_data/).
 
 ---
 
