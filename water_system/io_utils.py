@@ -157,27 +157,44 @@ def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str
     except Exception as e:
         raise ValueError(f"Failed to load optimized parameters: {str(e)}")  
 
-def load_parameters_from_file(filename: str) -> Dict[str, Union[Dict, List]]:
+def load_parameters_from_file(filename: str, solution_id: int = None) -> Dict[str, Union[Dict, List]]:
     """
     Load previously saved optimized parameters from a file.
-    
+
     Args:
         filename (str): Path to the parameter file
-        
+        solution_id (int, optional): If provided, loads the parameters from the specified Pareto solution.
+                                     If None, loads the recommended solution.
+
     Returns:
         dict: Dictionary containing the optimization results
     """
     import json
-    
+
     with open(filename, 'r') as f:
         data = json.load(f)
-    
-    # Extract relevant data from the JSON structure
-    return {
-        'success': True,
-        'message': "Parameters loaded from file",
-        'recommended_solution': {
-            'reservoir_parameters': data['recommended_solution']['reservoir_parameters'],
-            'hydroworks_parameters': data['recommended_solution']['hydroworks_parameters']
+
+    if solution_id is not None and 'pareto_solutions' in data:
+        # Find the solution with the given id
+        pareto_solutions = data['pareto_solutions']
+        solution = next((s for s in pareto_solutions if s['id'] == solution_id), None)
+        if solution is None:
+            raise ValueError(f"Solution with id {solution_id} not found in pareto_solutions.")
+        return {
+            'success': True,
+            'message': f"Parameters loaded from Pareto solution id {solution_id}",
+            'recommended_solution': {
+                'reservoir_parameters': solution['reservoir_parameters'],
+                'hydroworks_parameters': solution['hydroworks_parameters']
+            }
         }
-    }
+    else:
+        # Default: load recommended solution
+        return {
+            'success': True,
+            'message': "Parameters loaded from file",
+            'recommended_solution': {
+                'reservoir_parameters': data['recommended_solution']['reservoir_parameters'],
+                'hydroworks_parameters': data['recommended_solution']['hydroworks_parameters']
+            }
+        }
