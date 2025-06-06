@@ -34,6 +34,7 @@ if __name__ == "__main__":
     vis.plot_system_demands_vs_inflow()
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
+    vis.plot_network_layout()
     print("Visualizations complete")
     
     end = datetime.now()

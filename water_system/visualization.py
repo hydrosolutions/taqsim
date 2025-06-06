@@ -506,7 +506,6 @@ class WaterSystemVisualizer:
         Returns:
             str: Path to the saved plot file
         """
-        from .nodes import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
         
         # Create a larger figure for detailed visualization
         fig, ax = plt.subplots(figsize=(20, 10.5))
@@ -1001,114 +1000,197 @@ class WaterSystemVisualizer:
         return self._save_plot("reservoir_volumes")
 
     def plot_network_layout(self):
-            """
-            Create and save a static network layout plot for the water system, showing only
-            structural information like capacities and lengths.
-            Returns the path to the saved image file.
-            """
-            # Setting node positions based on easting and northing
-            pos = {}
-            for node, data in self.system.graph.nodes(data=True):
-                node_instance = data['node']
-                pos[node] = (node_instance.easting, node_instance.northing)
-
-            # Create figure with a main subplot and space for legend
-            fig = plt.figure(figsize=(25, 15))
-            gs = plt.GridSpec(1, 20, figure=fig)
-            ax = fig.add_subplot(gs[0, :19])  # Main plot takes up most of the space
-
-            #plt.suptitle(f'{self.name} System Network Layout', fontsize=30, y=0.95)
-            
-            # Define node styling with descriptive names for legend
-            node_styles = {
-                SupplyNode: {'color': 'skyblue', 'shape': 's', 'name': 'Supply Node'},
-                StorageNode: {'color': 'lightgreen', 'shape': 'v', 'name': 'Storage Node'},
-                DemandNode: {'color': 'salmon', 'shape': 'o', 'name': 'Demand Node'},
-                SinkNode: {'color': 'lightgray', 'shape': 's', 'name': 'Sink Node'},
-                HydroWorks: {'color': 'orange', 'shape': 'o', 'name': 'Hydroworks'}
-            }
-            
-            node_size = 5000
-            
-            # Draw nodes and collect legend elements
-            legend_elements = []
-            for node_type, style in node_styles.items():
-                node_list = [node for node, data in self.system.graph.nodes(data=True) 
-                            if isinstance(data['node'], node_type)]
-                nx.draw_networkx_nodes(self.system.graph, pos, 
-                                    nodelist=node_list, 
-                                    node_color=style['color'], 
-                                    node_shape=style['shape'],
-                                    node_size=node_size, 
-                                    alpha=0.6,
-                                    ax=ax)
-                
-                # Add to legend elements
-                legend_elements.append(plt.scatter([], [], 
-                                                c=style['color'],
-                                                marker=style['shape'],
-                                                s=500,
-                                                label=style['name']))
-
-            # Draw edges with width based on capacity
-            max_capacity = max(edge_data['edge'].capacity for _, _, edge_data in self.system.graph.edges(data=True))
-            
-            edge_widths = []
-            for _, _, edge_data in self.system.graph.edges(data=True):
-                edge = edge_data['edge']
-                # Scale width between 1 and 10 based on capacity
-                width =3 #+ (edge.capacity / max_capacity) * 10
-                edge_widths.append(width)
-
-            # Draw edges
-            nx.draw_networkx_edges(self.system.graph, pos, 
-                                edge_color='gray',
-                                arrows=True, 
-                                arrowsize=55, 
-                                width=edge_widths,
-                                ax=ax)
-
-            # Update node labels with static information
-            labels = {}
-            for node, data in self.system.graph.nodes(data=True):
-                node_instance = data['node']
-                if isinstance(node_instance, SupplyNode):
-                    labels[node] = f"{node}"
-                elif isinstance(node_instance, DemandNode):
-                    labels[node] = f"{node}"
-                elif isinstance(node_instance, SinkNode):
-                    labels[node] = f"{node}"
-                elif isinstance(node_instance, StorageNode):
-                    labels[node] = f"{node}"#\nCap: {node_instance.capacity:,.0f} m³"
-                elif isinstance(node_instance, HydroWorks):
-                    labels[node] = f"{node}"
-            
-            nx.draw_networkx_labels(self.system.graph, pos, labels, font_size=14, ax=ax)
-            
-            # Add edge labels showing capacity and length
-            edge_labels = {}
-            for u, v, d in self.system.graph.edges(data=True):
-                edge = d['edge']
-                edge_labels[(u, v)] = (f'{edge.capacity} m³/s')
+        """
+        Create a network overview visualization that is compatible with the updated NodeTypes.
         
-            '''nx.draw_networkx_edge_labels(self.system.graph, pos, edge_labels=edge_labels, 
-                        font_size=14, ax=ax, rotate=False)'''
-    
+        Returns:
+            str: Path to the saved plot file
+        """
+        
+        # Create a larger figure for detailed visualization
+        fig, ax = plt.subplots(figsize=(20, 10.5))
+        
+        # Setting node positions based on easting and northing
+        pos = {}
+        for node, data in self.system.graph.nodes(data=True):
+            node_instance = data['node']
+            pos[node] = (node_instance.easting, node_instance.northing)
+        
+        # Calculate edge statistics for styling
+        edge_capacities = {}
+        total_capacity = 0
+        max_capacity = 0
+        edge_types = {}
+        
+        for u, v, edge_data in self.system.graph.edges(data=True):
+            edge = edge_data['edge']
+            capacity = edge.capacity
+            edge_capacities[(u, v)] = capacity
+            total_capacity += capacity
+            max_capacity = max(max_capacity, capacity)
+            
+            # Categorize edge types
+            source_type = type(edge.source).__name__
+            target_type = type(edge.target).__name__
+            edge_types[(u, v)] = f"{source_type}-to-{target_type}"
+        
+        # Node styling
+        node_sizes = {
+            SupplyNode: 1500,
+            StorageNode: 2500,
+            DemandNode: 1600,
+            SinkNode: 2500,
+            HydroWorks: 2000,
+            RunoffNode: 500
+        }
+        
+        node_colors = {
+            SupplyNode: '#2196F3',  # Blue
+            StorageNode: '#4CAF50',  # Green
+            DemandNode: '#F44336',  # Red
+            SinkNode: '#9E9E9E',    # Grey
+            HydroWorks: '#FF9800',   # Orange
+            RunoffNode: '#8B4513'    # Brown
+        }
+        
+        node_shapes = {
+            SupplyNode: 's',        # Square
+            StorageNode: 'h',       # Hexagon
+            DemandNode: 'o',        # Circle
+            SinkNode: 'd',          # Diamond
+            HydroWorks: 'p',        # Pentagon
+            RunoffNode: 's'         # Square
+        }
 
-            # Create the legend on the top right of the plot
-            ax.legend(handles=legend_elements,
-                loc='upper right',
-                frameon=True,
-                fancybox=True,
-                shadow=True,
-                fontsize=22)
+        node_names = {
+            SupplyNode: 'Source Node',        
+            StorageNode: 'Storage Node',      
+            DemandNode: 'Demand Node',        
+            SinkNode: 'Sink Node',          
+            HydroWorks: 'Hydrowork Node',     
+            RunoffNode: 'Surfacerunoff Node'  
+        }
+        
+        # Group nodes by type
+        grouped_nodes = {
+            node_type: [node for node, data in self.system.graph.nodes(data=True) 
+                        if isinstance(data['node'], node_type)]
+            for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode]
+        }
+        
+        # Create edge color mapping based on capacity
+        norm = Normalize(vmin=0, vmax=max_capacity)
+        edge_cmap = LinearSegmentedColormap.from_list('edge_colors', ['#DCE3F5', '#2A57BF', '#0A1D56'])
+        
+        # Draw edges with width and color based on capacity
+        for u, v, edge_data in self.system.graph.edges(data=True):
+            edge = edge_data['edge']
+            capacity = edge.capacity
+            color = edge_cmap(norm(capacity))
             
-            plt.axis('off')
-            plt.ylim(4360000, 4480000)
-            plt.xlim(153000, 384000)
-            plt.tight_layout()
+            # Calculate width based on capacity (square root scaling for better visualization)
+            width = 1 + 8 * np.sqrt(capacity / max_capacity) if max_capacity > 0 else 1
             
-            return self._save_plot("network_layout")
+            # Create the edge
+            ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]], 
+                color=color, linewidth=width, alpha=0.7, zorder=1,
+                solid_capstyle='round', path_effects=[PathEffects.withStroke(linewidth=width+1, foreground='white', alpha=0.2)])
+        
+        # Draw nodes by type
+        for node_type, nodes in grouped_nodes.items():
+            if not nodes:
+                continue
+                
+            nx.draw_networkx_nodes(
+                self.system.graph, pos,
+                nodelist=nodes,
+                node_size=node_sizes[node_type],
+                node_color=node_colors[node_type],
+                node_shape=node_shapes[node_type],
+                edgecolors='white',
+                linewidths=1.5,
+                alpha=0.9,
+                ax=ax
+            )
+        
+        # Add capacity-based edge labels for edges with significant capacity
+        capacity_threshold = 200  # Show labels for edges with >0% of max capacity
+        edge_labels = {(u, v): f"{edge_data['edge'].capacity:.0f}"
+                    for u, v, edge_data in self.system.graph.edges(data=True)
+                    if edge_data['edge'].capacity > capacity_threshold}
+        
+        # Draw edge labels (capacity) on the figure
+        nx.draw_networkx_edge_labels(
+            self.system.graph,
+            pos,
+            edge_labels=edge_labels,
+            font_size=14,
+            font_color='navy',
+            font_weight='bold',
+            bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7),
+            ax=ax
+        )
+        
+        # Only label SinkNode, DemandNode, and StorageNode
+        node_labels = {}
+        for node_id, data in self.system.graph.nodes(data=True):
+            node = data['node']
+            if (
+                node_id in SinkNode.all_ids or
+                node_id in DemandNode.all_ids #or
+                #node_id in StorageNode.all_ids
+            ):
+                node_labels[node_id] = node_id  # or customize label as needed
+      
+        # Draw node labels with white outline for better visibility
+        for node, label in node_labels.items():
+            x, y = pos[node]
+            txt = ax.text(x, y, label, fontsize=15, ha='center', va='center', 
+                        fontweight='bold', zorder=5)
+            txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='white')])
+        
+        # Create a legend
+        legend_elements = []
+        
+        # Node type legend
+        for node_type in [SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode]:
+            if grouped_nodes[node_type]:  # Only add to legend if this type exists
+                legend_elements.append(
+                    Line2D([0], [0], marker=node_shapes[node_type], color='w', 
+                        markerfacecolor=node_colors[node_type], markersize=15, 
+                        label=node_names[node_type])
+                )
+        
+        # Single edge capacity legend element
+        legend_elements.append(
+            Line2D([0], [0], color=edge_cmap(0.5), linewidth=3,
+            label=f'Edge')
+        )
+        
+        # Add the legend
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=22,
+                framealpha=0.9, fancybox=True, shadow=True)
+    
+        # Find geographic bounding box
+        eastings = [p[0] for p in pos.values()]
+        northings = [p[1] for p in pos.values()]
+        min_easting, max_easting = min(eastings), max(eastings)
+        min_northing, max_northing = min(northings), max(northings)
+        
+        # Add a 5% padding
+        easting_padding = (max_easting - min_easting) * 0.02
+        northing_padding = (max_northing - min_northing) * 0.08
+        
+        # Set axis limits with padding
+        ax.set_xlim(min_easting - easting_padding, max_easting + easting_padding)
+        ax.set_ylim(min_northing - northing_padding, max_northing + northing_padding)
+        
+        # Turn off axis
+        plt.axis('off')
+        
+        plt.tight_layout()
+            
+        return self._save_plot("network_layout")
 
     def print_water_balance_summary(self):
         """
