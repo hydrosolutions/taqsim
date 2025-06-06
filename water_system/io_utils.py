@@ -64,10 +64,24 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
         # If pareto front exists, save all solutions
         if 'pareto_front' in optimization_results and optimization_results['pareto_front']:
             pareto_solutions = []
+            optimizer = optimization_results.get('optimizer', None)
+            # Prepare decode_individual arguments if optimizer is available
+            if optimizer is not None:
+                reservoir_ids = optimizer.reservoir_ids
+                hydroworks_ids = optimizer.hydroworks_ids
+                hydroworks_targets = optimizer.hydroworks_targets
+            else:
+                reservoir_ids = hydroworks_ids = hydroworks_targets = None
+
             for i, ind in enumerate(optimization_results['pareto_front']):
                 # Try to decode parameters if possible, fallback to None if not available
                 try:
-                    reservoir_params, hydroworks_params = decode_individual.__get__(None, type(optimization_results['optimizer']))(optimization_results['optimizer'], ind)
+                    if optimizer is not None:
+                        reservoir_params, hydroworks_params = decode_individual(
+                            reservoir_ids, hydroworks_ids, hydroworks_targets, ind
+                        )
+                    else:
+                        reservoir_params, hydroworks_params = None, None
                 except Exception:
                     reservoir_params, hydroworks_params = None, None
 

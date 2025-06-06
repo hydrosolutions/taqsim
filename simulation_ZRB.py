@@ -16,7 +16,7 @@ if __name__ == "__main__":
     system = create_simplified_ZRB_system(start_year, start_month, num_time_steps)
 
     # Example of running the simulation with optimized parameters for a simplified ZRB system
-    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test5.json")
+    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test99.json")
 
     
     # Load optimized parameters
