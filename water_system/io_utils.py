@@ -38,71 +38,51 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
 
     # Prepare basic data for saving
     save_data = {
-        'is_multi_objective': is_multi_objective,
         'population_size': optimization_results.get('population_size', 0),
         'generations': optimization_results.get('generations', 0),
         'crossover_probability': optimization_results.get('crossover_probability', 0),
         'mutation_probability': optimization_results.get('mutation_probability', 0),
+        'num_pareto_solutions': len(optimization_results.get('pareto_front', [])),
     }
+    # If pareto front exists, save all solutions
+    if 'pareto_front' in optimization_results and optimization_results['pareto_front']:
+        pareto_solutions = []
+        optimizer = optimization_results.get('optimizer', None)
+        # Prepare decode_individual arguments if optimizer is available
+        if optimizer is not None:
+            reservoir_ids = optimizer.reservoir_ids
+            hydroworks_ids = optimizer.hydroworks_ids
+            hydroworks_targets = optimizer.hydroworks_targets
+        else:
+            reservoir_ids = hydroworks_ids = hydroworks_targets = None
 
-    # Add the recommended solution (weighted best)
-    save_data['recommended_solution'] = {
-        'reservoir_parameters': convert_to_float(optimization_results['optimal_reservoir_parameters']),
-        'hydroworks_parameters': convert_to_float(optimization_results['optimal_hydroworks_parameters'])
-    }
-
-    # Add objective values based on format
-    if is_multi_objective:
-        obj_values = convert_to_float(optimization_results['objective_values'])
-        save_data['recommended_solution']['objective_values'] = obj_values
-
-        # Add each objective value separately with generic keys
-        if isinstance(obj_values, (list, tuple)):
-            for i, val in enumerate(obj_values):
-                save_data['recommended_solution'][f'objective_{i+1}'] = float(val)
-
-        # If pareto front exists, save all solutions
-        if 'pareto_front' in optimization_results and optimization_results['pareto_front']:
-            pareto_solutions = []
-            optimizer = optimization_results.get('optimizer', None)
-            # Prepare decode_individual arguments if optimizer is available
-            if optimizer is not None:
-                reservoir_ids = optimizer.reservoir_ids
-                hydroworks_ids = optimizer.hydroworks_ids
-                hydroworks_targets = optimizer.hydroworks_targets
-            else:
-                reservoir_ids = hydroworks_ids = hydroworks_targets = None
-
-            for i, ind in enumerate(optimization_results['pareto_front']):
-                # Try to decode parameters if possible, fallback to None if not available
-                try:
-                    if optimizer is not None:
-                        reservoir_params, hydroworks_params = decode_individual(
-                            reservoir_ids, hydroworks_ids, hydroworks_targets, ind
-                        )
-                    else:
-                        reservoir_params, hydroworks_params = None, None
-                except Exception:
+        for i, ind in enumerate(optimization_results['pareto_front']):
+            # Try to decode parameters if possible, fallback to None if not available
+            try:
+                if optimizer is not None:
+                    reservoir_params, hydroworks_params = decode_individual(
+                        reservoir_ids, hydroworks_ids, hydroworks_targets, ind
+                    )
+                else:
                     reservoir_params, hydroworks_params = None, None
+            except Exception:
+                reservoir_params, hydroworks_params = None, None
 
-                # Create a solution entry
-                solution = {
-                    'id': i,
-                    'objective_values': convert_to_float(ind.fitness.values),
-                    'reservoir_parameters': convert_to_float(reservoir_params),
-                    'hydroworks_parameters': convert_to_float(hydroworks_params)
-                }
-                # Add each objective value separately
-                for j, val in enumerate(ind.fitness.values):
-                    solution[f'objective_{j+1}'] = float(val)
-                pareto_solutions.append(solution)
+            # Create a solution entry
+            solution = {
+                'id': i,
+                'objective_values': convert_to_float(ind.fitness.values),
+            }
+            # Add each objective value separately
+            for j, val in enumerate(ind.fitness.values):
+                solution[f'objective_{j+1}'] = float(val)
 
-            # Add all Pareto solutions to the save data
-            save_data['pareto_solutions'] = pareto_solutions
-            save_data['num_pareto_solutions'] = len(pareto_solutions)
-    else:
-        # Single objective case
-        save_data['recommended_solution']['objective_value'] = float(optimization_results.get('objective_value', 0))
+            solution['reservoir_parameters']= convert_to_float(reservoir_params)
+            solution['hydroworks_parameters']= convert_to_float(hydroworks_params)
+            pareto_solutions.append(solution)
+
+        # Add all Pareto solutions to the save data
+        save_data['pareto_solutions'] = pareto_solutions
 
     # Save to file
     with open(filename, 'w') as f:
@@ -157,43 +137,27 @@ def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str
     except Exception as e:
         raise ValueError(f"Failed to load optimized parameters: {str(e)}")  
 
-def load_parameters_from_file(filename: str, solution_id: int = None) -> Dict[str, Union[Dict, List]]:
+def load_parameters_from_file(filename: str) -> Dict[str, Union[Dict, List]]:
     """
     Load previously saved optimized parameters from a file.
 
     Args:
         filename (str): Path to the parameter file
-        solution_id (int, optional): If provided, loads the parameters from the specified Pareto solution.
-                                     If None, loads the recommended solution.
 
     Returns:
-        dict: Dictionary containing the optimization results
+        dict: Dictionary containing the pareto solutions and their parameters
     """
-
+    # Check if the file exists
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"Parameter file {filename} does not exist.")
+    # Load the JSON data from the file
     with open(filename, 'r') as f:
         data = json.load(f)
 
-    if solution_id is not None and 'pareto_solutions' in data:
-        # Find the solution with the given id
-        pareto_solutions = data['pareto_solutions']
-        solution = next((s for s in pareto_solutions if s['id'] == solution_id), None)
-        if solution is None:
-            raise ValueError(f"Solution with id {solution_id} not found in pareto_solutions.")
-        return {
-            'success': True,
-            'message': f"Parameters loaded from Pareto solution id {solution_id}",
-            'recommended_solution': {
-                'reservoir_parameters': solution['reservoir_parameters'],
-                'hydroworks_parameters': solution['hydroworks_parameters']
-            }
-        }
-    else:
-        # Default: load recommended solution
-        return {
-            'success': True,
-            'message': "Parameters loaded from file",
-            'recommended_solution': {
-                'reservoir_parameters': data['recommended_solution']['reservoir_parameters'],
-                'hydroworks_parameters': data['recommended_solution']['hydroworks_parameters']
-            }
-        }
+    # Check if the file contains Pareto solutions
+    if 'pareto_solutions' not in data:
+        raise ValueError(f"File {filename} does not contain Pareto solutions..")
+
+    # Find the solution with the given id
+    pareto_solutions = data['pareto_solutions']
+    return pareto_solutions
