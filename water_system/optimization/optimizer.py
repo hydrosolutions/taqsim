@@ -535,9 +535,6 @@ class DeapOptimizer:
             'generations': self.ngen,
             'crossover_probability': self.cxpb,
             'mutation_probability': self.mutpb,
-            'objective_values': best_ind.fitness.values,
-            'optimal_reservoir_parameters': reservoir_params,
-            'optimal_hydroworks_parameters': hydroworks_params,
             'pareto_front': self.pareto_front,
             'optimizer': self  # Include the optimizer instance for parameter decoding
         }
