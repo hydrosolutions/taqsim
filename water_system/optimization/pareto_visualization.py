@@ -85,8 +85,6 @@ class ParetoVisualizer:
             return self._pareto_front_nd(filename)
  
     def _pareto_front_3d(self, filename):
-        # Use your existing 3D dashboard logic
-        # (You can call your ParetoFrontDashboard3D.create_dashboard here if you want)
         x, y, z = self.objective_names
         fig = make_subplots(
             rows=2, cols=2,
@@ -99,50 +97,85 @@ class ParetoVisualizer:
                 f'{x} vs {z}'
             ]
         )
-        min_x_idx = self.df[x].idxmin()
-        min_y_idx = self.df[y].idxmin()
-        min_z_idx = self.df[z].idxmin()
-        balanced_idx = self.df['Composite Score'].idxmin()
-        # 3D scatter
+        # 3D scatter for all solutions
         fig.add_trace(go.Scatter3d(
             x=self.df[x], y=self.df[y], z=self.df[z],
             mode='markers',
-            marker=dict(size=5, color=self.df['Solution'], colorscale='Viridis', opacity=0.8),
+            marker=dict(size=5, color='#35b779', opacity=0.8),
             text=[f'ID: {sid}' for sid in self.df['Solution']],
             hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>{z}: %{{z:.2e}}<br>',
             name='Pareto Solutions'
         ), row=1, col=1)
-        # Highlight special points in 3D
-        for idx, color, label in zip([min_x_idx, min_y_idx, min_z_idx, balanced_idx], ['red', 'blue', 'green', 'purple'], [f'Best {x}', f'Best {y}', f'Best {z}', 'Balanced']):
+
+        # Highlight best for each objective in 3D
+        colors = ['red', 'blue', 'green', 'orange', 'cyan', 'magenta', 'yellow', 'brown', 'pink', 'gray']
+        for i, obj in enumerate(self.objective_names):
+            idx = self.df[obj].idxmin()
+            color = colors[i % len(colors)]
             fig.add_trace(go.Scatter3d(
                 x=[self.df.loc[idx, x]], y=[self.df.loc[idx, y]], z=[self.df.loc[idx, z]],
-                mode='markers', marker=dict(size=10, color=color, symbol='diamond' if label == 'Balanced' else 'circle'),
-                text=[f'ID: {self.df.loc[idx, "Solution"]}'],
+                mode='markers', marker=dict(size=12, color=color, symbol='circle'),
+                text=[f'Best {obj} (ID: {self.df.loc[idx, "Solution"]})'],
                 hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>{z}: %{{z:.2e}}<br>',
-                name=label
+                name=f'Best {obj}'
             ), row=1, col=1)
+
+
         # 2D projections
+        # y vs x
         fig.add_trace(go.Scatter(
             x=self.df[x], y=self.df[y], mode='markers',
-            marker=dict(size=10, color=self.df['Solution'], colorscale='Viridis', showscale=False),
+            marker=dict(size=10, color='#35b779', showscale=False),
             text=[f'ID: {sid}' for sid in self.df['Solution']],
             hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>',
             name=f'{y} vs {x}'
         ), row=1, col=2)
+        # y vs z
         fig.add_trace(go.Scatter(
             x=self.df[y], y=self.df[z], mode='markers',
-            marker=dict(size=10, color=self.df['Solution'], colorscale='Viridis', showscale=False),
+            marker=dict(size=10, color='#35b779', showscale=False),
             text=[f'ID: {sid}' for sid in self.df['Solution']],
             hovertemplate=f'<b>%{{text}}</b><br>{y}: %{{x:.2e}}<br>{z}: %{{y:.2e}}<br>',
             name=f'{y} vs {z}'
         ), row=2, col=1)
+        # x vs z
         fig.add_trace(go.Scatter(
             x=self.df[x], y=self.df[z], mode='markers',
-            marker=dict(size=10, color=self.df['Solution'], colorscale='Viridis', showscale=False),
+            marker=dict(size=10, color='#35b779', showscale=False),
             text=[f'ID: {sid}' for sid in self.df['Solution']],
             hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{z}: %{{y:.2e}}<br>',
             name=f'{x} vs {z}'
         ), row=2, col=2)
+
+        # Highlight best for each objective and balanced in 2D projections
+        for i, obj in enumerate(self.objective_names):
+            idx = self.df[obj].idxmin()
+            color = colors[i % len(colors)]
+            # y vs x
+            fig.add_trace(go.Scatter(
+                x=[self.df.loc[idx, x]], y=[self.df.loc[idx, y]],
+                mode='markers', marker=dict(size=15, color=color),
+                text=[f'Best {obj} (ID: {self.df.loc[idx, "Solution"]})'],
+                hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>',
+                name=f'Best {obj}'
+            ), row=1, col=2)
+            # y vs z
+            fig.add_trace(go.Scatter(
+                x=[self.df.loc[idx, y]], y=[self.df.loc[idx, z]],
+                mode='markers', marker=dict(size=15, color=color),
+                text=[f'Best {obj} (ID: {self.df.loc[idx, "Solution"]})'],
+                hovertemplate=f'<b>%{{text}}</b><br>{y}: %{{x:.2e}}<br>{z}: %{{y:.2e}}<br>',
+                name=f'Best {obj}'
+            ), row=2, col=1)
+            # x vs z
+            fig.add_trace(go.Scatter(
+                x=[self.df.loc[idx, x]], y=[self.df.loc[idx, z]],
+                mode='markers', marker=dict(size=15, color=color),
+                text=[f'Best {obj} (ID: {self.df.loc[idx, "Solution"]})'],
+                hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{z}: %{{y:.2e}}<br>',
+                name=f'Best {obj}'
+            ), row=2, col=2)
+
         # Add axis labels to all subplots
         fig.update_scenes(
             xaxis_title=x,
@@ -197,7 +230,7 @@ class ParetoVisualizer:
             fig.add_trace(go.Scatter(
                 x=self.df[x], y=self.df[y],
                 mode='markers',
-                marker=dict(size=10, color=self.df['Solution'], colorscale='Viridis', showscale=False),
+                marker=dict(size=10, color='#35b779', showscale=False),
                 text=[f'ID: {sid}' for sid in self.df['Solution']],
                 hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>',
                 name=f'{y} vs {x}'
@@ -220,13 +253,7 @@ class ParetoVisualizer:
                 hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>',
                 name=f'Best {y}'
             ), row=row, col=col)
-            fig.add_trace(go.Scatter(
-                x=[self.df.loc[balanced_idx, x]], y=[self.df.loc[balanced_idx, y]],
-                mode='markers', marker=dict(size=15, color='purple', symbol='diamond'),
-                text=[f'ID: {self.df.loc[balanced_idx, "Solution"]}'],
-                hovertemplate=f'<b>%{{text}}</b><br>{x}: %{{x:.2e}}<br>{y}: %{{y:.2e}}<br>',
-                name='Balanced'
-            ), row=row, col=col)
+
             fig.update_xaxes(title_text=x, row=row, col=col)
             fig.update_yaxes(title_text=y, row=row, col=col)
 
@@ -299,7 +326,8 @@ class ParetoVisualizer:
             color="Composite Score",
             dimensions=self.objective_names,
             color_continuous_scale=px.colors.diverging.Tealrose,
-            title='Parallel Coordinates Plot'
+            title='Parallel Coordinates Plot',
+            
         )
         fig.update_layout(
             font=dict(size=12),
