@@ -92,30 +92,27 @@ def save_optimized_parameters(optimization_results: Dict[str, Union[Dict, List]]
     if is_multi_objective and 'pareto_solutions' in save_data:
         print(f"Saved {save_data['num_pareto_solutions']} Pareto-optimal solutions")
 
-def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str, Union[Dict, List]]) -> WaterSystem:
+def load_optimized_parameters(system: WaterSystem, pareto_solutions: Dict[str, Union[Dict, List]], solution_id: int) -> WaterSystem:
     """
-    Load optimized parameters into an existing water system.
-    
+    Load optimized parameters into an existing water system from a list of Pareto solutions.
+
     Args:
         system (WaterSystem): The water system to update
-        optimization_results (dict): Results from the optimizer containing:
-            - optimal_reservoir_parameters (dict): Parameters for each reservoir
-            - optimal_hydroworks_parameters (dict): Parameters for each hydroworks
-            
+        pareto_solutions (list): List of Pareto solutions (output from load_parameters_from_file)
+        solution_id (int): ID of the solution to load parameters from
+
     Returns:
         WaterSystem: Updated system with optimized parameters
     """
     try:
-        # Check if the results have the recommended_solution structure or direct parameters
-        if 'recommended_solution' in optimization_results:
-            # Use the recommended solution structure
-            reservoir_params = optimization_results['recommended_solution']['reservoir_parameters'] 
-            hydroworks_params = optimization_results['recommended_solution']['hydroworks_parameters']
-        else:
-            # Use the direct structure from the optimizer
-            reservoir_params = optimization_results['optimal_reservoir_parameters']
-            hydroworks_params = optimization_results['optimal_hydroworks_parameters']
-        
+        # Find the solution with the given id
+        solution = next((sol for sol in pareto_solutions if sol.get('id', None) == solution_id), None)
+        if solution is None:
+            raise ValueError(f"Solution with id {solution_id} not found in the provided Pareto solutions.")
+
+        reservoir_params = solution.get('reservoir_parameters', {})
+        hydroworks_params = solution.get('hydroworks_parameters', {})
+
         # Load reservoir parameters
         for res_id, params in reservoir_params.items():
             reservoir_node = system.graph.nodes[res_id]['node']
@@ -123,7 +120,7 @@ def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str
                 raise ValueError(f"Node {res_id} does not appear to be a StorageNode")
             reservoir_node.set_release_params(params)
             print(f"Successfully updated parameters for reservoir {res_id}")
-            
+
         # Load hydroworks parameters
         for hw_id, params in hydroworks_params.items():
             hydroworks_node = system.graph.nodes[hw_id]['node']
@@ -131,9 +128,9 @@ def load_optimized_parameters(system: WaterSystem,optimization_results: Dict[str
                 raise ValueError(f"Node {hw_id} does not appear to be a HydroWorks")
             hydroworks_node.set_distribution_parameters(params)
             print(f"Successfully updated parameters for hydroworks {hw_id}")
-            
+
         return system
-        
+
     except Exception as e:
         raise ValueError(f"Failed to load optimized parameters: {str(e)}")  
 
