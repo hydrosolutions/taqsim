@@ -1,8 +1,8 @@
-from water_system import  WaterSystemVisualizer
+from water_system import  (WaterSystemVisualizer, ParetoVisualizer)
 from datetime import datetime
 from system_creator_ZRB import create_simplified_ZRB_system
 from water_system.io_utils import load_optimized_parameters, load_parameters_from_file
-
+import json
 
 if __name__ == "__main__":
 
@@ -15,11 +15,21 @@ if __name__ == "__main__":
     # Create new system
     system = create_simplified_ZRB_system(start_year, start_month, num_time_steps)
 
-    # Example of running the simulation with optimized parameters for a simplified ZRB system
-    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test99.json", solution_id=5)
+
+    with open(f"./data/simplified_ZRB/parameter/test99.json", 'r') as f:
+        data = json.load(f)
+    print(data['pareto_solutions'])
+    dashboard = ParetoVisualizer(data['pareto_solutions'])
+    dashboard.generate_full_report()
+
+    
+
 
     
     # Load optimized parameters
+    # Example of running the simulation with optimized parameters for a simplified ZRB system
+    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test99.json", solution_id=5)
+    
     system = load_optimized_parameters(system, loaded_results)
     print("Optimized parameters loaded successfully")
     # Run simulation

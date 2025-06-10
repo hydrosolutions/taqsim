@@ -513,7 +513,13 @@ class DeapOptimizer:
                 self.history[f'std_obj{i}'].append(record[f'obj{i}']['std'])
 
         # Extract the Pareto front
-        self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
+        if self.num_of_objectives == 1:
+            # Only keep the best individual
+            best_ind = min(pop, key=lambda ind: ind.fitness.values[0])
+            self.pareto_front = [best_ind]
+        else:
+            # Multi-objective: keep the Pareto front
+            self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
 
         # Get the overall best individual based on a weighted sum of all objectives
         best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))

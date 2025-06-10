@@ -169,7 +169,6 @@ def load_parameters_from_file(filename: str, solution_id: int = None) -> Dict[st
     Returns:
         dict: Dictionary containing the optimization results
     """
-    import json
 
     with open(filename, 'r') as f:
         data = json.load(f)
