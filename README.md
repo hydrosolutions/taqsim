@@ -143,24 +143,9 @@ vis.print_water_balance_summary()
 
 ---
 
-## Visualization
-
-- The `visualize()` method and `WaterSystemVisualizer` class provide:
-  - Network layout plots
-  - Time series of storage, flows, and deficits
-  - Heatmaps of demand deficits
-  - Pareto front and convergence plots for optimization
-
----
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
 
 ## Contact
 
-For questions or suggestions, please open an issue or contact Tobias Siegfried at [siegfried@hydrosolutions.ch](mailto:siegfried@hydrosolutions.ch).
+For questions or suggestions, please open an issue or contact Gianna Giovanoli ([giovanoli@hydrosolutions.ch](mailto:giovanoli@hydrosolutions.ch)) or Tobias Siegfried ([siegfried@hydrosolutions.ch](mailto:siegfried@hydrosolutions.ch)).
 
 ---

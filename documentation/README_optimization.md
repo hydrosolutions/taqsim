@@ -1,8 +1,8 @@
 # How-To Guide: Running an Optimization 
 
-This guide explains how to use [`optimizer.py`](./water_system/optimization/optimizer.py) to optimize water allocation in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
+This guide explains how to use [`optimizer.py`](../water_system/optimization/optimizer.py) to optimize water allocation in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
 
-In order to use the optimizaiton framework a `WaterSystem` has to be created first according to **XX**.
+In order to use the optimizaiton framework a `WaterSystem` has to be created first according to [README_system_creation_example.md](./README_system_creation_example.md).
 
 
 ## 1. Introduction to the `DeapOptimizer` Class
@@ -43,7 +43,7 @@ Example:
     }
 ```
 
-The number of keys in the `objective_weights` dictionary (3 in the example above) determines the number of objectives. Each key maps to a list of weights, which specify how much each component contributes to that objective. The five possible components you can assign weights to are listed below. Further details and the implementation of these components can be found in [`objectives.py`](./water_system/optimization/objectives.py).
+The number of keys in the `objective_weights` dictionary (3 in the example above) determines the number of objectives. Each key maps to a list of weights, which specify how much each component contributes to that objective. The five possible components you can assign weights to are listed below. Further details and the implementation of these components can be found in [`objectives.py`](../water_system/optimization/objectives.py).
 
 The five available Objective Function Components: 
 
@@ -151,7 +151,7 @@ mutpb = 0.2         # Mutation probability
 
 > **Tip:** There is no universal best setting. The optimal configuration depends on your specific problem, the number of decision variables, and your computational resources. Experiment with different settings and monitor the convergence plots to find a good balance between solution quality and runtime.
 
-For more advanced tuning, consider using automated hyperparameter optimization tools or running multiple experiments with different settings. A separate README file is available in this repository that explains how to use [Optuna](https://optuna.org/) to perform automated hyperparameter optimization for single-objective problems. This guide will help you set up an Optuna study to efficiently search for the best genetic algorithm parameters for your specific case.
+For more advanced tuning, consider using automated hyperparameter optimization tools or running multiple experiments with different settings. [Optuna](https://optuna.org/) can be used to perform automated hyperparameter optimization for single-objective problems.
 
 ## 4. Run Optimization
 
@@ -201,14 +201,11 @@ After the optimization completes, the `results` dictionary contains:
 - **generations**: The number of generations run.
 - **crossover_probability**: The crossover probability used.
 - **mutation_probability**: The mutation probability used.
-- **objective_values**: The final objective value(s) for the recommended solution.
-- **optimal_reservoir_parameters**: The best-found reservoir operation parameters.
-- **optimal_hydroworks_parameters**: The best-found hydroworks operation parameters.
 - **pareto_front**: (For multi-objective runs) The set of non-dominated (Pareto-optimal) solutions found.
 - **optimizer**: The optimizer instance (for advanced use).
 
 ### Convergence Plots
-The convergence plots are saved in the [model_output](./model_output/) folder. The plot_convergence() method creates a subplot for each objective function, showing its convergence over generations. The plot_total_objective_convergence() method plots the sum of all objectives.
+The convergence plots are saved in the [model_output](../model_output/) folder. The plot_convergence() method creates a subplot for each objective function, showing its convergence over generations. The plot_total_objective_convergence() method plots the sum of all objectives.
 
 > **Tip:** Review the convergence plots and Pareto front visualizations to understand the trade-offs and performance of your solutions. If the optimization does not converge or the solutions are unsatisfactory, consider adjusting your genetic algorithm settings or objective weights.
 
@@ -220,16 +217,14 @@ from water_system/io_utils.py import save_optimized_parameters
 
 save_optimized_parameters(results, filename)
 ```
-
-...
 ---
 
 ## 5. Visualizing the Pareto Front
 
 Understanding the trade-offs between objectives is crucial in multi-objective optimization. The Pareto front represents the set of non-dominated solutions, where improving one objective would worsen at least one other. Visualizing this front helps you interpret the results and select solutions that best fit your management priorities.
 
-The `ParetoVisualizer` Class defined in [`pareto_visualization.py`](./water_system/optimization/pareto_visualization.py) allows to visualize different features for optimizations with more than one objective function. These allow you to explore the relationships between objectives and analyze the distribution of optimal solutions. All possible visualizations can be run with the method generate_full_report() and are saved in
-[visualization](./model_output/visualization)
+The `ParetoVisualizer` Class defined in [`pareto_visualization.py`](../water_system/optimization/pareto_visualization.py) allows to visualize different features for optimizations with more than one objective function. These allow you to explore the relationships between objectives and analyze the distribution of optimal solutions. All possible visualizations can be run with the method generate_full_report() and are saved in the
+[optimization](../model_output/optimization/) folder.
 
 ### Possible visualizations
 
@@ -253,7 +248,7 @@ from water_system import ParetoVisualizer
 pareto_solutions = results['pareto_front']
 
 # Pareto Visualization for a 2 objective optimization
-pareto_visualization = ParetoVisualizer(pareto_solutions, objective_labels=['Demand Deficit', 'Spillage'])
+pareto_visualization = ParetoVisualizer(pareto_solutions, objective_labels=['Irrigation Supply Deficit', 'Spillage'])
 pareto_visualization.generate_full_report() #Generates all 3 visualizations
 
 ```
