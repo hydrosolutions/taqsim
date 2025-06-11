@@ -155,7 +155,7 @@ if __name__ == "__main__":
     MyProblem.plot_total_objective_convergence()
 
     results = load_parameters_from_file("./data/dummy_data/optimization_results.json")
-    my_water_system = load_optimized_parameters(my_water_system, results)
+    my_water_system = load_optimized_parameters(my_water_system, results, solution_id=0)
     my_water_system.simulate(time_steps=12)
 
     vis = WaterSystemVisualizer(my_water_system, name='Dummy_Water_System_Visualization')
