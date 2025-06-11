@@ -281,8 +281,10 @@ class ParetoVisualizer:
         # Format for display
         for name in self.objective_names:
             representatives[f'{name}'] = representatives[name].map('{:,.3f}'.format)
+        # Add Solution ID column for display
+        representatives.insert(1, 'Solution ID', representatives['Solution'])
         # Remove the Solution column from display
-        display_columns = ['Solution Type'] + [f'{name}' for name in self.objective_names]
+        display_columns = ['Solution Type', 'Solution ID'] + [f'{name}' for name in self.objective_names]
         fig = go.Figure(data=[go.Table(
             header=dict(
                 values=display_columns,
@@ -323,16 +325,15 @@ class ParetoVisualizer:
 
         fig = px.parallel_coordinates(
             self.df,
-            color="Composite Score",
+            #color="Composite Score",
             dimensions=self.objective_names,
-            color_continuous_scale=px.colors.diverging.Tealrose,
             title='Parallel Coordinates Plot',
             
         )
         fig.update_layout(
             font=dict(size=12),
             height=600,
-            width=1000
+            width=800
         )
 
         output_path = os.path.join(self.output_dir, filename)

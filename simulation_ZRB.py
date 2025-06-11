@@ -15,28 +15,23 @@ if __name__ == "__main__":
     # Create new system
     system = create_simplified_ZRB_system(start_year, start_month, num_time_steps)
 
+    sol=load_parameters_from_file(f"./data/simplified_ZRB/parameter/parameter_3obj_100gen_3000pop.json")
 
-    with open(f"./data/simplified_ZRB/parameter/test99.json", 'r') as f:
-        data = json.load(f)
-    print(data['pareto_solutions'])
-    dashboard = ParetoVisualizer(data['pareto_solutions'])
+    dashboard = ParetoVisualizer(sol, objective_names=[f'Irrig. Supply Deficit [km³/a]', f'Industry Supply Deficit [km³/a]', f'Ecological Flow Deficit [km³/a]'])
     dashboard.generate_full_report()
-
-    
-
-
     
     # Load optimized parameters
     # Example of running the simulation with optimized parameters for a simplified ZRB system
-    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/test99.json", solution_id=5)
+    loaded_results = load_parameters_from_file(f"./data/simplified_ZRB/parameter/parameter_3obj_100gen_3000pop.json")
     
-    system = load_optimized_parameters(system, loaded_results)
+    sol_id = 70  # Example solution ID to load
+    system = load_optimized_parameters(system, pareto_solutions=loaded_results, solution_id=sol_id)
     print("Optimized parameters loaded successfully")
     # Run simulation
     system.simulate(num_time_steps)
     print("Simulation complete")
 
-    vis=WaterSystemVisualizer(system, name=f'ZRB_simulation')
+    vis=WaterSystemVisualizer(system, name=f'Solution_{sol_id}')
     vis.plot_network_overview()
     vis.plot_minimum_flow_compliance()
     vis.plot_spills()
@@ -49,6 +44,5 @@ if __name__ == "__main__":
     
     end = datetime.now()
     print(f"Execution time: {end - start}")
-    
 
-    
+

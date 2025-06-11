@@ -19,6 +19,7 @@ import networkx as nx
 from datetime import datetime
 from typing import Dict, List, Optional, Union, Any, Tuple
 from .nodes import SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode
+import plotly.graph_objects as go
 
 # Helper function for getting node outflow
 def get_node_outflow(node, time_step):
@@ -1515,3 +1516,102 @@ class WaterSystemVisualizer:
         except Exception as e:
             print(f"Error plotting system demands vs inflow: {str(e)}")
             return None
+
+    def plot_interactive_network(self, filename="interactive_network.html"):
+        """
+        Create an interactive Plotly visualization of the water network over time.
+        The user can slide through each timestep to see edge flows, demand abstractions, and reservoir storage.
+        """
+        # Get node positions
+        pos = {node: (data['node'].easting, data['node'].northing)
+               for node, data in self.system.graph.nodes(data=True)}
+        node_ids = list(pos.keys())
+        time_steps = range(self.system.time_steps)
+
+        # Prepare data for each timestep
+        edge_traces = []
+        node_traces = []
+        frames = []
+
+        # Get node types for coloring
+        from .nodes import DemandNode, StorageNode
+
+        for t in time_steps:
+            # Edge flows
+            edge_x = []
+            edge_y = []
+            edge_width = []
+            for u, v, data in self.system.graph.edges(data=True):
+                edge = data['edge']
+                flow = edge.flow_after_losses[t] if t < len(edge.flow_after_losses) else 0
+                x0, y0 = pos[u]
+                x1, y1 = pos[v]
+                edge_x += [x0, x1, None]
+                edge_y += [y0, y1, None]
+                edge_width.append(max(1, flow / 10))  # Scale as needed
+
+            # Node abstraction/demand and storage
+            node_x = []
+            node_y = []
+            node_color = []
+            node_size = []
+            node_text = []
+            for node_id in node_ids:
+                node = self.system.graph.nodes[node_id]['node']
+                x, y = pos[node_id]
+                node_x.append(x)
+                node_y.append(y)
+                if isinstance(node, DemandNode):
+                    abstraction = node.demand_rates[t] if t < len(node.demand_rates) else 0
+                    node_color.append('red')
+                    node_size.append(10 + abstraction / 10)  # Scale as needed
+                    node_text.append(f"Demand: {abstraction:.2f}")
+                elif isinstance(node, StorageNode):
+                    storage = node.storage[t] if t < len(node.storage) else 0
+                    node_color.append('blue')
+                    node_size.append(10 + storage / 1e6)  # Scale as needed
+                    node_text.append(f"Storage: {storage:.2f}")
+                else:
+                    node_color.append('gray')
+                    node_size.append(10)
+                    node_text.append(node_id)
+
+            # Create traces for this frame
+            edge_trace = go.Scatter(
+                x=edge_x, y=edge_y,
+                line=dict(width=2, color='royalblue'),
+                hoverinfo='none',
+                mode='lines'
+            )
+            node_trace = go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers+text',
+                marker=dict(size=node_size, color=node_color, line=dict(width=2, color='black')),
+                text=node_text,
+                hoverinfo='text'
+            )
+            frames.append(go.Frame(data=[edge_trace, node_trace], name=str(t)))
+
+        # Initial plot
+        fig = go.Figure(
+            data=frames[0].data,
+            layout=go.Layout(
+                title="Interactive Water Network State",
+                updatemenus=[dict(
+                    type="buttons",
+                    showactive=False,
+                    buttons=[dict(label="Play", method="animate", args=[None])]
+                )],
+                sliders=[dict(
+                    steps=[dict(method='animate', args=[[str(t)], dict(mode='immediate', frame=dict(duration=500, redraw=True))],
+                            label=f'Timestep {t}') for t in time_steps],
+                    transition=dict(duration=0),
+                    x=0.1, y=0, currentvalue=dict(prefix="Timestep: ")
+                )]
+            ),
+            frames=frames
+        )
+
+        fig.write_html(os.path.join(self.image_dir, filename))
+        print(f"Interactive network visualization saved to {os.path.join(self.image_dir, filename)}")
+        return fig

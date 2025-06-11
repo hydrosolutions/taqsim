@@ -1,6 +1,6 @@
 import os
 from water_system import (DeapOptimizer, ParetoVisualizer)
-from water_system.io_utils import save_optimized_parameters
+from water_system.io_utils import save_optimized_parameters, load_parameters_from_file
 from datetime import datetime
 from system_creator_ZRB import create_simplified_ZRB_system
 
@@ -12,15 +12,16 @@ if __name__ == "__main__":
     start_month = 1
     num_time_steps = 12 * 6  # 6 years of monthly data
 
-    number_of_generations = 30
-    population_size = 30
+    number_of_generations = 10
+    population_size = 3000
     crossover_probability = 0.65
     mutation_probability = 0.3
 
     objective_weights ={
-            'objective_1': [1,2,0,0,0],
+            'objective_1': [1,0,0,0,0],
+            'objective_2': [0,1,1,0,0],
+            'objective_3': [0,0,0,1,0],
         }
-
 
     # Create the base water system
     water_system = create_simplified_ZRB_system(start_year, start_month, num_time_steps)
@@ -48,17 +49,13 @@ if __name__ == "__main__":
     print("-" * 60)
     print(f"Success: {results['success']}")
     print(f"Message: {results['message']}")
-    print(f"Final objective values:")
-    for i, value in enumerate(results['objective_values'], 1):
-        print(f"  - Objective {i}:    {value:,.3f} km³/a")
-    
     # Print the number of solutions in the Pareto front
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
 
     save_optimized_parameters(results, f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
-    
-    
-    dashboard = ParetoVisualizer(results['pareto_front'])
+    sol =load_parameters_from_file(f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
+
+    dashboard = ParetoVisualizer(sol)
     dashboard.generate_full_report()
 
     end = datetime.now()
