@@ -212,6 +212,9 @@ class GroundwaterEdge:
         self.source = source
         self.target = target
         self.edge_type = edge_type
+        self.flow_after_losses = []
+        self.flow_before_losses = []
+        self.losses = []
         
         # Validate inputs based on edge type
         if edge_type == "horizontal":
@@ -370,21 +373,18 @@ class GroundwaterEdge:
             return self.target.max_pumping_rate * 0.5  # 50% as default
         return 0.0
     
-    def update(self, time_step: int) -> None:
+    def update(self, flow) -> None:
         """
         Update edge flow for current time step.
         
         Args:
             time_step (int): Current time step index
         """
-        flow = self.calculate_flow(time_step)
+        self.flow_before_losses.append(flow)
+        self.flow_after_losses.append(flow)  # Initially same as before losses
+        self.losses.append(0)
         self.flow_history.append(max(0, flow))
     
-    @property
-    def flow_after_losses(self) -> List[float]:
-        """Compatibility with existing edge interface."""
-        return self.flow_history
-
 class WellNode:
     """
     Represents a groundwater extraction well.

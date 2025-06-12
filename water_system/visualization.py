@@ -525,10 +525,10 @@ class WaterSystemVisualizer:
         
         for u, v, edge_data in self.system.graph.edges(data=True):
             edge = edge_data['edge']
-            capacity = edge.capacity
-            edge_capacities[(u, v)] = capacity
-            total_capacity += capacity
-            max_capacity = max(max_capacity, capacity)
+            #capacity = edge.capacity
+            #edge_capacities[(u, v)] = capacity
+            #total_capacity += capacity
+            #max_capacity = max(max_capacity, capacity)
             
             # Categorize edge types
             source_type = type(edge.source).__name__
@@ -586,12 +586,12 @@ class WaterSystemVisualizer:
         # Draw edges with width and color based on capacity
         for u, v, edge_data in self.system.graph.edges(data=True):
             edge = edge_data['edge']
-            capacity = edge.capacity
-            color = edge_cmap(norm(capacity))
+            #capacity = edge.capacity
+            color = 'blue'  # Default color
             
             # Calculate width based on capacity (square root scaling for better visualization)
-            width = 1 + 5 * np.sqrt(capacity / max_capacity) if max_capacity > 0 else 1
-            
+            width = 5
+
             # Create the edge
             ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]], 
                 color=color, linewidth=width, alpha=0.7, zorder=1,
@@ -613,24 +613,6 @@ class WaterSystemVisualizer:
                 alpha=0.9,
                 ax=ax
             )
-        
-        # Add capacity-based edge labels for edges with significant capacity
-        capacity_threshold = 0  # Show labels for edges with >0% of max capacity
-        edge_labels = {(u, v): f"{edge_data['edge'].capacity:.0f}"
-                    for u, v, edge_data in self.system.graph.edges(data=True)
-                    if edge_data['edge'].capacity > capacity_threshold}
-        
-        # Draw edge labels (capacity) on the figure
-        nx.draw_networkx_edge_labels(
-            self.system.graph,
-            pos,
-            edge_labels=edge_labels,
-            font_size=14,
-            font_color='navy',
-            font_weight='bold',
-            bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.7),
-            ax=ax
-        )
         
         # Create node labels with key information
         node_labels = {}

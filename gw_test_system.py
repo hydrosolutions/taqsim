@@ -10,7 +10,7 @@ if __name__ == "__main__":
     my_water_system = WaterSystem(dt=dt, start_year=2020, start_month=1)
 
     supply = SupplyNode(
-        id="Source2",
+        id="Source",
         easting=100,
         northing=300,
         csv_file='./data/dummy_data/supply_timeseries.csv',

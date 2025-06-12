@@ -184,6 +184,13 @@ class SupplyNode:
             # Get the supply rate for the current time step
             current_supply_rate = self.supply_rates[time_step]
             self.supply_history.append(current_supply_rate)
+            # Update the outflow groundwater edges first
+            for k in self.outflow_gw_edges:
+                # Update each groundwater outflow edge
+                gw_edge = self.outflow_gw_edges[k]
+                # The flow is limited by the edge capacity
+                flow = flow = gw_edge.calculate_flow(time_step)
+                gw_edge.update(flow)
 
             # Update the outflow edge
             if self.outflow_edge is not None:
