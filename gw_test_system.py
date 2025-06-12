@@ -81,16 +81,27 @@ if __name__ == "__main__":
     my_water_system.add_node(demand1)
 
         # Create aquifer
-    aquifer = AquiferNode(
+    aquifer1 = AquiferNode(
         id="Aquifer1",
         easting=300,
         northing=400,
         area=50,  # 50 km²
-        max_thickness=50.0,  # 50 m
+        max_thickness=80.0,  # 50 m
         porosity=0.2,  # 20%
-        initial_head=25.0  # 25 m
+        initial_head=5.0  # 25 m
     )
-    my_water_system.add_node(aquifer)
+    my_water_system.add_node(aquifer1)
+
+    aquifer2 = AquiferNode(
+        id="Aquifer2",
+        easting=400,
+        northing=300,
+        area=50,  # 50 km²
+        max_thickness=30.0,  # 50 m
+        porosity=0.2,  # 20%
+        initial_head=5.0  # 25 m
+    )
+    my_water_system.add_node(aquifer2)
 
     demand2 = DemandNode(
         id="agriculture2",
@@ -133,21 +144,31 @@ if __name__ == "__main__":
 
     recharge_edge = GroundwaterEdge(
         source=supply,
-        target=aquifer,
+        target=aquifer1,
         edge_type="recharge",
         recharge_fraction=0.2  # 20% of source discharge
     )
     my_water_system.add_edge(recharge_edge)
 
     horizontal_edge = GroundwaterEdge(
-        source=aquifer,
-        target=sink,
+        source=aquifer1,
+        target=aquifer2,
         edge_type="horizontal",
-        conductivity=1e-4,  # 1e-4 m/s
-        area=1000.0,  # 1000 m² cross-sectional area
-        length=2000.0  # 2 km distance
+        conductivity=1e-1,  # 1e-3 m/s
+        area=5000.0,  # 1000 m² cross-sectional area
+        length=500.0  # 500 m distance
     )
     my_water_system.add_edge(horizontal_edge)
+
+    sink_edge = GroundwaterEdge(
+        source=aquifer2,
+        target=sink,
+        edge_type="sink",
+        conductivity=1e-1,  # 1e-4 m/s
+        area=5000.0,  # 1000 m² cross-sectional area
+        length=200.0  # 200 m distance
+    )
+    my_water_system.add_edge(sink_edge)
 
     my_water_system._check_network()
 
@@ -156,7 +177,7 @@ if __name__ == "__main__":
 
     objectives = {'objective_1':[1,1,1,0,0]} 
 
-    MyProblem = DeapOptimizer(
+    '''MyProblem = DeapOptimizer(
                     base_system=my_water_system,
                     num_time_steps=12,  # 12 month are optimized
                     objective_weights=objectives,
@@ -175,7 +196,7 @@ if __name__ == "__main__":
 
     # Plot convergence and Pareto front
     MyProblem.plot_convergence()
-    MyProblem.plot_total_objective_convergence()
+    MyProblem.plot_total_objective_convergence()'''
 
     results = load_parameters_from_file("./data/dummy_data/optimization_results.json")
     my_water_system = load_optimized_parameters(my_water_system, results, solution_id=0)
@@ -183,6 +204,7 @@ if __name__ == "__main__":
 
     vis = WaterSystemVisualizer(my_water_system, name='GW_Test_System_Visualization')
     vis.plot_network_overview()
+    vis.plot_aquifer_dynamics()
     vis.plot_minimum_flow_compliance()
     vis.plot_spills()
     vis.plot_reservoir_volumes()

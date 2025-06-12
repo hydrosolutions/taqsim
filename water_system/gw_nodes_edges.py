@@ -154,7 +154,7 @@ class AquiferNode:
                     outflow = edge.calculate_flow(time_step)
                     total_outflow += outflow
                     # Update the edge with calculated flow
-                    edge.update(time_step)
+                    edge.update(outflow)
             
             # Water balance: dS/dt = In - Out
             net_flow = total_inflow - total_outflow
@@ -185,6 +185,7 @@ class GroundwaterEdge:
     1. Horizontal flow (Darcy): Q = K * A * (h1 - h2) / L
     2. Recharge flow: Q = fraction * source_discharge
     3. Pumping flow: Q = specified rate
+    4. Sink flow: Q = a * S^b
     """
     
     def __init__(
@@ -195,7 +196,8 @@ class GroundwaterEdge:
         conductivity: Optional[float] = None,
         area: Optional[float] = None,
         length: Optional[float] = None,
-        recharge_fraction: Optional[float] = None
+        recharge_fraction: Optional[float] = None,
+        a: Optional[float] = None
     ) -> None:
         """
         Initialize groundwater edge with different flow types.
@@ -239,6 +241,18 @@ class GroundwaterEdge:
         elif edge_type == "pumping":
             # Pumping flow is controlled by the target (well) node
             pass
+        elif edge_type == "sink":
+            if conductivity is None or area is None:
+                raise ValueError("Horizontal flow requires conductivity and area parameters")
+            validate_positive_float(conductivity, "conductivity")
+            validate_positive_float(area, "area")
+            if length is not None:
+                validate_positive_float(length, "length")
+                
+            self.conductivity = conductivity  # K [m/s]
+            self.area = area  # A [m²]
+            self.length = length if length is not None else self._calculate_length()
+            
         else:
             raise ValueError(f"Unknown edge_type: {edge_type}. Must be 'horizontal', 'recharge', or 'pumping'")
         
@@ -284,13 +298,16 @@ class GroundwaterEdge:
         """
         try:
             if self.edge_type == "horizontal":
-                return self._calculate_horizontal_flow()
+                return self._calculate_horizontal_flow(time_step)
                 
             elif self.edge_type == "recharge":
                 return self._calculate_recharge_flow(time_step)
                 
             elif self.edge_type == "pumping":
                 return self._calculate_pumping_flow(time_step)
+            
+            elif self.edge_type == "sink":
+                return self._calculate_sink_flow(time_step)
                 
             else:
                 return 0.0
@@ -299,7 +316,7 @@ class GroundwaterEdge:
             print(f"Error calculating flow for edge {self.source.id}->{self.target.id}: {e}")
             return 0.0
     
-    def _calculate_horizontal_flow(self) -> float:
+    def _calculate_horizontal_flow(self, time_step:int) -> float:
         """
         Calculate horizontal flow using Darcy's law: Q = K * A * (h1 - h2) / L
         
@@ -308,8 +325,8 @@ class GroundwaterEdge:
         """
         # Get source head
         source_head = 0.0
-        if hasattr(self.source, 'current_head'):
-            source_head = self.source.current_head
+        if hasattr(self.source, 'head_history') and time_step < len(self.source.head_history):
+            source_head = self.source.head_history[time_step]
         
         # Get target head
         target_head = 0.0
@@ -373,6 +390,24 @@ class GroundwaterEdge:
             return self.target.max_pumping_rate * 0.5  # 50% as default
         return 0.0
     
+    def _calculate_sink_flow(self, time_step: int) -> float:
+
+        # Get source head
+        source_head = 0.0
+        if hasattr(self.source, 'head_history') and time_step < len(self.source.head_history):
+            source_head = self.source.head_history[time_step]
+
+        # Get target head
+        target_head = 5 #0.6*source_head
+        # Calculate head difference
+        head_diff = source_head - target_head
+        
+        # Apply Darcy's law: Q = K * A * dh / L
+        flow = self.conductivity * self.area * head_diff / self.length
+        
+        # Ensure flow is non-negative (no reverse flow for simplicity)
+        return max(0, flow)
+
     def update(self, flow) -> None:
         """
         Update edge flow for current time step.

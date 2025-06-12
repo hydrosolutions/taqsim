@@ -1068,12 +1068,9 @@ class WaterSystemVisualizer:
         # Draw edges with width and color based on capacity
         for u, v, edge_data in self.system.graph.edges(data=True):
             edge = edge_data['edge']
-            capacity = edge.capacity
-            color = edge_cmap(norm(capacity))
-            
+            color = 'blue'
             # Calculate width based on capacity (square root scaling for better visualization)
-            width = 1 + 8 * np.sqrt(capacity / max_capacity) if max_capacity > 0 else 1
-            
+            width = 1 + 5
             # Create the edge
             ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]], 
                 color=color, linewidth=width, alpha=0.7, zorder=1,
@@ -1597,3 +1594,57 @@ class WaterSystemVisualizer:
         fig.write_html(os.path.join(self.image_dir, filename))
         print(f"Interactive network visualization saved to {os.path.join(self.image_dir, filename)}")
         return fig
+
+    def plot_aquifer_dynamics(self):
+        """
+        Plot storage/head dynamics for all AquiferNodes and flows for all GroundwaterEdges.
+        """
+        from .gw_nodes_edges import AquiferNode, GroundwaterEdge
+
+        # Find aquifer nodes and groundwater edges
+        aquifer_nodes = [(node_id, data['node']) for node_id, data in self.system.graph.nodes(data=True)
+                         if isinstance(data['node'], AquiferNode)]
+        gw_edges = [(u, v, d['edge']) for u, v, d in self.system.graph.edges(data=True)
+                    if isinstance(d['edge'], GroundwaterEdge)]
+
+        n_aquifers = len(aquifer_nodes)
+        n_gw_edges = len(gw_edges)
+        total_plots = n_aquifers + n_gw_edges
+
+        if total_plots == 0:
+            print("No aquifer nodes or groundwater edges found in the system.")
+            return
+
+        plt.rcParams.update({'font.size': 14})
+        fig, axes = plt.subplots(total_plots, 1, figsize=(14, 4 * total_plots), sharex=True)
+        if total_plots == 1:
+            axes = [axes]
+
+        time_steps = range(self.system.time_steps)
+
+        # Plot aquifer node dynamics
+        for idx, (node_id, aquifer) in enumerate(aquifer_nodes):
+            ax = axes[idx]
+            storage = aquifer.storage_history[:len(time_steps)]
+            head = aquifer.head_history[:len(time_steps)]
+            ax.plot(time_steps, storage, label='Storage [m³]', color='blue')
+            ax2 = ax.twinx()
+            ax2.plot(time_steps, head, label='Head [m]', color='green', linestyle='--')
+            ax.set_title(f'Aquifer {node_id}: Storage and Head')
+            ax.set_ylabel('Storage [m³]')
+            ax2.set_ylabel('Head [m]')
+            ax.legend(loc='upper left')
+            ax2.legend(loc='upper right')
+
+        # Plot groundwater edge flows
+        for idx, (u, v, edge) in enumerate(gw_edges, start=n_aquifers):
+            ax = axes[idx]
+            flows = edge.flow_after_losses[:len(time_steps)]
+            ax.plot(time_steps, flows, label=f'GW Flow {u}→{v} [{edge.edge_type}]', color='purple')
+            ax.set_title(f'Groundwater Edge {u}→{v} ({edge.edge_type})')
+            ax.set_ylabel('Flow [m³/s]')
+            ax.legend()
+
+        axes[-1].set_xlabel('Time Step')
+        plt.tight_layout()
+        return self._save_plot("aquifer_dynamics")
