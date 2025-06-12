@@ -1,6 +1,7 @@
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
 from water_system import DeapOptimizer, WaterSystemVisualizer
 from water_system.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters
+from water_system.gw_nodes_edges import AquiferNode, GroundwaterEdge
 
 if __name__ == "__main__":
     # Created a dummy water system with various nodes and edges
@@ -79,6 +80,18 @@ if __name__ == "__main__":
     )
     my_water_system.add_node(demand1)
 
+        # Create aquifer
+    aquifer = AquiferNode(
+        id="Aquifer1",
+        easting=300,
+        northing=400,
+        area=50,  # 50 km²
+        max_thickness=50.0,  # 50 m
+        porosity=0.2,  # 20%
+        initial_head=25.0  # 25 m
+    )
+    my_water_system.add_node(aquifer)
+
     demand2 = DemandNode(
         id="agriculture2",
         easting=400,
@@ -117,6 +130,24 @@ if __name__ == "__main__":
     my_water_system.add_edge(Edge(runoff2, demand2, 60))
     my_water_system.add_edge(Edge(demand1, sink, 100))
     my_water_system.add_edge(Edge(demand2, sink, 100))
+
+    recharge_edge = GroundwaterEdge(
+        source=supply,
+        target=aquifer,
+        edge_type="recharge",
+        recharge_fraction=0.2  # 20% of source discharge
+    )
+    my_water_system.add_edge(recharge_edge)
+
+    horizontal_edge = GroundwaterEdge(
+        source=aquifer,
+        target=sink,
+        edge_type="horizontal",
+        conductivity=1e-4,  # 1e-4 m/s
+        area=1000.0,  # 1000 m² cross-sectional area
+        length=2000.0  # 2 km distance
+    )
+    my_water_system.add_edge(horizontal_edge)
 
     my_water_system._check_network()
 

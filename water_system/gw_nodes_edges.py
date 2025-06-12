@@ -56,6 +56,8 @@ class AquiferNode:
         validate_node_id(id, "AquiferNode")
         validate_coordinates(easting, northing, id)
         validate_positive_float(area, "area")
+        # Convert area from km² to m²
+        area_m2 = area * 1e6
         validate_positive_float(max_thickness, "max_thickness")
         validate_positive_float(porosity, "porosity")
         validate_nonnegativity_int_or_float(initial_head, "initial_head")
@@ -69,7 +71,7 @@ class AquiferNode:
         AquiferNode.all_ids.append(id)
         self.easting = easting
         self.northing = northing
-        self.area = area
+        self.area = area_m2  # Store area in m² internally
         self.max_thickness = max_thickness
         self.porosity = porosity
         
@@ -148,11 +150,11 @@ class AquiferNode:
             total_outflow = 0
             for edge in self.outflow_edges.values():
                 if hasattr(edge, 'calculate_flow'):
-                    # For GroundwaterEdge, calculate flow based on current head
-                    outflow = edge.calculate_flow(self.current_head)
+                    # For GroundwaterEdge, calculate flow based on current conditions
+                    outflow = edge.calculate_flow(time_step)
                     total_outflow += outflow
                     # Update the edge with calculated flow
-                    edge.update(outflow)
+                    edge.update(time_step)
             
             # Water balance: dS/dt = In - Out
             net_flow = total_inflow - total_outflow
@@ -177,49 +179,65 @@ class AquiferNode:
 
 class GroundwaterEdge:
     """
-    Groundwater edge using Darcy's law for horizontal flow calculation.
+    Groundwater edge for different types of groundwater flow.
     
-    Flow is calculated as: Q = K * A * (h1 - h2) / L
-    where:
-    - K is hydraulic conductivity [m/s]
-    - A is cross-sectional area [m²] 
-    - h1, h2 are hydraulic heads [m]
-    - L is distance between nodes [m]
+    Supports multiple flow types:
+    1. Horizontal flow (Darcy): Q = K * A * (h1 - h2) / L
+    2. Recharge flow: Q = fraction * source_discharge
+    3. Pumping flow: Q = specified rate
     """
     
     def __init__(
         self,
         source,
         target, 
-        conductivity: float,
-        area: float,
-        length: Optional[float] = None
+        edge_type: str = "horizontal",
+        conductivity: Optional[float] = None,
+        area: Optional[float] = None,
+        length: Optional[float] = None,
+        recharge_fraction: Optional[float] = None
     ) -> None:
         """
-        Initialize groundwater edge with Darcy's law parameters.
+        Initialize groundwater edge with different flow types.
         
         Args:
-            source: Source node (usually AquiferNode)
+            source: Source node (AquiferNode, SupplyNode, etc.)
             target: Target node (AquiferNode, WellNode, or SinkNode)
-            conductivity (float): Hydraulic conductivity [m/s]
-            area (float): Cross-sectional area for flow [m²]
-            length (float, optional): Distance between nodes [m]. If None, calculated from coordinates.
+            edge_type (str): Type of flow - "horizontal", "recharge", or "pumping"
+            conductivity (float, optional): Hydraulic conductivity [m/s] (for horizontal flow)
+            area (float, optional): Cross-sectional area [m²] (for horizontal flow)
+            length (float, optional): Distance between nodes [m] (for horizontal flow)
+            recharge_fraction (float, optional): Fraction of source discharge (for recharge flow)
         """
-        validate_positive_float(conductivity, "conductivity")
-        validate_positive_float(area, "area")
-        if length is not None:
-            validate_positive_float(length, "length")
-        
         self.source = source
         self.target = target
-        self.conductivity = conductivity  # K [m/s]
-        self.area = area  # A [m²]
+        self.edge_type = edge_type
         
-        # Calculate length if not provided
-        if length is not None:
-            self.length = length
+        # Validate inputs based on edge type
+        if edge_type == "horizontal":
+            if conductivity is None or area is None:
+                raise ValueError("Horizontal flow requires conductivity and area parameters")
+            validate_positive_float(conductivity, "conductivity")
+            validate_positive_float(area, "area")
+            if length is not None:
+                validate_positive_float(length, "length")
+                
+            self.conductivity = conductivity  # K [m/s]
+            self.area = area  # A [m²]
+            self.length = length if length is not None else self._calculate_length()
+            
+        elif edge_type == "recharge":
+            if recharge_fraction is None:
+                raise ValueError("Recharge flow requires recharge_fraction parameter")
+            if not (0 <= recharge_fraction <= 1):
+                raise ValueError(f"Recharge fraction ({recharge_fraction}) must be between 0 and 1")
+            self.recharge_fraction = recharge_fraction
+            
+        elif edge_type == "pumping":
+            # Pumping flow is controlled by the target (well) node
+            pass
         else:
-            self.length = self._calculate_length()
+            raise ValueError(f"Unknown edge_type: {edge_type}. Must be 'horizontal', 'recharge', or 'pumping'")
         
         # Flow tracking
         self.flow_history = []
@@ -251,48 +269,115 @@ class GroundwaterEdge:
             print(f"Error calculating edge length: {e}. Using default 1000m.")
             return 1000.0
     
-    def calculate_flow(self, source_head: float) -> float:
+    def calculate_flow(self, time_step: int) -> float:
         """
-        Calculate flow using Darcy's law: Q = K * A * (h1 - h2) / L
+        Calculate flow based on edge type.
         
         Args:
-            source_head (float): Hydraulic head at source [m]
+            time_step (int): Current time step index
             
         Returns:
-            float: Flow rate [m³/s] (positive = flow from source to target)
+            float: Flow rate [m³/s]
         """
         try:
-            # Get target head
-            target_head = 0.0
-            if hasattr(self.target, 'current_head'):
-                target_head = self.target.current_head
-            elif hasattr(self.target, 'water_level') and len(self.target.water_level) > 0:
-                # For surface water nodes that might have water levels
-                target_head = self.target.water_level[-1]
-            
-            # Calculate head difference
-            head_diff = source_head - target_head
-            
-            # Apply Darcy's law: Q = K * A * dh / L
-            flow = self.conductivity * self.area * head_diff / self.length
-            
-            # Ensure flow is non-negative (no reverse flow for simplicity)
-            return max(0, flow)
-            
+            if self.edge_type == "horizontal":
+                return self._calculate_horizontal_flow()
+                
+            elif self.edge_type == "recharge":
+                return self._calculate_recharge_flow(time_step)
+                
+            elif self.edge_type == "pumping":
+                return self._calculate_pumping_flow(time_step)
+                
+            else:
+                return 0.0
+                
         except Exception as e:
             print(f"Error calculating flow for edge {self.source.id}->{self.target.id}: {e}")
             return 0.0
     
-    def update(self, flow: Optional[float] = None) -> None:
+    def _calculate_horizontal_flow(self) -> float:
+        """
+        Calculate horizontal flow using Darcy's law: Q = K * A * (h1 - h2) / L
+        
+        Returns:
+            float: Flow rate [m³/s] (positive = flow from source to target)
+        """
+        # Get source head
+        source_head = 0.0
+        if hasattr(self.source, 'current_head'):
+            source_head = self.source.current_head
+        
+        # Get target head
+        target_head = 0.0
+        if hasattr(self.target, 'current_head'):
+            target_head = self.target.current_head
+        elif hasattr(self.target, 'water_level') and len(self.target.water_level) > 0:
+            # For surface water nodes that might have water levels
+            target_head = self.target.water_level[-1]
+        
+        # Calculate head difference
+        head_diff = source_head - target_head
+        
+        # Apply Darcy's law: Q = K * A * dh / L
+        flow = self.conductivity * self.area * head_diff / self.length
+        
+        # Ensure flow is non-negative (no reverse flow for simplicity)
+        return max(0, flow)
+    
+    def _calculate_recharge_flow(self, time_step: int) -> float:
+        """
+        Calculate recharge flow as fraction of source discharge.
+        
+        Args:
+            time_step (int): Current time step index
+            
+        Returns:
+            float: Recharge flow rate [m³/s]
+        """
+        # Get source discharge
+        source_discharge = 0.0
+        
+        if hasattr(self.source, 'supply_rates') and time_step < len(self.source.supply_rates):
+            # For SupplyNode
+            source_discharge = self.source.supply_rates[time_step]
+        elif hasattr(self.source, 'runoff_history') and time_step < len(self.source.runoff_history):
+            # For RunoffNode
+            source_discharge = self.source.runoff_history[time_step]
+        elif hasattr(self.source, 'outflow_edge') and self.source.outflow_edge:
+            # Generic outflow from node
+            if (hasattr(self.source.outflow_edge, 'flow_before_losses') and 
+                time_step < len(self.source.outflow_edge.flow_before_losses)):
+                source_discharge = self.source.outflow_edge.flow_before_losses[time_step]
+        
+        # Calculate recharge as fraction of source discharge
+        return source_discharge * self.recharge_fraction
+    
+    def _calculate_pumping_flow(self, time_step: int) -> float:
+        """
+        Calculate pumping flow (controlled by target well).
+        
+        Args:
+            time_step (int): Current time step index
+            
+        Returns:
+            float: Pumping flow rate [m³/s]
+        """
+        if hasattr(self.target, 'pumping_history') and time_step < len(self.target.pumping_history):
+            return self.target.pumping_history[time_step]
+        elif hasattr(self.target, 'max_pumping_rate'):
+            # Default to some fraction of max pumping if no history available
+            return self.target.max_pumping_rate * 0.5  # 50% as default
+        return 0.0
+    
+    def update(self, time_step: int) -> None:
         """
         Update edge flow for current time step.
         
         Args:
-            flow (float, optional): Specified flow rate. If None, uses last calculated flow.
+            time_step (int): Current time step index
         """
-        if flow is None:
-            flow = 0.0
-        
+        flow = self.calculate_flow(time_step)
         self.flow_history.append(max(0, flow))
     
     @property
@@ -378,38 +463,3 @@ class WellNode:
         except Exception as e:
             print(f"Error updating well node {self.id}: {str(e)}")
             self.pumping_history.append(0)
-
-    """
-    Extend existing water system with simplified groundwater components.
-    
-    Args:
-        base_system: Existing WaterSystem instance
-        aquifer_config: Dictionary with aquifer parameters
-    
-    Returns:
-        Enhanced system with groundwater
-    """
-    if aquifer_config is None:
-        aquifer_config = {
-            'area': 1e8,  # 100 km²
-            'max_thickness': 50.0,  # 50 m
-            'porosity': 0.2,  # 20%
-            'initial_head': 25.0  # 25 m
-        }
-    
-    # Create main aquifer
-    main_aquifer = AquiferNode(
-        id="MainAquifer",
-        easting=300000,
-        northing=4400000,
-        **aquifer_config
-    )
-    
-    # Add to system (assuming WaterSystem has been extended with groundwater methods)
-    if hasattr(base_system, 'add_aquifer_node'):
-        base_system.add_aquifer_node(main_aquifer)
-    else:
-        # Fallback to generic node addition
-        base_system.add_node(main_aquifer)
-    
-    return base_system

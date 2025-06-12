@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from typing import Dict, List, Optional, Union, Any
+from .gw_nodes_edges import GroundwaterEdge
 from .validation_functions import (validate_node_id, 
                                    validate_coordinates, 
                                    validate_positive_integer,
@@ -129,6 +130,7 @@ class SupplyNode:
         self.easting = easting  # easting coordinate of the node in UTM system
         self.northing = northing  # northing coordinate of the node in UTM system
         self.outflow_edge = None  # Single outflow edge
+        self.outflow_gw_edges ={}
         self.supply_history = []
 
         # Try to import time series data first
@@ -156,9 +158,14 @@ class SupplyNode:
         Raises:
             ValueError: If an outflow edge is already set.
         """
-        if self.outflow_edge is not None:
-            raise ValueError(f"SupplyNode {self.id} already has an outflow edge. Only one outflow edge is allowed.")
-        self.outflow_edge = edge
+        if isinstance(edge, GroundwaterEdge):
+            # Add to groundwater outflow edges (keyed by target node id)
+            self.outflow_gw_edges[edge.target.id] = edge
+        else:
+            # Only one normal outflow edge allowed
+            if self.outflow_edge is not None:
+                raise ValueError(f"SupplyNode {self.id} already has a normal outflow edge. Only one allowed.")
+            self.outflow_edge = edge
 
     def update(self, time_step: int, dt: float) -> None:
         """

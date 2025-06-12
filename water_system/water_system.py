@@ -11,6 +11,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 from .nodes import SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode
+from .gw_nodes_edges import AquiferNode, GroundwaterEdge
 from .edge import Edge
 from .validation_functions import (validate_positive_float, 
                                    validate_month,
@@ -21,7 +22,7 @@ from .validation_functions import (validate_positive_float,
                                    validate_year)
 
 # Define a type for any valid node type
-NodeType = Union[SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode]
+NodeType = Union[SupplyNode, StorageNode, HydroWorks, DemandNode, SinkNode, RunoffNode, AquiferNode]
 
 class WaterSystem:
     """
@@ -82,7 +83,7 @@ class WaterSystem:
         node_type = type(node).__name__
         self.graph.add_node(node.id, node=node, node_type=node_type)
 
-    def add_edge(self, edge: Edge) -> None:
+    def add_edge(self, edge: Union[Edge, GroundwaterEdge]) -> None:
         """
         Add an edge to the water system.
 
