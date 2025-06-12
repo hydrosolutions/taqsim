@@ -183,7 +183,7 @@ class GroundwaterEdge:
     
     Supports multiple flow types:
     1. Horizontal flow (Darcy): Q = K * A * (h1 - h2) / L
-    2. Recharge flow: Q = fraction * source_discharge
+    2. Recharge flow: Q = fraction * source_discharge OR fraction * rainfall_volume
     3. Pumping flow: Q = specified rate
     4. Sink flow: Q = a * S^b
     """
@@ -197,7 +197,7 @@ class GroundwaterEdge:
         area: Optional[float] = None,
         length: Optional[float] = None,
         recharge_fraction: Optional[float] = None,
-        a: Optional[float] = None
+        fixed_head: Optional[float] = None
     ) -> None:
         """
         Initialize groundwater edge with different flow types.
@@ -248,10 +248,14 @@ class GroundwaterEdge:
             validate_positive_float(area, "area")
             if length is not None:
                 validate_positive_float(length, "length")
+            if fixed_head is None:
+                raise ValueError("Sink flow requires fixed_head parameter")
+            validate_positive_float(fixed_head, "fixed_head")
                 
             self.conductivity = conductivity  # K [m/s]
             self.area = area  # A [m²]
             self.length = length if length is not None else self._calculate_length()
+            self.fixed_head = fixed_head  # Fixed head at the sink node
             
         else:
             raise ValueError(f"Unknown edge_type: {edge_type}. Must be 'horizontal', 'recharge', or 'pumping'")
@@ -394,7 +398,7 @@ class GroundwaterEdge:
             source_head = self.source.head_history[time_step]
 
         # Get target head
-        target_head = 5 #0.6*source_head
+        target_head = self.fixed_head
         # Calculate head difference
         head_diff = source_head - target_head
         

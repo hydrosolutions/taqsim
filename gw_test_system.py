@@ -175,7 +175,8 @@ if __name__ == "__main__":
         edge_type="sink",
         conductivity=1e-1,  # 1e-4 m/s
         area=5000.0,  # 1000 m² cross-sectional area
-        length=200.0  # 200 m distance
+        length=200.0,  # 200 m distance
+        fixed_head=1.0  # Fixed head at the sink node
     )
     my_water_system.add_edge(sink_edge)
 
