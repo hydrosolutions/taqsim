@@ -142,13 +142,22 @@ if __name__ == "__main__":
     my_water_system.add_edge(Edge(demand1, sink, 100))
     my_water_system.add_edge(Edge(demand2, sink, 100))
 
-    recharge_edge = GroundwaterEdge(
+    recharge_edge1 = GroundwaterEdge(
         source=supply,
         target=aquifer1,
         edge_type="recharge",
-        recharge_fraction=0.2  # 20% of source discharge
+        recharge_fraction=0  # 20% of source discharge
     )
-    my_water_system.add_edge(recharge_edge)
+    my_water_system.add_edge(recharge_edge1)
+
+    recharge_edge2 = GroundwaterEdge(
+        source=runoff2,
+        target=aquifer2,
+        edge_type="recharge",
+        recharge_fraction=0.99  # 20% of source discharge
+    )
+    my_water_system.add_edge(recharge_edge2)
+
 
     horizontal_edge = GroundwaterEdge(
         source=aquifer1,

@@ -361,15 +361,11 @@ class GroundwaterEdge:
         if hasattr(self.source, 'supply_rates') and time_step < len(self.source.supply_rates):
             # For SupplyNode
             source_discharge = self.source.supply_rates[time_step]
-        elif hasattr(self.source, 'runoff_history') and time_step < len(self.source.runoff_history):
-            # For RunoffNode
-            source_discharge = self.source.runoff_history[time_step]
-        elif hasattr(self.source, 'outflow_edge') and self.source.outflow_edge:
-            # Generic outflow from node
-            if (hasattr(self.source.outflow_edge, 'flow_before_losses') and 
-                time_step < len(self.source.outflow_edge.flow_before_losses)):
-                source_discharge = self.source.outflow_edge.flow_before_losses[time_step]
-        
+
+        elif hasattr(self.source, 'rainfall_discharge') and time_step < len(self.source.rainfall_discharge):
+            # For RainfallNode
+            source_discharge = self.source.rainfall_discharge[time_step]
+
         # Calculate recharge as fraction of source discharge
         return source_discharge * self.recharge_fraction
     

@@ -189,7 +189,7 @@ class SupplyNode:
                 # Update each groundwater outflow edge
                 gw_edge = self.outflow_gw_edges[k]
                 # The flow is limited by the edge capacity
-                flow = flow = gw_edge.calculate_flow(time_step)
+                flow = gw_edge.calculate_flow(time_step)
                 gw_edge.update(flow)
 
             # Update the outflow edge
@@ -1252,6 +1252,8 @@ class RunoffNode:
         self.outflow_edge = None  # Single outflow edge
         self.runoff_coefficient = runoff_coefficient # Fraction of rainfall that becomes runoff
         self.runoff_history = []
+        self.rainfall_discharge = []
+        self.outflow_gw_edges = {}  # Dictionary of groundwater outflow edges
         
         # Import rainfall data from CSV if provided
         self.rainfall_data = initialize_time_series(
@@ -1273,9 +1275,14 @@ class RunoffNode:
         Raises:
             ValueError: If an outflow edge is already set.
         """
-        if self.outflow_edge is not None:
-            raise ValueError(f"RunoffNode {self.id} already has an outflow edge. Only one outflow edge is allowed.")
-        self.outflow_edge = edge
+        if isinstance(edge, GroundwaterEdge):
+            # Add to groundwater outflow edges (keyed by target node id)
+            self.outflow_gw_edges[edge.target.id] = edge
+        else:
+            # Only one normal outflow edge allowed
+            if self.outflow_edge is not None:
+                raise ValueError(f"SupplyNode {self.id} already has a normal outflow edge. Only one allowed.")
+            self.outflow_edge = edge
 
     def calculate_runoff(self, rainfall: float, dt: float) -> float:
         """
@@ -1303,10 +1310,10 @@ class RunoffNode:
         # Calculate runoff volume
         # Convert rainfall from mm to m and multiply by area (km²) to get volume in m³
         # Then apply runoff coefficient to determine how much becomes runoff
-        volume = (rainfall / 1000) * self.area * 1e6 * self.runoff_coefficient
-        
+        volume = (rainfall / 1000) * self.area * 1e6 
+        self.rainfall_discharge.append(volume/dt)  # Store volume for history
         # Convert volume to flow rate (m³/s) based on the time step duration
-        runoff_rate = volume / dt
+        runoff_rate = volume * self.runoff_coefficient / dt
         
         return runoff_rate
     
@@ -1336,6 +1343,14 @@ class RunoffNode:
             
             # Store runoff in history
             self.runoff_history.append(runoff)
+
+            # Update the outflow groundwater edges first
+            for k in self.outflow_gw_edges:
+                # Update each groundwater outflow edge
+                gw_edge = self.outflow_gw_edges[k]
+                # The flow is limited by the edge capacity
+                flow = gw_edge.calculate_flow(time_step)
+                gw_edge.update(flow)
 
             # Update the outflow edge
             if self.outflow_edge is not None:
