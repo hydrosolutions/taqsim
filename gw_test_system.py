@@ -146,7 +146,7 @@ if __name__ == "__main__":
         source=supply,
         target=aquifer1,
         edge_type="recharge",
-        recharge_fraction=0  # 20% of source discharge
+        recharge_fraction=0.2  # 20% of source discharge
     )
     my_water_system.add_edge(recharge_edge1)
 
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         source=runoff2,
         target=aquifer2,
         edge_type="recharge",
-        recharge_fraction=0.99  # 20% of source discharge
+        recharge_fraction=0.2  # 20% of source discharge
     )
     my_water_system.add_edge(recharge_edge2)
 
@@ -164,8 +164,8 @@ if __name__ == "__main__":
         target=aquifer2,
         edge_type="horizontal",
         conductivity=1e-1,  # 1e-3 m/s
-        area=5000.0,  # 1000 m² cross-sectional area
-        length=500.0  # 500 m distance
+        area=10000.0,  # 1000 m² cross-sectional area
+        length=5000.0  # 500 m distance
     )
     my_water_system.add_edge(horizontal_edge)
 
@@ -175,7 +175,7 @@ if __name__ == "__main__":
         edge_type="sink",
         conductivity=1e-1,  # 1e-4 m/s
         area=5000.0,  # 1000 m² cross-sectional area
-        length=200.0,  # 200 m distance
+        length=2000.0,  # 200 m distance
         fixed_head=1.0  # Fixed head at the sink node
     )
     my_water_system.add_edge(sink_edge)
@@ -187,12 +187,12 @@ if __name__ == "__main__":
 
     objectives = {'objective_1':[1,1,1,0,0]} 
 
-    '''MyProblem = DeapOptimizer(
+    MyProblem = DeapOptimizer(
                     base_system=my_water_system,
                     num_time_steps=12,  # 12 month are optimized
                     objective_weights=objectives,
-                    ngen=10,        # Optimizing over 50 generations
-                    population_size=50, # A Population consists of 100 individuals
+                    ngen=20,        # Optimizing over 50 generations
+                    population_size=100, # A Population consists of 100 individuals
                     cxpb=0.6,       # 0.6 probability for crossover
                     mutpb=0.2,      # 0.2 probability for mutation 
     )
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
     # Plot convergence and Pareto front
     MyProblem.plot_convergence()
-    MyProblem.plot_total_objective_convergence()'''
+    MyProblem.plot_total_objective_convergence()
 
     results = load_parameters_from_file("./data/dummy_data/optimization_results.json")
     my_water_system = load_optimized_parameters(my_water_system, results, solution_id=0)
