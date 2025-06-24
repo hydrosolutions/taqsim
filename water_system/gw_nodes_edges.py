@@ -36,6 +36,7 @@ class AquiferNode:
         easting: float,
         northing: float,
         area: float,
+        bottom_elevation: float,
         max_thickness: float,
         porosity: float,
         initial_head: float
@@ -48,13 +49,15 @@ class AquiferNode:
             easting (float): Easting coordinate [m]
             northing (float): Northing coordinate [m] 
             area (float): Aquifer area [m²]
+            bottom_elevation (float): Bottom elevation of aquifer [m asl.]
             max_thickness (float): Maximum saturated thickness [m]
             porosity (float): Effective porosity [-]
-            initial_head (float): Initial hydraulic head above datum [m]
+            initial_head (float): Initial hydraulic head above datum [m asl.]
         """
         # Validate inputs using existing validation functions
         validate_node_id(id, "AquiferNode")
         validate_coordinates(easting, northing, id)
+        validate_positive_float(bottom_elevation, "bottom_elevation")
         validate_positive_float(area, "area")
         # Convert area from km² to m²
         area_m2 = area * 1e6
@@ -64,14 +67,15 @@ class AquiferNode:
         
         if porosity >= 1.0:
             raise ValueError(f"Porosity ({porosity}) must be less than 1.0")
-        if initial_head > max_thickness:
-            raise ValueError(f"Initial head ({initial_head}) cannot exceed max thickness ({max_thickness})")
+        if initial_head > (bottom_elevation+max_thickness):
+            raise ValueError(f"Initial head ({initial_head}) cannot exceed max thickness ({bottom_elevation+max_thickness})")
             
         self.id = id
         AquiferNode.all_ids.append(id)
         self.easting = easting
         self.northing = northing
         self.area = area_m2  # Store area in m² internally
+        self.bottom_elevation = bottom_elevation  # Bottom elevation [m asl.]
         self.max_thickness = max_thickness
         self.porosity = porosity
         
@@ -100,7 +104,7 @@ class AquiferNode:
         Returns:
             float: Storage volume [m³]
         """
-        effective_head = max(0, min(head, self.max_thickness))
+        effective_head = max(0, min(head-self.bottom_elevation, self.max_thickness))
         return effective_head * self.area * self.porosity
     
     def _storage_to_head(self, storage: float) -> float:
@@ -117,7 +121,7 @@ class AquiferNode:
         """
         max_storage = self.max_thickness * self.area * self.porosity
         storage = max(0, min(storage, max_storage))
-        return storage / (self.area * self.porosity)
+        return storage / (self.area * self.porosity) + self.bottom_elevation
     
     def add_inflow_edge(self, edge):
         """Add an inflow edge (recharge or inter-aquifer flow)."""

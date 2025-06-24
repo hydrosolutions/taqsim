@@ -1,4 +1,21 @@
 """
+╔═════════════════════════════════════════════════════════════════════════╗
+║           ████████╗ ██████╗  ██████╗ ███████╗██╗███╗   ███╗             ║
+║           ╚══██╔══╝██╔═══██╗██╔═══██╗██╔════╝██║████╗ ████║             ║
+║              ██║   ██║   ██║██║   ██║███████╗██║██╔████╔██║             ║
+║              ██║   ██║   ██║██║▄▄ ██║╚════██║██║██║╚██╔╝██║             ║
+║              ██║   ╚██████╔╝╚██████╔╝███████║██║██║ ╚═╝ ██║             ║
+║              ╚═╝    ╚═════╝  ╚══▀▀═╝ ╚══════╝╚═╝╚═╝     ╚═╝             ║
+║                                                                         ║
+║           Advanced Water Resource System Modeling Framework             ║
+║     ┌─────────────────────────────────────────────────────────────┐     ║
+║     │ • Multi-objective optimization of water resource systems    │     ║
+║     │ • Network-based simulation with specialized node types      │     ║
+║     │ • Pareto-optimal solutions for sustainable water management │     ║
+║     └─────────────────────────────────────────────────────────────┘     ║
+║                                                                         ║
+╚═════════════════════════════════════════════════════════════════════════╝
+
 This module defines the WaterSystem class, which is the main class for creating and managing
 a water system simulation. It uses NetworkX for graph representation.
 

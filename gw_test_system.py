@@ -86,9 +86,10 @@ if __name__ == "__main__":
         easting=300,
         northing=400,
         area=50,  # 50 km²
+        bottom_elevation=120,
         max_thickness=80.0,  # 50 m
         porosity=0.2,  # 20%
-        initial_head=5.0  # 25 m
+        initial_head=125.0  # 25 m
     )
     my_water_system.add_node(aquifer1)
 
@@ -97,9 +98,10 @@ if __name__ == "__main__":
         easting=400,
         northing=300,
         area=50,  # 50 km²
+        bottom_elevation=100,
         max_thickness=30.0,  # 50 m
         porosity=0.2,  # 20%
-        initial_head=5.0  # 25 m
+        initial_head=120.0  # 25 m
     )
     my_water_system.add_node(aquifer2)
 
@@ -176,7 +178,7 @@ if __name__ == "__main__":
         conductivity=1e-1,  # 1e-4 m/s
         area=5000.0,  # 1000 m² cross-sectional area
         length=2000.0,  # 200 m distance
-        fixed_head=1.0  # Fixed head at the sink node
+        fixed_head=111.0  # Fixed head at the sink node
     )
     my_water_system.add_edge(sink_edge)
 
