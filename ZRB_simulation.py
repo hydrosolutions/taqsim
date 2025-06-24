@@ -1,3 +1,21 @@
+"""
+╔═════════════════════════════════════════════════════════════════════════╗
+║           ████████╗ ██████╗  ██████╗ ███████╗██╗███╗   ███╗             ║
+║           ╚══██╔══╝██╔═══██╗██╔═══██╗██╔════╝██║████╗ ████║             ║
+║              ██║   ██║   ██║██║   ██║███████╗██║██╔████╔██║             ║
+║              ██║   ██║   ██║██║▄▄ ██║╚════██║██║██║╚██╔╝██║             ║
+║              ██║   ╚██████╔╝╚██████╔╝███████║██║██║ ╚═╝ ██║             ║
+║              ╚═╝    ╚═════╝  ╚══▀▀═╝ ╚══════╝╚═╝╚═╝     ╚═╝             ║
+║                                                                         ║
+║           Advanced Water Resource System Modeling Framework             ║
+║     ┌─────────────────────────────────────────────────────────────┐     ║
+║     │ • Network-based simulation with specialized node types      │     ║
+║     │ • Multi-objective optimization of water resource systems    │     ║
+║     │ • Pareto-optimal solutions for sustainable water management │     ║
+║     └─────────────────────────────────────────────────────────────┘     ║
+║                                                                         ║
+╚═════════════════════════════════════════════════════════════════════════╝
+"""
 from water_system import  (WaterSystemVisualizer, ParetoVisualizer)
 from datetime import datetime
 from ZRB_system_creator import create_ZRB_system

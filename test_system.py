@@ -1,3 +1,22 @@
+"""
+╔═════════════════════════════════════════════════════════════════════════╗
+║           ████████╗ ██████╗  ██████╗ ███████╗██╗███╗   ███╗             ║
+║           ╚══██╔══╝██╔═══██╗██╔═══██╗██╔════╝██║████╗ ████║             ║
+║              ██║   ██║   ██║██║   ██║███████╗██║██╔████╔██║             ║
+║              ██║   ██║   ██║██║▄▄ ██║╚════██║██║██║╚██╔╝██║             ║
+║              ██║   ╚██████╔╝╚██████╔╝███████║██║██║ ╚═╝ ██║             ║
+║              ╚═╝    ╚═════╝  ╚══▀▀═╝ ╚══════╝╚═╝╚═╝     ╚═╝             ║
+║                                                                         ║
+║           Advanced Water Resource System Modeling Framework             ║
+║     ┌─────────────────────────────────────────────────────────────┐     ║
+║     │ • Network-based simulation with specialized node types      │     ║
+║     │ • Multi-objective optimization of water resource systems    │     ║
+║     │ • Pareto-optimal solutions for sustainable water management │     ║
+║     └─────────────────────────────────────────────────────────────┘     ║
+║                                                                         ║
+╚═════════════════════════════════════════════════════════════════════════╝
+"""
+
 from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
 from water_system import DeapOptimizer, WaterSystemVisualizer
 from water_system.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters

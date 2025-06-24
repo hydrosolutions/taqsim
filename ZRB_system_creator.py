@@ -320,9 +320,9 @@ def create_future_scenario_ZRB_system(
     system._check_network()
     return system
 
-# Note: The baseline system is created with the same structure as the ZRB system,
+# Note: The tuman system is created with the same structure as the ZRB system,
 # but it uses different data files and configurations specific to the administrative districts/tumans.
-def create_baseline_ZRB_system(start_year: int, start_month: int, num_time_steps: int) -> WaterSystem:
+def create_tuman_ZRB_system(start_year: int, start_month: int, num_time_steps: int) -> WaterSystem:
     """
     Create a ZRB water system model for baseline simulations.
     """
