@@ -32,7 +32,7 @@ This project provides an object-oriented Python framework for simulating and opt
 ## Project Structure
 
 ```
-water_system/
+taqsim/
 │
 ├── __init__.py
 ├── water_system.py
@@ -79,7 +79,7 @@ See [README_system_creation_example.md](documentation/README_system_creation_exa
 
 **Basic Example:**
 ```python
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
+from taqsim import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
 
 dt = 30.44 * 24 * 3600  # seconds in a month
 my_water_system = WaterSystem(dt=dt, start_year=2020, start_month=1)
@@ -101,7 +101,7 @@ my_water_system._check_network()
 See [README_optimization.md](documentation/README_optimization.md) for details.
 
 ```python
-from water_system import DeapOptimizer
+from taqsim import DeapOptimizer
 
 objectives = {'objective_1':[1,1,1,0,0]}  # See documentation for meaning
 
@@ -121,7 +121,7 @@ results = MyProblem.optimize()
 ### 3. Visualization
 
 ```python
-from water_system import WaterSystemVisualizer
+from taqsim import WaterSystemVisualizer
 
 vis = WaterSystemVisualizer(my_water_system, name='Example_System_Visualization')
 vis.plot_network_overview()

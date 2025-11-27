@@ -16,8 +16,8 @@
 ║                                                                         ║
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
-from water_system import (DeapOptimizer, ParetoVisualizer)
-from water_system.io_utils import save_optimized_parameters, load_parameters_from_file
+from taqsim import DeapOptimizer, ParetoVisualizer
+from taqsim.io_utils import save_optimized_parameters, load_parameters_from_file
 from datetime import datetime
 from ZRB_system_creator import create_ZRB_system
 

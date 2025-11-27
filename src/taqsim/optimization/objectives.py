@@ -26,6 +26,7 @@ Returns:
 
 import numpy as np
 
+
 def regular_demand_deficit(system, regular_demand_ids, dt, num_years):
     """
     Calculate the total annual regular demand deficit.
@@ -41,10 +42,11 @@ def regular_demand_deficit(system, regular_demand_ids, dt, num_years):
     """
     total = 0
     for node_id in regular_demand_ids:
-        demand_node = system.graph.nodes[node_id]['node']
+        demand_node = system.graph.nodes[node_id]["node"]
         deficit = np.array(demand_node.unmet_demand) * dt
         total += np.sum(deficit)
     return total / num_years / 1e9
+
 
 def priority_demand_deficit(system, priority_demand_ids, dt, num_years):
     """
@@ -61,10 +63,11 @@ def priority_demand_deficit(system, priority_demand_ids, dt, num_years):
     """
     total = 0
     for node_id in priority_demand_ids:
-        demand_node = system.graph.nodes[node_id]['node']
+        demand_node = system.graph.nodes[node_id]["node"]
         deficit = np.array(demand_node.unmet_demand) * dt
         total += np.sum(deficit)
     return total / num_years / 1e9
+
 
 def sink_node_min_flow_deficit(system, sink_ids, dt, num_years):
     """
@@ -81,10 +84,11 @@ def sink_node_min_flow_deficit(system, sink_ids, dt, num_years):
     """
     total = 0
     for node_id in sink_ids:
-        sink_node = system.graph.nodes[node_id]['node']
+        sink_node = system.graph.nodes[node_id]["node"]
         deficit = np.array(sink_node.flow_deficits) * dt
         total += np.sum(deficit)
     return total / num_years / 1e9
+
 
 def total_spillage(system, hydroworks_ids, reservoir_ids, num_years):
     """
@@ -101,10 +105,11 @@ def total_spillage(system, hydroworks_ids, reservoir_ids, num_years):
     """
     total = 0
     for node_id in hydroworks_ids:
-        total += np.sum(system.graph.nodes[node_id]['node'].spill_register)
+        total += np.sum(system.graph.nodes[node_id]["node"].spill_register)
     for node_id in reservoir_ids:
-        total += np.sum(system.graph.nodes[node_id]['node'].spillway_register)
+        total += np.sum(system.graph.nodes[node_id]["node"].spillway_register)
     return total / num_years / 1e9
+
 
 def total_unmet_ecological_flow(system, dt, num_years):
     """
@@ -120,8 +125,8 @@ def total_unmet_ecological_flow(system, dt, num_years):
     """
     total_unmet = 0
     for _, _, edge_data in system.graph.edges(data=True):
-        edge = edge_data['edge']
-        if getattr(edge, 'ecological_flow', 0) > 0:
+        edge = edge_data["edge"]
+        if getattr(edge, "ecological_flow", 0) > 0:
             # Sum unmet ecological flow for this edge
             total_unmet += sum(edge.unmet_ecological_flow) * dt
     return total_unmet / num_years / 1e9

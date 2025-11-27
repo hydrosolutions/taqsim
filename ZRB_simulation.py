@@ -16,10 +16,10 @@
 ║                                                                         ║
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
-from water_system import  (WaterSystemVisualizer, ParetoVisualizer)
+from taqsim import WaterSystemVisualizer, ParetoVisualizer
 from datetime import datetime
 from ZRB_system_creator import create_ZRB_system
-from water_system.io_utils import load_optimized_parameters, load_parameters_from_file
+from taqsim.io_utils import load_optimized_parameters, load_parameters_from_file
 import json
 
 if __name__ == "__main__":

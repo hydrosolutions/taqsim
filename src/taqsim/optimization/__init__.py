@@ -20,7 +20,7 @@ Modules and Classes:
         * ParetoFrontDashboard4D
 
 Usage:
-    from water_system.optimization import (
+    from taqsim.optimization import (
         DeapSingleObjectiveOptimizer, DeapTwoObjectiveOptimizer,
         DeapThreeObjectiveOptimizer, DeapFourObjectiveOptimizer,
         PymooSingleObjectiveOptimizer, PymooMultiObjectiveOptimizer,
@@ -36,6 +36,4 @@ from .pareto_visualization import (
     ParetoVisualizer,
 )
 
-__all__ = [
-    'ParetoVisualizer', 'DeapOptimizer'
-]
+__all__ = ["ParetoVisualizer", "DeapOptimizer"]

@@ -1,8 +1,8 @@
 from typing import Callable, Dict, List, Optional, Union
 import pandas as pd
 import json
-from water_system import (WaterSystem, SupplyNode, StorageNode, DemandNode, 
-                          SinkNode, HydroWorks, RunoffNode, Edge)
+from taqsim import (WaterSystem, SupplyNode, StorageNode, DemandNode,
+                    SinkNode, HydroWorks, RunoffNode, Edge)
 
 
 def create_ZRB_system(start_year: int, start_month: int, num_time_steps: int) -> WaterSystem:

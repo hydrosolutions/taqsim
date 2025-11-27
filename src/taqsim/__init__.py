@@ -1,5 +1,5 @@
 """
-water_system
+taqsim
 
 This package provides a framework for simulating and optimizing water flow in a network system.
 
@@ -18,17 +18,27 @@ Classes:
     Edge: Represents a connection between two nodes in the water system. This can either represent a river or a canal.
 """
 
-from .water_system import WaterSystem
-from .nodes import SupplyNode, SinkNode, DemandNode, StorageNode, HydroWorks, RunoffNode
 from .edge import Edge
-from .visualization import WaterSystemVisualizer
+from .nodes import DemandNode, HydroWorks, RunoffNode, SinkNode, StorageNode, SupplyNode
 from .optimization.optimizer import DeapOptimizer
 from .optimization.pareto_visualization import ParetoVisualizer
+from .visualization import WaterSystemVisualizer
+from .water_system import WaterSystem
 
-# Define what should be imported with "from water_system import *"
-__all__ = ['WaterSystem', 'SupplyNode', 'SinkNode', 'DemandNode', 
-           'StorageNode', 'HydroWorks','RunoffNode', 'Edge', 'WaterSystemVisualizer', 
-           'ParetoVisualizer', 'DeapOptimizer']
+# Define what should be imported with "from taqsim import *"
+__all__ = [
+    "WaterSystem",
+    "SupplyNode",
+    "SinkNode",
+    "DemandNode",
+    "StorageNode",
+    "HydroWorks",
+    "RunoffNode",
+    "Edge",
+    "WaterSystemVisualizer",
+    "ParetoVisualizer",
+    "DeapOptimizer",
+]
 
 # Package version
-__version__ = '0.2.0'
+__version__ = "0.2.0"

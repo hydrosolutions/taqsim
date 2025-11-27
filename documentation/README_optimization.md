@@ -1,6 +1,6 @@
 # How-To Guide: Running an Optimization 
 
-This guide explains how to use [`optimizer.py`](../water_system/optimization/optimizer.py) to optimize water allocation in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
+This guide explains how to use [`optimizer.py`](../taqsim/optimization/optimizer.py) to optimize water allocation in a water resource system (such as a river basin with reservoirs and different demands). The module leverages the [DEAP](https://deap.readthedocs.io/) evolutionary computation framework to perform multi-objective or single-objective optimization of water resource systems.
 
 In order to use the optimizaiton framework a `WaterSystem` has to be created first according to [README_system_creation_example.md](./README_system_creation_example.md).
 
@@ -16,8 +16,8 @@ A `DeapOptimizer`has to be initialised using the following arguments:
 - mutpb (float): Mutation probability for the Genetic Algorithm
 
 
-```python 
-from water_system import DeapOptimizer
+```python
+from taqsim import DeapOptimizer
 
 MyProblem = DeapOptimizer(
               base_system=water_system,
@@ -43,7 +43,7 @@ Example:
     }
 ```
 
-The number of keys in the `objective_weights` dictionary (3 in the example above) determines the number of objectives. Each key maps to a list of weights, which specify how much each component contributes to that objective. The five possible components you can assign weights to are listed below. Further details and the implementation of these components can be found in [`objectives.py`](../water_system/optimization/objectives.py).
+The number of keys in the `objective_weights` dictionary (3 in the example above) determines the number of objectives. Each key maps to a list of weights, which specify how much each component contributes to that objective. The five possible components you can assign weights to are listed below. Further details and the implementation of these components can be found in [`objectives.py`](../taqsim/optimization/objectives.py).
 
 The five available Objective Function Components: 
 
@@ -159,11 +159,11 @@ Once you have defined your objective weights, genetic algorithm settings and cre
 
 **Example usage:**
 ```python
-from water_system import DeapOptimizer
+from taqsim import DeapOptimizer
 
 # Define objective weights
-two_objectives = {'objective_1':[1,1,1,0,0], 
-                  'objective_2':[0,0,0,1,1]} 
+two_objectives = {'objective_1':[1,1,1,0,0],
+                  'objective_2':[0,0,0,1,1]}
 
 # Initialize the Optimizer
 MyProblem = DeapOptimizer(
@@ -173,7 +173,7 @@ MyProblem = DeapOptimizer(
                 ngen=50,        # Optimizing over 50 generations
                 population_size=100, # A Population consists of 100 individuals
                 cxpb=0.6,       # 0.6 probability for crossover
-                mutpb=0.2,      # 0.2 probability for mutation 
+                mutpb=0.2,      # 0.2 probability for mutation
 )
 
 # Run the optimization
@@ -213,7 +213,7 @@ The convergence plots are saved in the [model_output](../model_output/) folder. 
 The `save_optimized_parameters` function allows you to save the results of your optimization run to a JSON file. The function takes a filename(str) containing a path and the optimization results dictionary as input. The saved optimization results can then be used to simulate the `WaterSystem` (further explanations in **XX**)
 
 ```python
-from water_system/io_utils.py import save_optimized_parameters
+from taqsim.io_utils import save_optimized_parameters
 
 save_optimized_parameters(results, filename)
 ```
@@ -223,7 +223,7 @@ save_optimized_parameters(results, filename)
 
 Understanding the trade-offs between objectives is crucial in multi-objective optimization. The Pareto front represents the set of non-dominated solutions, where improving one objective would worsen at least one other. Visualizing this front helps you interpret the results and select solutions that best fit your management priorities.
 
-The `ParetoVisualizer` Class defined in [`pareto_visualization.py`](../water_system/optimization/pareto_visualization.py) allows to visualize different features for optimizations with more than one objective function. These allow you to explore the relationships between objectives and analyze the distribution of optimal solutions. All possible visualizations can be run with the method generate_full_report() and are saved in the
+The `ParetoVisualizer` Class defined in [`pareto_visualization.py`](../taqsim/optimization/pareto_visualization.py) allows to visualize different features for optimizations with more than one objective function. These allow you to explore the relationships between objectives and analyze the distribution of optimal solutions. All possible visualizations can be run with the method generate_full_report() and are saved in the
 [optimization](../model_output/optimization/) folder.
 
 ### Possible visualizations
@@ -242,7 +242,7 @@ The `ParetoVisualizer` Class defined in [`pareto_visualization.py`](../water_sys
 After running your optimization and obtaining results, you can visualize the Pareto front as follows:
 
 ```python
-from water_system import ParetoVisualizer
+from taqsim import ParetoVisualizer
 
 # Assuming 'results' is the output from your optimizer
 pareto_solutions = results['pareto_front']

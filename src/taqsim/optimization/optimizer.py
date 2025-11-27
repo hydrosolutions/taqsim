@@ -1,20 +1,53 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from deap import base, creator, tools, algorithms
-import random
 import copy
-import numpy as np
+import multiprocessing
 import os
-from water_system import WaterSystem, StorageNode, DemandNode, HydroWorks, SinkNode
+import random
+from typing import Protocol
+
+import matplotlib.pyplot as plt
+import numpy as np
+from deap import base, creator, tools
+
+from ..nodes import DemandNode, HydroWorks, SinkNode, StorageNode
+from ..water_system import WaterSystem
 from .objectives import (
-    regular_demand_deficit,
     priority_demand_deficit,
+    regular_demand_deficit,
     sink_node_min_flow_deficit,
     total_spillage,
-    total_unmet_ecological_flow
+    total_unmet_ecological_flow,
 )
-import multiprocessing
+
+# --------------------- RNG PROTOCOL AND DEFAULT IMPLEMENTATION ---------------------
+
+
+class RNG(Protocol):
+    """Protocol for random number generation."""
+
+    def random(self) -> float: ...
+    def uniform(self, low: float, high: float) -> float: ...
+    def random_array(self, size: int) -> np.ndarray: ...
+
+
+class DefaultRNG:
+    """Default random number generator implementation."""
+
+    def __init__(self, seed: int | None = None):
+        self._np_rng = np.random.default_rng(seed)
+        self._rng = random.Random(seed)
+
+    def random(self) -> float:
+        return self._rng.random()
+
+    def uniform(self, low: float, high: float) -> float:
+        return self._np_rng.uniform(low, high)
+
+    def random_array(self, size: int) -> np.ndarray:
+        return self._np_rng.random(size)
+
+
 # --------------------- SHARED UTILITY FUNCTIONS ---------------------
+
 
 def normalize_distribution(values: np.ndarray) -> np.ndarray:
     """
@@ -35,9 +68,8 @@ def normalize_distribution(values: np.ndarray) -> np.ndarray:
         return np.full_like(values, 1.0 / len(values))
     return values / total
 
-def decode_individual(
-    reservoir_ids, hydroworks_ids, hydroworks_targets, individual
-):
+
+def decode_individual(reservoir_ids, hydroworks_ids, hydroworks_targets, individual):
     """
     Decode a flat list of genes into structured reservoir and hydroworks parameters.
 
@@ -59,12 +91,12 @@ def decode_individual(
     individual = np.array(individual)
     current_idx = 0
     for res_id in reservoir_ids:
-        params = {'Vr': [], 'V1': [], 'V2': []}
+        params = {"Vr": [], "V1": [], "V2": []}
         for month in range(12):
             start_idx = current_idx + month * genes_per_reservoir_month
-            params['Vr'].append(individual[start_idx])
-            params['V1'].append(individual[start_idx + 1])
-            params['V2'].append(individual[start_idx + 2])
+            params["Vr"].append(individual[start_idx])
+            params["V1"].append(individual[start_idx + 1])
+            params["V2"].append(individual[start_idx + 2])
         reservoir_params[res_id] = params
         current_idx += 12 * genes_per_reservoir_month
 
@@ -89,6 +121,7 @@ def decode_individual(
 
     return reservoir_params, hydroworks_params
 
+
 # --------------------- OPTIMIZER CLASS -----------------------------
 class DeapOptimizer:
     """
@@ -108,6 +141,7 @@ class DeapOptimizer:
         num_of_objectives (int): Number of objectives in the optimization.
         history (dict): Stores convergence statistics for each objective.
     """
+
     def __init__(
         self,
         base_system: WaterSystem,
@@ -116,7 +150,8 @@ class DeapOptimizer:
         ngen: int,
         cxpb: float,
         mutpb: float,
-        objective_weights: dict[str, list[int]]
+        objective_weights: dict[str, list[int]],
+        rng: RNG | None = None,
     ) -> None:
         """
         Initialize the DEAP optimizer for the water system.
@@ -129,6 +164,7 @@ class DeapOptimizer:
             cxpb (float): Crossover probability. Defaults to 0.65.
             mutpb (float): Mutation probability. Defaults to 0.32.
             objective_weights (dict): Weights for each objective. Defaults to 4 objectives.
+            rng (RNG | None): Random number generator. If None, uses DefaultRNG().
         """
         self.base_system = base_system
         self.num_time_steps = num_time_steps
@@ -141,7 +177,8 @@ class DeapOptimizer:
         self.mutpb = mutpb
         self.objective_weights = objective_weights
         self.num_of_objectives = len(objective_weights)
-        
+        self.rng = rng or DefaultRNG()
+
         # Extract node IDs from the system
         self.priority_demand_ids = DemandNode.high_priority_demand_ids
         self.regular_demand_ids = DemandNode.low_priority_demand_ids
@@ -153,19 +190,19 @@ class DeapOptimizer:
         # Reservoir bounds
         self.reservoir_bounds = {}
         for node_id in self.reservoir_ids:
-            reservoir = self.base_system.graph.nodes[node_id]['node']
+            reservoir = self.base_system.graph.nodes[node_id]["node"]
             total_capacity = reservoir.outflow_edge.capacity
             dead_storage = reservoir.dead_storage
             capacity = reservoir.capacity
             self.reservoir_bounds[node_id] = {
-                'Vr': (0, total_capacity*self.dt),
-                'V1': (dead_storage, capacity),
-                'V2': (dead_storage, capacity)
+                "Vr": (0, total_capacity * self.dt),
+                "V1": (dead_storage, capacity),
+                "V2": (dead_storage, capacity),
             }
-        
+
         # Get hydroworks targets
         for node_id in self.hydroworks_ids:
-            hydrowork = self.base_system.graph.nodes[node_id]['node']
+            hydrowork = self.base_system.graph.nodes[node_id]["node"]
             self.hydroworks_targets[node_id] = list(hydrowork.outflow_edges.keys())
 
         self._setup_toolbox()
@@ -178,9 +215,9 @@ class DeapOptimizer:
         This method also initializes the multiprocessing pool and convergence history.
         """
         # Remove any existing Fitness/Individual to avoid DEAP errors
-        if 'FitnessMulti' in creator.__dict__:
+        if "FitnessMulti" in creator.__dict__:
             del creator.FitnessMulti
-        if 'Individual' in creator.__dict__:
+        if "Individual" in creator.__dict__:
             del creator.Individual
 
         # Set up DEAP types
@@ -228,20 +265,20 @@ class DeapOptimizer:
         for res_id in self.reservoir_ids:
             bounds = self.reservoir_bounds[res_id]
             for month in range(12):
-                Vr = np.random.uniform(bounds['Vr'][0], bounds['Vr'][1])
-                V1_min = bounds['V1'][0]
-                V1_max = bounds['V1'][1]
-                V1 = np.random.uniform(V1_min, V1_max)
-                V2_min = max(bounds['V2'][0], V1)
-                V2_max = bounds['V2'][1]
-                V2 = np.random.uniform(V2_min, V2_max)
+                Vr = self.rng.uniform(bounds["Vr"][0], bounds["Vr"][1])
+                V1_min = bounds["V1"][0]
+                V1_max = bounds["V1"][1]
+                V1 = self.rng.uniform(V1_min, V1_max)
+                V2_min = max(bounds["V2"][0], V1)
+                V2_max = bounds["V2"][1]
+                V2 = self.rng.uniform(V2_min, V2_max)
                 genes.extend([Vr, V1, V2])
 
         # Add hydroworks genes
         for hw_id in self.hydroworks_ids:
             n_targets = len(self.hydroworks_targets[hw_id])
             for month in range(12):
-                dist = np.random.random(n_targets)
+                dist = self.rng.random_array(n_targets)
                 normalized_dist = normalize_distribution(dist)
                 genes.extend(normalized_dist)
 
@@ -262,50 +299,52 @@ class DeapOptimizer:
             tuple: (child1, child2) - Two new individuals after crossover.
         """
         ind1, ind2 = np.array(ind1), np.array(ind2)
-        
+
         # Handle reservoirs month by month
-        genes_per_month = 3 
+        genes_per_month = 3
         num_reservoirs = len(self.reservoir_ids)
-        
+
         # For each month
         for month in range(12):
             # For each reservoir, decide whether to swap this month's parameters
             for res_idx in range(num_reservoirs):
-                if random.random() < 0.5:
+                if self.rng.random() < 0.5:
                     # Calculate indices for this month's parameters
                     start_idx = (res_idx * 12 * genes_per_month) + (month * genes_per_month)
                     end_idx = start_idx + genes_per_month
-                    
+
                     # Swap parameters for this month
-                    ind1[start_idx:end_idx], ind2[start_idx:end_idx] = \
-                        ind2[start_idx:end_idx].copy(), ind1[start_idx:end_idx].copy()
+                    ind1[start_idx:end_idx], ind2[start_idx:end_idx] = (
+                        ind2[start_idx:end_idx].copy(),
+                        ind1[start_idx:end_idx].copy(),
+                    )
 
         # Handle hydroworks month by month
         hw_start = num_reservoirs * 12 * genes_per_month
         current_idx = hw_start
-        
+
         # For each month
         for month in range(12):
             # For each hydrowork
             hw_current_idx = current_idx
             for hw_id in self.hydroworks_ids:
                 n_targets = len(self.hydroworks_targets[hw_id])
-                
-                if random.random() < 0.5:
+
+                if self.rng.random() < 0.5:
                     # Calculate indices for this month's distribution parameters
                     start_idx = hw_current_idx + (month * n_targets)
                     end_idx = start_idx + n_targets
-                    
+
                     # Swap distribution parameters for this month
                     tmp1 = ind1[start_idx:end_idx].copy()
                     tmp2 = ind2[start_idx:end_idx].copy()
-                    
+
                     # Normalize the distributions before swapping
                     ind1[start_idx:end_idx] = normalize_distribution(tmp2)
                     ind2[start_idx:end_idx] = normalize_distribution(tmp1)
-                
+
                 hw_current_idx += 12 * n_targets  # Move to next hydrowork's base index
-        
+
         # Return individuals using the appropriate creator.Individual type
         return self.creator.Individual(ind1.tolist()), self.creator.Individual(ind2.tolist())
 
@@ -335,22 +374,22 @@ class DeapOptimizer:
             for month in range(12):
                 start_idx = (res_idx * 12 * genes_per_reservoir_month) + (month * genes_per_reservoir_month)
 
-                for param_idx, param_name in enumerate(['Vr', 'V1', 'V2']):
-                    if random.random() < indpb:
+                for param_idx, param_name in enumerate(["Vr", "V1", "V2"]):
+                    if self.rng.random() < indpb:
                         bounds = self.reservoir_bounds[res_id][param_name]
-                        value = np.random.uniform(bounds[0], bounds[1])
+                        value = self.rng.uniform(bounds[0], bounds[1])
 
                         # Special handling for volume relationships
-                        if param_name == 'V2':
+                        if param_name == "V2":
                             # Ensure V2 > V1
                             min_bound = max(bounds[0], individual[start_idx + 1])  # V1 index is 1, V2 must be > V1
-                            value = np.random.uniform(min_bound, bounds[1])
-                        elif param_name == 'V1':
+                            value = self.rng.uniform(min_bound, bounds[1])
+                        elif param_name == "V1":
                             # Ensure V1 < V2 and V1 > dead_storage
-                            dead_storage = self.base_system.graph.nodes[res_id]['node'].dead_storage
+                            dead_storage = self.base_system.graph.nodes[res_id]["node"].dead_storage
                             min_bound = max(bounds[0], dead_storage)
                             max_bound = min(bounds[1], individual[start_idx + 2])  # V2 index is 2
-                            value = np.random.uniform(min_bound, max_bound)
+                            value = self.rng.uniform(min_bound, max_bound)
 
                         individual[start_idx + param_idx] = value
 
@@ -360,13 +399,13 @@ class DeapOptimizer:
 
         for hw_idx, hw_id in enumerate(self.hydroworks_ids):
             n_targets = len(self.hydroworks_targets[hw_id])
-            if random.random() < indpb:
+            if self.rng.random() < indpb:
                 hw_updates.add(hw_id)
                 for month in range(12):
                     start_idx = current_idx + (month * n_targets)
                     end_idx = start_idx + n_targets
                     if end_idx <= len(individual):  # Check array bounds
-                        individual[start_idx:end_idx] = np.random.random(n_targets)
+                        individual[start_idx:end_idx] = self.rng.random_array(n_targets)
             current_idx += 12 * n_targets  # Update index for next hydroworks
 
         # Normalize hydroworks distributions that were modified
@@ -381,7 +420,173 @@ class DeapOptimizer:
             current_idx += 12 * n_targets  # Update index for next hydroworks
 
         # Return the creator.Individual type appropriate for the specific optimizer
-        return self.creator.Individual(individual.tolist()),
+        return (self.creator.Individual(individual.tolist()),)
+
+    def _create_initial_population(self):
+        """
+        Create and evaluate the initial population.
+
+        Returns:
+            tuple: (population, static_eval_args, n_obj)
+                - population (list): Evaluated initial population
+                - static_eval_args (tuple): Static arguments for evaluation
+                - n_obj (int): Number of objectives
+        """
+        pop = self.toolbox.population(n=self.population_size)
+
+        static_eval_args = (
+            self.base_system,
+            self.num_time_steps,
+            self.num_years,
+            self.dt,
+            self.objective_weights,
+            self.num_of_objectives,
+            self.reservoir_ids,
+            self.reservoir_bounds,
+            self.hydroworks_ids,
+            self.hydroworks_targets,
+            self.regular_demand_ids,
+            self.priority_demand_ids,
+            self.sink_ids,
+        )
+
+        fitnesses = list(self.pool.map(evaluate_individual, [static_eval_args + (ind,) for ind in pop]))
+        for ind, fit in zip(pop, fitnesses):
+            ind.fitness.values = fit
+
+        n_obj = len(pop[0].fitness.values)
+
+        for i in range(1, n_obj + 1):
+            self.history[f"min_obj{i}"] = []
+            self.history[f"avg_obj{i}"] = []
+            self.history[f"std_obj{i}"] = []
+
+        return pop, static_eval_args, n_obj
+
+    def _setup_statistics(self, n_obj: int):
+        """
+        Set up statistics tracking and logbook for optimization.
+
+        Args:
+            n_obj (int): Number of objectives
+
+        Returns:
+            tuple: (mstats, logbook)
+                - mstats: DEAP MultiStatistics object
+                - logbook: DEAP Logbook object
+        """
+        stats_objs = []
+        for i in range(n_obj):
+            stats = tools.Statistics(lambda ind, idx=i: ind.fitness.values[idx])
+            stats.register("min", np.min)
+            stats.register("avg", np.mean)
+            stats.register("std", np.std)
+            stats_objs.append(stats)
+
+        mstats = tools.MultiStatistics(**{f"obj{i + 1}": stats_objs[i] for i in range(n_obj)})
+
+        logbook = tools.Logbook()
+        logbook.header = ["gen", "nevals"]
+        for i in range(n_obj):
+            logbook.header += [f"obj{i + 1}_avg", f"obj{i + 1}_min", f"obj{i + 1}_std"]
+
+        return mstats, logbook
+
+    def _run_generation(self, population: list, static_eval_args: tuple) -> list:
+        """
+        Run a single generation of evolution (selection, crossover, mutation, evaluation).
+
+        Args:
+            population (list): Current population
+            static_eval_args (tuple): Static arguments for evaluation
+
+        Returns:
+            list: New population after selection from parents and offspring
+        """
+        offspring = self.toolbox.select(population, len(population))
+        offspring = list(map(self.toolbox.clone, offspring))
+
+        for i in range(1, len(offspring), 2):
+            if self.rng.random() < self.cxpb:
+                offspring[i - 1], offspring[i] = self.toolbox.mate(offspring[i - 1], offspring[i])
+                del offspring[i - 1].fitness.values, offspring[i].fitness.values
+
+        for i in range(len(offspring)):
+            if self.rng.random() < self.mutpb:
+                (offspring[i],) = self.toolbox.mutate(offspring[i])
+                del offspring[i].fitness.values
+
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        if invalid_ind:
+            fitnesses = list(self.pool.map(evaluate_individual, [static_eval_args + (ind,) for ind in invalid_ind]))
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+
+        return self.toolbox.select(population + offspring, self.population_size)
+
+    def _record_generation_stats(self, gen: int, population: list, logbook, mstats, n_obj: int):
+        """
+        Record statistics for the current generation.
+
+        Args:
+            gen (int): Generation number
+            population (list): Current population
+            logbook: DEAP Logbook object
+            mstats: DEAP MultiStatistics object
+            n_obj (int): Number of objectives
+        """
+        record = mstats.compile(population)
+        flat_record = {"gen": gen, "nevals": len(population) if gen == 0 else self.population_size}
+        for i in range(n_obj):
+            flat_record[f"obj{i + 1}_avg"] = record[f"obj{i + 1}"]["avg"]
+            flat_record[f"obj{i + 1}_min"] = record[f"obj{i + 1}"]["min"]
+            flat_record[f"obj{i + 1}_std"] = record[f"obj{i + 1}"]["std"]
+        logbook.record(**flat_record)
+        print(logbook.stream)
+
+        if gen > 0:
+            for i in range(1, n_obj + 1):
+                self.history[f"min_obj{i}"].append(record[f"obj{i}"]["min"])
+                self.history[f"avg_obj{i}"].append(record[f"obj{i}"]["avg"])
+                self.history[f"std_obj{i}"].append(record[f"obj{i}"]["std"])
+
+    def _extract_pareto_front(self, population: list) -> list:
+        """
+        Extract the Pareto front from the final population.
+
+        Args:
+            population (list): Final population
+
+        Returns:
+            list: Pareto front individuals
+        """
+        if self.num_of_objectives == 1:
+            best_ind = min(population, key=lambda ind: ind.fitness.values[0])
+            return [best_ind]
+        else:
+            return tools.sortNondominated(population, len(population), first_front_only=True)[0]
+
+    def _package_results(self, pareto_front: list, n_obj: int) -> dict:
+        """
+        Package optimization results into a dictionary.
+
+        Args:
+            pareto_front (list): Pareto front individuals
+            n_obj (int): Number of objectives
+
+        Returns:
+            dict: Results dictionary
+        """
+        return {
+            "success": True,
+            "message": f"{n_obj}-objective optimization completed successfully",
+            "population_size": self.population_size,
+            "generations": self.ngen,
+            "crossover_probability": self.cxpb,
+            "mutation_probability": self.mutpb,
+            "pareto_front": pareto_front,
+            "optimizer": self,
+        }
 
     def optimize(self):
         """
@@ -403,141 +608,22 @@ class DeapOptimizer:
                 - 'pareto_front' (list): List of Pareto-optimal individuals.
                 - 'optimizer' (DeapOptimizer): Reference to the optimizer instance.
         """
-        # Create initial population
-        pop = self.toolbox.population(n=self.population_size)
+        pop, static_eval_args, n_obj = self._create_initial_population()
 
-        # Prepare static arguments for evaluation (everything except the individual)
-        static_eval_args = (
-            self.base_system,
-            self.num_time_steps,
-            self.num_years,
-            self.dt,
-            self.objective_weights,
-            self.num_of_objectives,
-            self.reservoir_ids,
-            self.reservoir_bounds,
-            self.hydroworks_ids,
-            self.hydroworks_targets,
-            self.regular_demand_ids,
-            self.priority_demand_ids,
-            self.sink_ids
-        )
+        mstats, logbook = self._setup_statistics(n_obj)
 
-        # Evaluate initial population in parallel
-        fitnesses = list(self.pool.map(
-            evaluate_individual,
-            [static_eval_args + (ind,) for ind in pop]
-        ))
-        for ind, fit in zip(pop, fitnesses):
-            ind.fitness.values = fit
+        self._record_generation_stats(0, pop, logbook, mstats, n_obj)
 
-        # Determine number of objectives from the first individual's fitness
-        n_obj = len(pop[0].fitness.values)
-        # Initialize history keys for all objectives
-        for i in range(1, n_obj + 1):
-            self.history[f'min_obj{i}'] = []
-            self.history[f'avg_obj{i}'] = []
-            self.history[f'std_obj{i}'] = []
-
-        # Initialize statistics tracking for all objectives
-        stats_objs = []
-        for i in range(n_obj):
-            stats = tools.Statistics(lambda ind, idx=i: ind.fitness.values[idx])
-            stats.register("min", np.min)
-            stats.register("avg", np.mean)
-            stats.register("std", np.std)
-            stats_objs.append(stats)
-
-        # Combine statistics into a multi-statistics object
-        mstats = tools.MultiStatistics(**{f'obj{i+1}': stats_objs[i] for i in range(n_obj)})
-
-        # Create the logbook for statistics
-        logbook = tools.Logbook()
-        logbook.header = ['gen', 'nevals']
-        for i in range(n_obj):
-            logbook.header += [f'obj{i+1}_avg', f'obj{i+1}_min', f'obj{i+1}_std']
-
-        # Record the initial statistics
-        record = mstats.compile(pop)
-        flat_record = {'gen': 0, 'nevals': len(pop)}
-        for i in range(n_obj):
-            flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
-            flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
-            flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
-        logbook.record(**flat_record)
-        print(logbook.stream)
-
-        # Begin the evolution
         for gen in range(1, self.ngen + 1):
-            offspring = self.toolbox.select(pop, len(pop))
-            offspring = list(map(self.toolbox.clone, offspring))
+            pop = self._run_generation(pop, static_eval_args)
+            self._record_generation_stats(gen, pop, logbook, mstats, n_obj)
 
-            # Apply crossover and mutation
-            for i in range(1, len(offspring), 2):
-                if random.random() < self.cxpb:
-                    offspring[i-1], offspring[i] = self.toolbox.mate(offspring[i-1], offspring[i])
-                    del offspring[i-1].fitness.values, offspring[i].fitness.values
-
-            for i in range(len(offspring)):
-                if random.random() < self.mutpb:
-                    offspring[i], = self.toolbox.mutate(offspring[i])
-                    del offspring[i].fitness.values
-
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            if invalid_ind:
-                fitnesses = list(self.pool.map(
-                    evaluate_individual,
-                    [static_eval_args + (ind,) for ind in invalid_ind]
-                ))
-                for ind, fit in zip(invalid_ind, fitnesses):
-                    ind.fitness.values = fit
-
-            # Select the survivors from the combined population of parents and offspring
-            pop = self.toolbox.select(pop + offspring, self.population_size)
-
-            # Record statistics
-            record = mstats.compile(pop)
-            flat_record = {'gen': gen, 'nevals': len(offspring)}
-            for i in range(n_obj):
-                flat_record[f'obj{i+1}_avg'] = record[f'obj{i+1}']['avg']
-                flat_record[f'obj{i+1}_min'] = record[f'obj{i+1}']['min']
-                flat_record[f'obj{i+1}_std'] = record[f'obj{i+1}']['std']
-            logbook.record(**flat_record)
-            print(logbook.stream)
-
-            # Store the history for all objectives
-            for i in range(1, n_obj + 1):
-                self.history[f'min_obj{i}'].append(record[f'obj{i}']['min'])
-                self.history[f'avg_obj{i}'].append(record[f'obj{i}']['avg'])
-                self.history[f'std_obj{i}'].append(record[f'obj{i}']['std'])
-
-        # Extract the Pareto front
-        if self.num_of_objectives == 1:
-            # Only keep the best individual
-            best_ind = min(pop, key=lambda ind: ind.fitness.values[0])
-            self.pareto_front = [best_ind]
-        else:
-            # Multi-objective: keep the Pareto front
-            self.pareto_front = tools.sortNondominated(pop, len(pop), first_front_only=True)[0]
-
-        # Get the overall best individual based on a weighted sum of all objectives
-        best_ind = min(pop, key=lambda ind: sum(ind.fitness.values) / len(ind.fitness.values))
-        reservoir_params, hydroworks_params = decode_individual(self.reservoir_ids, self.hydroworks_ids, self.hydroworks_targets, best_ind)
+        self.pareto_front = self._extract_pareto_front(pop)
 
         self.pool.close()
         self.pool.join()
-        # Return results in a format similar to pymoo
-        return {
-            'success': True,
-            'message': f"{n_obj}-objective optimization completed successfully",
-            'population_size': self.population_size,
-            'generations': self.ngen,
-            'crossover_probability': self.cxpb,
-            'mutation_probability': self.mutpb,
-            'pareto_front': self.pareto_front,
-            'optimizer': self  # Include the optimizer instance for parameter decoding
-        }
+
+        return self._package_results(self.pareto_front, n_obj)
 
     def plot_convergence(self):
         """
@@ -559,13 +645,13 @@ class DeapOptimizer:
         if n_obj == 1:
             axes = [axes]
 
-        generations = range(1, len(self.history.get('min_obj1', [])) + 1)
+        generations = range(1, len(self.history.get("min_obj1", [])) + 1)
 
         for i in range(n_obj):
             ax = axes[i]
-            min_key = f'min_obj{i+1}'
-            avg_key = f'avg_obj{i+1}'
-            std_key = f'std_obj{i+1}'
+            min_key = f"min_obj{i + 1}"
+            avg_key = f"avg_obj{i + 1}"
+            std_key = f"std_obj{i + 1}"
 
             min_vals = self.history.get(min_key, [])
             avg_vals = self.history.get(avg_key, [])
@@ -574,26 +660,28 @@ class DeapOptimizer:
             if not min_vals:
                 continue
 
-            ax.plot(generations, min_vals, label='Best', color='blue')
-            ax.plot(generations, avg_vals, label='Average', color='orange')
+            ax.plot(generations, min_vals, label="Best", color="blue")
+            ax.plot(generations, avg_vals, label="Average", color="orange")
             ax.fill_between(
                 generations,
                 np.array(avg_vals) - np.array(std_vals),
                 np.array(avg_vals) + np.array(std_vals),
-                color='orange', alpha=0.2, label='Std Dev'
+                color="orange",
+                alpha=0.2,
+                label="Std Dev",
             )
-            ax.set_ylabel(f'Objective {i+1}')
+            ax.set_ylabel(f"Objective {i + 1}")
             ax.legend()
             ax.grid(True)
 
-        axes[-1].set_xlabel('Generation')
-        fig.suptitle('Convergence History per Objective', fontsize=16)
+        axes[-1].set_xlabel("Generation")
+        fig.suptitle("Convergence History per Objective", fontsize=16)
         plt.tight_layout(rect=[0, 0, 1, 0.97])
 
         # Ensure directory exists
-        save_path = os.path.join(os.getcwd(), 'model_output', 'optimization')
+        save_path = os.path.join(os.getcwd(), "model_output", "optimization")
         os.makedirs(save_path, exist_ok=True)
-        file_path = os.path.join(save_path, 'convergence.png')
+        file_path = os.path.join(save_path, "convergence.png")
         plt.savefig(file_path)
         plt.close(fig)
         print(f"Convergence plot saved to {file_path}")
@@ -618,7 +706,7 @@ class DeapOptimizer:
         avg_sums = []
         std_sums = []
 
-        num_gens = len(self.history.get('min_obj1', []))
+        num_gens = len(self.history.get("min_obj1", []))
         generations = range(1, num_gens + 1)
 
         for gen in range(num_gens):
@@ -626,9 +714,9 @@ class DeapOptimizer:
             avg_sum = 0
             std_sum = 0
             for i in range(n_obj):
-                min_vals = self.history.get(f'min_obj{i+1}', [])
-                avg_vals = self.history.get(f'avg_obj{i+1}', [])
-                std_vals = self.history.get(f'std_obj{i+1}', [])
+                min_vals = self.history.get(f"min_obj{i + 1}", [])
+                avg_vals = self.history.get(f"avg_obj{i + 1}", [])
+                std_vals = self.history.get(f"std_obj{i + 1}", [])
                 if min_vals and avg_vals and std_vals:
                     min_sum += min_vals[gen]
                     avg_sum += avg_vals[gen]
@@ -638,28 +726,31 @@ class DeapOptimizer:
             std_sums.append(std_sum)
 
         plt.figure(figsize=(8, 5))
-        plt.plot(generations, min_sums, label='Best (Sum)', color='blue')
-        plt.plot(generations, avg_sums, label='Average (Sum)', color='orange')
+        plt.plot(generations, min_sums, label="Best (Sum)", color="blue")
+        plt.plot(generations, avg_sums, label="Average (Sum)", color="orange")
         plt.fill_between(
             generations,
             np.array(avg_sums) - np.array(std_sums),
             np.array(avg_sums) + np.array(std_sums),
-            color='orange', alpha=0.2, label='Std Dev'
+            color="orange",
+            alpha=0.2,
+            label="Std Dev",
         )
-        plt.xlabel('Generation')
-        plt.ylabel('Sum of Objectives')
-        plt.title('Convergence of Total Objective (Sum of All Objectives)')
+        plt.xlabel("Generation")
+        plt.ylabel("Sum of Objectives")
+        plt.title("Convergence of Total Objective (Sum of All Objectives)")
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
 
         # Ensure directory exists
-        save_path = os.path.join(os.getcwd(), 'model_output', 'optimization')
+        save_path = os.path.join(os.getcwd(), "model_output", "optimization")
         os.makedirs(save_path, exist_ok=True)
-        file_path = os.path.join(save_path, 'total_objective_convergence.png')
+        file_path = os.path.join(save_path, "total_objective_convergence.png")
         plt.savefig(file_path)
         plt.close()
         print(f"Total objective convergence plot saved to {file_path}")
+
 
 # --------------------- EVALUATION FUNCTION -----------------------------
 # This function is used to evaluate an individual in parallel.
@@ -692,9 +783,8 @@ def evaluate_individual(args):
         regular_demand_ids,
         priority_demand_ids,
         sink_ids,
-        individual
+        individual,
     ) = args
-
 
     try:
         # Decode the individual's genes into parameters
@@ -707,9 +797,9 @@ def evaluate_individual(args):
 
         # Apply parameters to the system
         for res_id, params in reservoir_params.items():
-            system.graph.nodes[res_id]['node'].set_release_params(params)
+            system.graph.nodes[res_id]["node"].set_release_params(params)
         for hw_id, params in hydroworks_params.items():
-            system.graph.nodes[hw_id]['node'].set_distribution_parameters(params)
+            system.graph.nodes[hw_id]["node"].set_distribution_parameters(params)
 
         # Run simulation
         system.simulate(num_time_steps)
@@ -725,18 +815,20 @@ def evaluate_individual(args):
         # Objective 5: Unmet ecological flow at edges
         edge_ecological_flow_deficit = total_unmet_ecological_flow(system, dt, num_years)
 
-        base_objectives = np.array([
-            low_priority_demand_deficit,
-            high_priority_demand_deficit,
-            flooding_volume,
-            sink_min_flow_deficit,
-            edge_ecological_flow_deficit
-        ])
+        base_objectives = np.array(
+            [
+                low_priority_demand_deficit,
+                high_priority_demand_deficit,
+                flooding_volume,
+                sink_min_flow_deficit,
+                edge_ecological_flow_deficit,
+            ]
+        )
 
         # Prepare the weights for each objective as a list of arrays
         weights_list = []
         for i in range(1, num_of_objectives + 1):
-            weights = np.array(objective_weights[f'objective_{i}'])
+            weights = np.array(objective_weights[f"objective_{i}"])
             weights_list.append(weights)
 
         # Calculate the weighted sum for each objective
@@ -745,4 +837,4 @@ def evaluate_individual(args):
 
     except Exception as e:
         print(f"Error evaluating individual (static): {str(e)}")
-        return (float('inf'),) * num_of_objectives
+        return (float("inf"),) * num_of_objectives

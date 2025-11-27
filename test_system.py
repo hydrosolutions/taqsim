@@ -17,9 +17,9 @@
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
 
-from water_system import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
-from water_system import DeapOptimizer, WaterSystemVisualizer
-from water_system.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters
+from taqsim import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
+from taqsim import DeapOptimizer, WaterSystemVisualizer
+from taqsim.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters
 
 if __name__ == "__main__":
     # Created a dummy water system with various nodes and edges
