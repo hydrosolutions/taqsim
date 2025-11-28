@@ -270,35 +270,35 @@ with pytest.raises(ValueError, match="no steps"):
    - Clarify ambiguous requirements
    - Better to over-ask than under-deliver
 
-### Phase 2: Interface Design
+### Phase 2: Signature & Contract Design
 
-2. **Design interfaces for EVERY component**
-   - Use `Protocol` classes for service interfaces
-   - Use `dataclass` or `TypedDict` for data structures
-   - Use `Enum` for finite state representations
-   - **Everything starts as an interface** - no implementation yet
+2. **Design Signatures & Type Contracts for EVERY component**
+   - Use `Protocol` classes for service contracts (behavioral typing)
+   - Use `dataclass` or `TypedDict` for data contracts
+   - Use `Enum` for state/options definitions
+   - **Focus on input/output types and method signatures** - no implementation details yet
 
-3. **Verify interfaces with user**
-   - Present all interfaces for review
-   - Iterate until interfaces are locked
+3. **Verify Contracts with user**
+   - Present all signatures/protocols for review
+   - Iterate until the API surface is locked
    - Get explicit approval before proceeding
-   - **No moving forward until interfaces are finalized**
+   - **No moving forward until the contract is finalized**
 
 ### Phase 3: Behavioral Specification
 
-4. **Write test structure as behavioral interface**
-   - Create test classes and methods with clear names
-   - **Bodies contain only `pass`** - just the structure
-   - Tests define the expected behavior contract
+4. **Write test structure as behavioral contract**
+   - Create test classes and methods with clear names matching the intended behavior
+   - **Bodies contain only `pass`** - just the scaffold
+   - Tests define the expected behavioral contract
    - Get verification that test cases cover requirements
 
 ### Phase 4: Test Implementation
 
-5. **Write tests using interfaces only**
-   - Use fakes/stubs for all dependencies
-   - Tests must work against interfaces
+5. **Write tests using Contracts only**
+   - Use fakes/stubs based on the `Protocol` definitions
+   - Tests must work against the defined signatures
    - **No real implementation exists yet**
-   - Tests define the contract implementations must fulfill
+   - Tests enforce the contract that implementations must fulfill
 
 ---
 
@@ -311,13 +311,13 @@ with pytest.raises(ValueError, match="no steps"):
 6. **Implement all test bodies** (extreme parallelism)
    - Spawn 10+ agents simultaneously
    - Each agent owns a specific test file/module
-   - Tests remain interface-bound
+   - Tests remain contract-bound
 
 7. **Implement all logic** (extreme parallelism)
    - Spawn 10+ agents simultaneously
    - Each agent owns a specific implementation
    - Run until all tests pass
-   - **NO interface changes allowed** unless:
+   - **NO signature/contract changes allowed** unless:
      - Explicitly requested to user
      - Motivation for change is provided
      - User approves the change
@@ -326,7 +326,7 @@ with pytest.raises(ValueError, match="no steps"):
 
 - Agents MUST refuse to skip phases
 - Each phase requires explicit completion before next
-- Interface changes after Phase 3 require user approval with justification
+- Signature/Contract changes after Phase 3 require user approval with justification
 - Parallelism is MANDATORY in Phases 6-7, not optional
 
 ---
