@@ -13,6 +13,7 @@ dependencies = [
     "seaborn>=0.12",
     "plotly>=5.14",
     "deap>=1.4",
+    "pyzmq>=27.1.0",
 ]
 
 [build-system]
@@ -21,9 +22,12 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3",       # tests
+    "altair>=6.0.0",
+    "marimo>=0.18.1",
+    "polars>=1.35.2",
+    "pytest>=8.3", # tests
     "pytest-cov>=6.2.1",
-    "ruff>=0.12",        # linter + formatter
+    "ruff>=0.12", # linter + formatter
 ]
 
 # -----------------------

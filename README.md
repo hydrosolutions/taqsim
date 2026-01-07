@@ -59,12 +59,14 @@ system_creator_ZRB.py
 ## Installation
 
 1. **Clone the repository:**
+
    ```sh
    git clone https://github.com/hydrosolutions/water_system_simulation_optimization.git
    cd water_system_simulation_optimization
    ```
 
 2. **Install dependencies:**
+
    ```sh
    pip install networkx matplotlib pandas deap seaborn numpy
    ```
@@ -78,6 +80,7 @@ system_creator_ZRB.py
 See [README_system_creation_example.md](documentation/README_system_creation_example.md) for a full, step-by-step guide.
 
 **Basic Example:**
+
 ```python
 from taqsim import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
 
@@ -142,7 +145,6 @@ vis.print_water_balance_summary()
 - [README_optimization.md](documentation/README_optimization.md): Optimization setup and usage
 
 ---
-
 
 ## Contact
 
