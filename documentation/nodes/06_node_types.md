@@ -2,26 +2,26 @@
 
 ## Overview
 
-Five node types compose the water system. Each combines specific capabilities.
+Six node types compose the water system. Each combines specific capabilities. Nodes process water and record events but **do not know their targets** — topology is derived from edges by `WaterSystem`.
 
-| Node | Generates | Receives | Stores | Loses | Consumes | Gives |
-|------|-----------|----------|--------|-------|----------|-------|
-| Source | X | | | | | X |
-| Sink | | X | | | | |
-| Splitter | | X | | | | X |
-| Demand | | X | | | X | X |
-| Storage | | X | X | X | | X |
+| Node | Generates | Receives | Stores | Loses | Consumes | Output Event |
+|------|-----------|----------|--------|-------|----------|--------------|
+| Source | ✓ | | | | | WaterOutput |
+| PassThrough | | ✓ | | | | WaterOutput |
+| Splitter | | ✓ | | | | WaterDistributed |
+| Demand | | ✓ | | | ✓ | WaterOutput |
+| Storage | | ✓ | ✓ | ✓ | | WaterOutput |
+| Sink | | ✓ | | | | (terminal) |
 
 ---
 
 ## Source
 
-Water entry point. Generates inflow and distributes downstream.
+Water entry point. Generates inflow from a TimeSeries.
 
 ### Capabilities
 
 - **Generates**: Produces water from `inflow` TimeSeries
-- **Gives**: Distributes to targets via `split_strategy`
 
 ### Parameters
 
@@ -29,18 +29,16 @@ Water entry point. Generates inflow and distributes downstream.
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
 | `inflow` | `TimeSeries` | Yes | Inflow rates per timestep |
-| `targets` | `list[str]` | No | Downstream node IDs |
-| `split_strategy` | `SplitStrategy` | Yes | Distribution strategy |
 
 ### Events Recorded
 
-- `WaterGenerated(amount, t)` - when water is generated
-- `WaterDistributed(amount, target_id, t)` - for each target
+- `WaterGenerated(amount, t)` — when water is generated
+- `WaterOutput(amount, t)` — water available for downstream
 
 ### Update Cycle
 
 1. Generate water: `amount = inflow[t] * dt`
-2. Distribute to targets
+2. Record `WaterOutput` for routing
 
 ### Example
 
@@ -49,17 +47,15 @@ from taqsim.node import Source, TimeSeries
 
 source = Source(
     id="river_intake",
-    inflow=TimeSeries(values=[100.0, 150.0, 120.0]),
-    targets=["reservoir"],
-    split_strategy=equal_split
+    inflow=TimeSeries(values=[100.0, 150.0, 120.0])
 )
 ```
 
 ---
 
-## Sink
+## PassThrough
 
-Terminal node. Receives water and exits the system.
+Transparent node for turbines, measurement points, or junctions. Passes 100% of received water downstream.
 
 ### Capabilities
 
@@ -73,48 +69,53 @@ Terminal node. Receives water and exits the system.
 
 ### Events Recorded
 
-- `WaterReceived(amount, source_id, t)` - when water arrives
+- `WaterReceived(amount, source_id, t)` — when water arrives
+- `WaterPassedThrough(amount, t)` — for analysis (e.g., turbine power)
+- `WaterOutput(amount, t)` — water available for downstream
 
 ### Update Cycle
 
-No-op. Sink is passive; it only records received water.
+1. Record `WaterPassedThrough` for the accumulated amount
+2. Record `WaterOutput` for routing
+3. Reset counter
 
 ### Example
 
 ```python
-from taqsim.node import Sink
+from taqsim.node import PassThrough
 
-sink = Sink(id="ocean_outflow")
+turbine = PassThrough(id="hydropower_turbine")
 ```
 
 ---
 
 ## Splitter
 
-Distribution node. Receives water and splits among targets.
+Distribution node. Receives water and splits among multiple targets using a split strategy.
 
 ### Capabilities
 
 - **Receives**: Accepts water from upstream
-- **Gives**: Distributes to targets via `split_strategy`
 
 ### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
-| `targets` | `list[str]` | No | Downstream node IDs |
 | `split_strategy` | `SplitStrategy` | Yes | Distribution strategy |
+
+> **Note**: Targets are derived from edges by `WaterSystem` and populated via `_set_targets()` during validation.
 
 ### Events Recorded
 
-- `WaterReceived(amount, source_id, t)` - when water arrives
-- `WaterDistributed(amount, target_id, t)` - for each target
+- `WaterReceived(amount, source_id, t)` — when water arrives
+- `WaterDistributed(amount, target_id, t)` — for each target edge
 
 ### Update Cycle
 
-1. Distribute all received water to targets
-2. Reset received counter
+1. Apply split strategy to distribute water
+2. Record `WaterDistributed` for each target
+3. Reset counter
 
 ### Example
 
@@ -123,7 +124,6 @@ from taqsim.node import Splitter
 
 splitter = Splitter(
     id="canal_junction",
-    targets=["irrigation_north", "irrigation_south"],
     split_strategy=proportional_split
 )
 ```
@@ -132,13 +132,12 @@ splitter = Splitter(
 
 ## Demand
 
-Consumption node. Receives water, consumes requirement, passes remainder.
+Consumption node. Receives water, consumes requirement, passes remainder downstream.
 
 ### Capabilities
 
 - **Receives**: Accepts water from upstream
 - **Consumes**: Removes water to meet requirement
-- **Gives**: Distributes remaining to targets
 
 ### Parameters
 
@@ -146,15 +145,13 @@ Consumption node. Receives water, consumes requirement, passes remainder.
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
 | `requirement` | `TimeSeries` | Yes | Demand rates per timestep |
-| `targets` | `list[str]` | No | Downstream node IDs |
-| `split_strategy` | `SplitStrategy` | Yes | Distribution strategy |
 
 ### Events Recorded
 
-- `WaterReceived(amount, source_id, t)` - when water arrives
-- `WaterConsumed(amount, t)` - amount consumed
-- `DeficitRecorded(required, actual, deficit, t)` - if demand not met
-- `WaterDistributed(amount, target_id, t)` - for remaining water
+- `WaterReceived(amount, source_id, t)` — when water arrives
+- `WaterConsumed(amount, t)` — amount consumed
+- `DeficitRecorded(required, actual, deficit, t)` — if demand not met
+- `WaterOutput(amount, t)` — remaining water for downstream
 
 ### Deficit Tracking
 
@@ -167,19 +164,17 @@ When received water is less than required, a `DeficitRecorded` event captures:
 
 1. Consume up to requirement: `consumed = min(received, requirement[t] * dt)`
 2. Record deficit if `consumed < required`
-3. Distribute remaining water to targets
-4. Reset received counter
+3. Record `WaterOutput` for remaining water
+4. Reset counter
 
 ### Example
 
 ```python
 from taqsim.node import Demand, TimeSeries
 
-demand = Demand(
+city = Demand(
     id="city_water",
-    requirement=TimeSeries(values=[50.0, 60.0, 55.0]),
-    targets=["wastewater_treatment"],
-    split_strategy=equal_split
+    requirement=TimeSeries(values=[50.0, 60.0, 55.0])
 )
 ```
 
@@ -187,14 +182,13 @@ demand = Demand(
 
 ## Storage
 
-Reservoir node. Receives, stores, loses, releases, and distributes water.
+Reservoir node. Receives, stores, loses, releases, and outputs water.
 
 ### Capabilities
 
 - **Receives**: Accepts water from upstream
 - **Stores**: Buffers water up to capacity
 - **Loses**: Physical losses (evaporation, seepage)
-- **Gives**: Distributes released + spilled water
 
 ### Parameters
 
@@ -205,8 +199,6 @@ Reservoir node. Receives, stores, loses, releases, and distributes water.
 | `initial_storage` | `float` | No | Starting volume (default: 0) |
 | `release_rule` | `ReleaseRule` | Yes | Release calculation |
 | `loss_rule` | `LossRule` | Yes | Loss calculation |
-| `split_strategy` | `SplitStrategy` | Yes | Distribution strategy |
-| `targets` | `list[str]` | No | Downstream node IDs |
 
 ### Validation
 
@@ -215,19 +207,19 @@ Reservoir node. Receives, stores, loses, releases, and distributes water.
 
 ### Events Recorded
 
-- `WaterReceived(amount, source_id, t)` - when water arrives
-- `WaterStored(amount, t)` - amount added to storage
-- `WaterSpilled(amount, t)` - overflow when capacity exceeded
-- `WaterLost(amount, reason, t)` - per loss type (evaporation, seepage)
-- `WaterReleased(amount, t)` - controlled release
-- `WaterDistributed(amount, target_id, t)` - for each target
+- `WaterReceived(amount, source_id, t)` — when water arrives
+- `WaterStored(amount, t)` — amount added to storage
+- `WaterSpilled(amount, t)` — overflow when capacity exceeded
+- `WaterLost(amount, reason, t)` — per loss type (evaporation, seepage)
+- `WaterReleased(amount, t)` — controlled release
+- `WaterOutput(amount, t)` — released + spilled for downstream
 
 ### Spillway Handling
 
 When inflow exceeds available capacity:
 1. Store up to capacity
 2. Record `WaterSpilled` for overflow
-3. Spilled water joins released water for downstream distribution
+3. Spilled water joins released water in `WaterOutput`
 
 ### Loss Handling
 
@@ -250,8 +242,8 @@ reservoir.storage  # returns current volume
 1. Store inflow (record spill if overflow)
 2. Calculate and apply losses
 3. Calculate and apply release
-4. Distribute (released + spilled) to targets
-5. Reset received counter
+4. Record `WaterOutput` for (released + spilled)
+5. Reset counter
 
 ### Example
 
@@ -263,11 +255,41 @@ reservoir = Storage(
     capacity=10000.0,
     initial_storage=5000.0,
     release_rule=fixed_release,
-    loss_rule=evaporation_loss,
-    split_strategy=equal_split,
-    targets=["downstream_river"]
+    loss_rule=evaporation_loss
 )
 
 # Check current storage
 print(reservoir.storage)  # 5000.0
+```
+
+---
+
+## Sink
+
+Terminal node. Receives water and exits the system. Represents system boundaries (ocean, aquifer, etc.).
+
+### Capabilities
+
+- **Receives**: Accepts water from upstream
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | `str` | Yes | Unique identifier |
+
+### Events Recorded
+
+- `WaterReceived(amount, source_id, t)` — when water arrives
+
+### Update Cycle
+
+No-op. Sink is passive; it only records received water.
+
+### Example
+
+```python
+from taqsim.node import Sink
+
+sink = Sink(id="ocean_outflow")
 ```

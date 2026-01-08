@@ -68,12 +68,28 @@ Water removed from system by demand.
 WaterConsumed(amount=40.0, t=0)
 ```
 
-### WaterDistributed
+### WaterOutput
 
-Water sent to downstream node.
+Water available for downstream routing. Used by single-output nodes (Source, Storage, Demand, PassThrough). The `WaterSystem` orchestrator routes this to the appropriate edge.
 
 ```python
-WaterDistributed(amount=60.0, target_id="downstream_node", t=0)
+WaterOutput(amount=60.0, t=0)
+```
+
+### WaterPassedThrough
+
+Records water passing through a PassThrough node (for analysis, e.g., turbine power calculation).
+
+```python
+WaterPassedThrough(amount=100.0, t=0)
+```
+
+### WaterDistributed
+
+Water sent to a specific downstream target. Used by Splitter nodes to distribute to multiple targets.
+
+```python
+WaterDistributed(amount=60.0, target_id="downstream_edge", t=0)
 ```
 
 ### DeficitRecorded
@@ -112,10 +128,12 @@ Within a timestep, events are recorded in `update()` execution order:
 
 1. WaterGenerated (sources)
 2. WaterReceived
-3. WaterStored / WaterReleased
+3. WaterStored / WaterSpilled
 4. WaterLost
-5. WaterConsumed
-6. WaterDistributed
+5. WaterReleased
+6. WaterConsumed
+7. WaterPassedThrough (PassThrough nodes)
+8. WaterOutput (single-output nodes) / WaterDistributed (Splitter)
 
 ## Querying Events
 
@@ -143,6 +161,7 @@ All event types are part of the `NodeEvent` union:
 ```python
 NodeEvent = (
     WaterGenerated | WaterReceived | WaterStored | WaterReleased |
-    WaterLost | WaterConsumed | WaterDistributed | DeficitRecorded
+    WaterLost | WaterSpilled | WaterConsumed | WaterDistributed |
+    WaterOutput | WaterPassedThrough | DeficitRecorded
 )
 ```

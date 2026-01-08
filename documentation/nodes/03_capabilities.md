@@ -62,25 +62,20 @@ class Consumes(Protocol):
 
 Returns `(consumed, remaining)`.
 
-### Gives
-
-```python
-@runtime_checkable
-class Gives(Protocol):
-    def distribute(self, amount: float, t: int) -> dict[str, float]: ...
-```
-
-Returns `{target_id: amount}`.
-
 ## Composition Table
 
-| Node Type | Generates | Receives | Stores | Loses | Consumes | Gives |
-|-----------|-----------|----------|--------|-------|----------|-------|
-| Source    | ✓         |          |        |       |          | ✓     |
-| Splitter  |           | ✓        |        |       |          | ✓     |
-| Reservoir |           | ✓        | ✓      | ✓     |          | ✓     |
-| Demand    |           | ✓        |        |       | ✓        | ✓     |
-| Sink      |           | ✓        |        |       |          |       |
+| Node Type   | Generates | Receives | Stores | Loses | Consumes |
+|-------------|-----------|----------|--------|-------|----------|
+| Source      | ✓         |          |        |       |          |
+| PassThrough |           | ✓        |        |       |          |
+| Splitter    |           | ✓        |        |       |          |
+| Storage     |           | ✓        | ✓      | ✓     |          |
+| Demand      |           | ✓        |        |       | ✓        |
+| Sink        |           | ✓        |        |       |          |
+
+> **Note**: Topology (targets, distribution) is handled by `WaterSystem`, not by nodes.
+> The `Gives` protocol has been removed. Splitter uses `split_strategy` internally
+> but targets are derived from edges by the orchestrator.
 
 ## Checking Protocol Satisfaction
 
