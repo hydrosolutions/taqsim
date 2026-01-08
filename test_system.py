@@ -17,8 +17,18 @@
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
 
-from taqsim import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
-from taqsim import DeapOptimizer, WaterSystemVisualizer
+from taqsim import (
+    DeapOptimizer,
+    DemandNode,
+    Edge,
+    HydroWorks,
+    RunoffNode,
+    SinkNode,
+    StorageNode,
+    SupplyNode,
+    WaterSystem,
+    WaterSystemVisualizer,
+)
 from taqsim.io_utils import load_optimized_parameters, load_parameters_from_file, save_optimized_parameters
 
 if __name__ == "__main__":
@@ -150,7 +160,7 @@ if __name__ == "__main__":
     ## Setting up an Optimization problem
 
 
-    objectives = {'objective_1':[1,1,1,0,0]} 
+    objectives = {'objective_1':[1,1,1,0,0]}
 
     MyProblem = DeapOptimizer(
                     base_system=my_water_system,
@@ -159,13 +169,13 @@ if __name__ == "__main__":
                     ngen=100,        # Optimizing over 50 generations
                     population_size=500, # A Population consists of 100 individuals
                     cxpb=0.6,       # 0.6 probability for crossover
-                    mutpb=0.2,      # 0.2 probability for mutation 
+                    mutpb=0.2,      # 0.2 probability for mutation
     )
 
     # Run the optimization
     results = MyProblem.optimize()
     save_optimized_parameters(
-        results, 
+        results,
         filename="./data/dummy_data/optimization_results.json"
     )
 

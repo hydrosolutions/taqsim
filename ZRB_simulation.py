@@ -16,11 +16,10 @@
 ║                                                                         ║
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
-from taqsim import WaterSystemVisualizer, ParetoVisualizer
-from datetime import datetime
-from ZRB_system_creator import create_ZRB_system
+
+from taqsim import ParetoVisualizer, WaterSystemVisualizer
 from taqsim.io_utils import load_optimized_parameters, load_parameters_from_file
-import json
+from ZRB_system_creator import create_ZRB_system
 
 if __name__ == "__main__":
 
@@ -30,16 +29,16 @@ if __name__ == "__main__":
 
     # Create new system
     system = create_ZRB_system(start_year, start_month, num_time_steps)
-    
+
     # Load water allocation parameters from file
-    optimized_parameters=load_parameters_from_file(f"./data/ZRB_baseline/parameter/parameter_3obj_100gen_3000pop.json")
+    optimized_parameters=load_parameters_from_file("./data/ZRB_baseline/parameter/parameter_3obj_100gen_3000pop.json")
 
     # Create a ParetoVisualizer to visualize the optimization solutions
     # the objective_names are only used for visualization purposes
-    dashboard = ParetoVisualizer(optimized_parameters, objective_names=[f'Irrig. Supply Deficit [km³/a]', f'Industry Supply Deficit [km³/a]', f'Ecological Flow Deficit [km³/a]'])
+    dashboard = ParetoVisualizer(optimized_parameters, objective_names=['Irrig. Supply Deficit [km³/a]', 'Industry Supply Deficit [km³/a]', 'Ecological Flow Deficit [km³/a]'])
     dashboard.generate_full_report()
-    
-    # Load optimized parameters into the system, 
+
+    # Load optimized parameters into the system,
     # with the specified solution ID a solution from the Pareto front can be selected
     sol_id = 70  # Example solution ID to load
     system = load_optimized_parameters(system, pareto_solutions=optimized_parameters, solution_id=sol_id)
@@ -58,6 +57,6 @@ if __name__ == "__main__":
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_network_layout()
-    
+
 
 

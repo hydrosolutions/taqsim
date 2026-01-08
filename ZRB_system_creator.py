@@ -1,8 +1,8 @@
-from typing import Callable, Dict, List, Optional, Union
-import pandas as pd
 import json
-from taqsim import (WaterSystem, SupplyNode, StorageNode, DemandNode,
-                    SinkNode, HydroWorks, RunoffNode, Edge)
+
+import pandas as pd
+
+from taqsim import DemandNode, Edge, HydroWorks, RunoffNode, SinkNode, StorageNode, SupplyNode, WaterSystem
 
 
 def create_ZRB_system(start_year: int, start_month: int, num_time_steps: int) -> WaterSystem:
@@ -21,7 +21,7 @@ def create_ZRB_system(start_year: int, start_month: int, num_time_steps: int) ->
     dt = 30.44 * 24 * 3600
     # Initialize the water system
     system = WaterSystem(dt=dt, start_year=start_year, start_month=start_month)
-    # Base path for data files 
+    # Base path for data files
     base_path = './data/ZRB_baseline'
 
     # --- Add Supply Node (main inflow) ---
@@ -165,7 +165,7 @@ def create_ZRB_system(start_year: int, start_month: int, num_time_steps: int) ->
     system.add_node(Sink_Navoi)
 
     # --- Add Edges (connect all nodes according to config) ---
-    with open(f'{base_path}/config/edges_config.json', 'r') as file:
+    with open(f'{base_path}/config/edges_config.json') as file:
         edge_list = json.load(file)
     for node_id in edge_list:
         node = system.graph.nodes[node_id]['node']
@@ -258,7 +258,7 @@ def create_future_scenario_ZRB_system(
     RES_Kattakurgan = StorageNode("RES_Kattakurgan",
                                   easting=265377.2,
                                   northing=4414217.5,
-                                  hv_file=f"./data/baseline/reservoir/reservoir_kattakurgan_hv.csv",
+                                  hv_file="./data/baseline/reservoir/reservoir_kattakurgan_hv.csv",
                                   evaporation_file=evap_path,
                                   start_year=start_year,
                                   start_month=start_month,
@@ -269,7 +269,7 @@ def create_future_scenario_ZRB_system(
     RES_Akdarya = StorageNode("RES_Akdarya",
                               easting=274383.7,
                               northing=4432954.7,
-                              hv_file=f"./data/baseline/reservoir/reservoir_akdarya_hv.csv",
+                              hv_file="./data/baseline/reservoir/reservoir_akdarya_hv.csv",
                               evaporation_file=evap_path,
                               start_year=start_year,
                               start_month=start_month,
@@ -309,7 +309,7 @@ def create_future_scenario_ZRB_system(
     system.add_node(Sink_Kashkadarya)
     system.add_node(Sink_Navoi)
 
-    with open(f'{base_path}/config/edges_config.json', 'r') as file:
+    with open(f'{base_path}/config/edges_config.json') as file:
         edge_list = json.load(file)
     for node_id in edge_list:
         node = system.graph.nodes[node_id]['node']
@@ -383,7 +383,7 @@ def create_tuman_ZRB_system(start_year: int, start_month: int, num_time_steps: i
     RES_Kattakurgan = StorageNode("RES_Kattakurgan",
                                   easting=265377.2,
                                   northing=4414217.5,
-                                  hv_file=f"./data/baseline/reservoir/reservoir_kattakurgan_hv.csv",
+                                  hv_file="./data/baseline/reservoir/reservoir_kattakurgan_hv.csv",
                                   evaporation_file=evap_path,
                                   start_year=start_year,
                                   start_month=start_month,
@@ -394,7 +394,7 @@ def create_tuman_ZRB_system(start_year: int, start_month: int, num_time_steps: i
     RES_Akdarya = StorageNode("RES_Akdarya",
                               easting=274383.7,
                               northing=4432954.7,
-                              hv_file=f"./data/baseline/reservoir/reservoir_akdarya_hv.csv",
+                              hv_file="./data/baseline/reservoir/reservoir_akdarya_hv.csv",
                               evaporation_file=evap_path,
                               start_year=start_year,
                               start_month=start_month,
@@ -434,7 +434,7 @@ def create_tuman_ZRB_system(start_year: int, start_month: int, num_time_steps: i
     system.add_node(Sink_Kashkadarya)
     system.add_node(Sink_Navoi)
 
-    with open(f'{base_path}/config/edges_config.json', 'r') as file:
+    with open(f'{base_path}/config/edges_config.json') as file:
         edge_list = json.load(file)
     for node_id in edge_list:
         node = system.graph.nodes[node_id]['node']

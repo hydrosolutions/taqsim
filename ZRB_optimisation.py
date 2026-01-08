@@ -16,16 +16,17 @@
 ║                                                                         ║
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
-from taqsim import DeapOptimizer, ParetoVisualizer
-from taqsim.io_utils import save_optimized_parameters, load_parameters_from_file
 from datetime import datetime
+
+from taqsim import DeapOptimizer, ParetoVisualizer
+from taqsim.io_utils import load_parameters_from_file, save_optimized_parameters
 from ZRB_system_creator import create_ZRB_system
 
 if __name__ == "__main__":
-    
+
     # Logging start time to measure execution time
     start = datetime.now()
-    
+
     # Define parameters for the optimization
     start_year = 2017
     start_month = 1

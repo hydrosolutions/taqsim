@@ -4,8 +4,8 @@ import os
 
 import numpy as np
 
-from .water_system import WaterSystem
 from .optimization.optimizer import decode_individual
+from .water_system import WaterSystem
 
 logger = logging.getLogger(__name__)
 
