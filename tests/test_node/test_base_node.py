@@ -1,0 +1,161 @@
+import pytest
+
+from taqsim.node.base import BaseNode
+from taqsim.node.events import WaterGenerated, WaterReceived, WaterStored
+
+
+class TestBaseNodeInit:
+    def test_creates_with_id(self):
+        node = BaseNode(id="test_node")
+        assert node.id == "test_node"
+
+    def test_starts_with_empty_events(self):
+        node = BaseNode(id="test")
+        assert node.events == []
+
+    def test_id_is_stored_correctly(self):
+        node = BaseNode(id="unique_identifier_123")
+        assert node.id == "unique_identifier_123"
+
+
+class TestEventRecording:
+    def test_record_appends_event(self):
+        node = BaseNode(id="test")
+        event = WaterGenerated(amount=100.0, t=0)
+        node.record(event)
+        assert len(node.events) == 1
+        assert node.events[0] is event
+
+    def test_record_multiple_events(self):
+        node = BaseNode(id="test")
+        event1 = WaterGenerated(amount=100.0, t=0)
+        event2 = WaterReceived(amount=50.0, source_id="up", t=1)
+        event3 = WaterStored(amount=75.0, t=2)
+
+        node.record(event1)
+        node.record(event2)
+        node.record(event3)
+
+        assert len(node.events) == 3
+        assert node.events[0] is event1
+        assert node.events[1] is event2
+        assert node.events[2] is event3
+
+    def test_events_at_filters_by_timestep(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=0))
+        node.record(WaterGenerated(amount=50.0, t=1))
+        node.record(WaterReceived(amount=25.0, source_id="up", t=0))
+
+        events_t0 = node.events_at(0)
+        assert len(events_t0) == 2
+
+        events_t1 = node.events_at(1)
+        assert len(events_t1) == 1
+
+    def test_events_at_returns_empty_for_nonexistent_timestep(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=0))
+
+        events_t5 = node.events_at(5)
+        assert events_t5 == []
+
+    def test_events_at_returns_all_events_at_timestep(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=2))
+        node.record(WaterReceived(amount=50.0, source_id="a", t=2))
+        node.record(WaterStored(amount=75.0, t=2))
+        node.record(WaterGenerated(amount=25.0, t=3))
+
+        events_t2 = node.events_at(2)
+        assert len(events_t2) == 3
+
+    def test_events_of_type_filters_by_class(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=0))
+        node.record(WaterReceived(amount=50.0, source_id="up", t=0))
+        node.record(WaterGenerated(amount=75.0, t=1))
+
+        generated = node.events_of_type(WaterGenerated)
+        assert len(generated) == 2
+        assert all(isinstance(e, WaterGenerated) for e in generated)
+
+    def test_events_of_type_returns_empty_for_absent_type(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=0))
+
+        stored = node.events_of_type(WaterStored)
+        assert stored == []
+
+    def test_events_of_type_returns_all_matching_events(self):
+        node = BaseNode(id="test")
+        node.record(WaterReceived(amount=10.0, source_id="a", t=0))
+        node.record(WaterReceived(amount=20.0, source_id="b", t=1))
+        node.record(WaterReceived(amount=30.0, source_id="c", t=2))
+        node.record(WaterGenerated(amount=100.0, t=0))
+
+        received = node.events_of_type(WaterReceived)
+        assert len(received) == 3
+        assert all(isinstance(e, WaterReceived) for e in received)
+
+
+class TestClearEvents:
+    def test_removes_all_events(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=0))
+        node.record(WaterGenerated(amount=50.0, t=1))
+
+        node.clear_events()
+        assert node.events == []
+
+    def test_clear_allows_new_events_after(self):
+        node = BaseNode(id="test")
+        node.record(WaterGenerated(amount=100.0, t=0))
+        node.clear_events()
+
+        node.record(WaterGenerated(amount=200.0, t=5))
+        assert len(node.events) == 1
+        assert node.events[0].amount == 200.0
+
+    def test_clear_on_empty_events_is_safe(self):
+        node = BaseNode(id="test")
+        node.clear_events()
+        assert node.events == []
+
+
+class TestUpdateNotImplemented:
+    def test_raises_not_implemented(self):
+        node = BaseNode(id="test")
+        with pytest.raises(NotImplementedError, match="Subclasses must implement"):
+            node.update(t=0, dt=1.0)
+
+    def test_raises_not_implemented_with_different_params(self):
+        node = BaseNode(id="test")
+        with pytest.raises(NotImplementedError, match="Subclasses must implement"):
+            node.update(t=10, dt=3600.0)
+
+
+class TestBaseNodeInheritance:
+    def test_subclass_can_override_update(self):
+        class ConcreteNode(BaseNode):
+            def __init__(self, id: str):
+                super().__init__(id=id)
+                self.updated = False
+
+            def update(self, t: int, dt: float) -> None:
+                self.updated = True
+
+        node = ConcreteNode(id="concrete")
+        node.update(t=0, dt=1.0)
+        assert node.updated is True
+
+    def test_subclass_inherits_event_methods(self):
+        class ConcreteNode(BaseNode):
+            def update(self, t: int, dt: float) -> None:
+                self.record(WaterGenerated(amount=50.0, t=t))
+
+        node = ConcreteNode(id="concrete")
+        node.update(t=3, dt=1.0)
+
+        assert len(node.events) == 1
+        assert node.events[0].t == 3
