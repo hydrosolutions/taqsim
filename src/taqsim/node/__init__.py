@@ -1,8 +1,9 @@
+from taqsim.common import EVAPORATION, OVERFLOW, SEEPAGE, LossReason, summarize_losses
+
 from .base import BaseNode
 from .demand import Demand
 from .events import (
     DeficitRecorded,
-    LossReason,
     NodeEvent,
     WaterConsumed,
     WaterDistributed,
@@ -29,9 +30,14 @@ from .strategies import LossRule, ReleaseRule, SplitStrategy
 from .timeseries import TimeSeries
 
 __all__ = [
+    # Common
+    "EVAPORATION",
+    "LossReason",
+    "OVERFLOW",
+    "SEEPAGE",
+    "summarize_losses",
     # Events
     "DeficitRecorded",
-    "LossReason",
     "NodeEvent",
     "WaterConsumed",
     "WaterDistributed",

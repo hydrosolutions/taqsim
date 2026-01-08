@@ -2,9 +2,9 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.events import (
     DeficitRecorded,
-    LossReason,
     NodeEvent,
     WaterConsumed,
     WaterDistributed,
@@ -39,7 +39,7 @@ class TestEventImmutability:
             event.amount = 120.0
 
     def test_water_lost_is_frozen(self):
-        event = WaterLost(amount=10.0, reason=LossReason.EVAPORATION, t=4)
+        event = WaterLost(amount=10.0, reason=EVAPORATION, t=4)
         with pytest.raises(FrozenInstanceError):
             event.amount = 20.0
 
@@ -87,14 +87,14 @@ class TestEventCreation:
         assert event.t == 4
 
     def test_water_lost_stores_reason(self):
-        event = WaterLost(amount=10.0, reason=LossReason.EVAPORATION, t=2)
-        assert event.reason == LossReason.EVAPORATION
+        event = WaterLost(amount=10.0, reason=EVAPORATION, t=2)
+        assert event.reason == EVAPORATION
         assert event.amount == 10.0
         assert event.t == 2
 
     def test_water_lost_stores_seepage_reason(self):
-        event = WaterLost(amount=5.0, reason=LossReason.SEEPAGE, t=3)
-        assert event.reason == LossReason.SEEPAGE
+        event = WaterLost(amount=5.0, reason=SEEPAGE, t=3)
+        assert event.reason == SEEPAGE
 
     def test_water_spilled_stores_amount_and_t(self):
         event = WaterSpilled(amount=50.0, t=4)
@@ -121,14 +121,23 @@ class TestEventCreation:
 
 
 class TestLossReason:
-    def test_has_evaporation(self):
-        assert LossReason.EVAPORATION is not None
+    def test_is_str_subclass(self):
+        assert issubclass(LossReason, str)
 
-    def test_has_seepage(self):
-        assert LossReason.SEEPAGE is not None
+    def test_evaporation_equals_string(self):
+        assert EVAPORATION == "evaporation"
+
+    def test_seepage_equals_string(self):
+        assert SEEPAGE == "seepage"
 
     def test_evaporation_is_distinct_from_seepage(self):
-        assert LossReason.EVAPORATION != LossReason.SEEPAGE
+        assert EVAPORATION != SEEPAGE
+
+    def test_custom_loss_reason_works(self):
+        custom = LossReason("custom_loss")
+        assert custom == "custom_loss"
+        assert isinstance(custom, LossReason)
+        assert isinstance(custom, str)
 
 
 class TestNodeEventProtocol:
@@ -149,7 +158,7 @@ class TestNodeEventProtocol:
         assert isinstance(event, NodeEvent)
 
     def test_water_lost_is_node_event(self):
-        event = WaterLost(amount=10.0, reason=LossReason.EVAPORATION, t=4)
+        event = WaterLost(amount=10.0, reason=EVAPORATION, t=4)
         assert isinstance(event, NodeEvent)
 
     def test_water_spilled_is_node_event(self):

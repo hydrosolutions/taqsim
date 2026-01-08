@@ -54,10 +54,18 @@ class LossRule(Protocol):
     ) -> dict[LossReason, float]: ...  # {reason: amount}
 ```
 
-`LossReason` is an enum with values:
+`LossReason` is a `str` subclass with standard constants:
 
-- `LossReason.EVAPORATION`
-- `LossReason.SEEPAGE`
+- `EVAPORATION`
+- `SEEPAGE`
+- `OVERFLOW`
+
+Users can create custom loss reasons: `LossReason("infiltration")`
+
+Import from `taqsim.common`:
+```python
+from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW
+```
 
 ## Custom Implementations
 
@@ -121,7 +129,7 @@ class PercentageRelease:
 ### Zero Loss Rule
 
 ```python
-from taqsim.node import LossReason
+from taqsim.common import LossReason
 
 @dataclass
 class ZeroLoss:
@@ -134,6 +142,8 @@ class ZeroLoss:
 ### Evaporation Loss Rule
 
 ```python
+from taqsim.common import EVAPORATION
+
 @dataclass
 class EvaporationLoss:
     rate: float  # evaporation rate per timestep
@@ -142,12 +152,14 @@ class EvaporationLoss:
         self, storage: float, capacity: float, t: int, dt: float
     ) -> dict[LossReason, float]:
         loss = min(self.rate * dt, storage)
-        return {LossReason.EVAPORATION: loss}
+        return {EVAPORATION: loss}
 ```
 
 ### Combined Loss Rule
 
 ```python
+from taqsim.common import EVAPORATION, SEEPAGE
+
 @dataclass
 class CombinedLoss:
     evap_rate: float
@@ -157,8 +169,8 @@ class CombinedLoss:
         self, storage: float, capacity: float, t: int, dt: float
     ) -> dict[LossReason, float]:
         return {
-            LossReason.EVAPORATION: self.evap_rate * dt,
-            LossReason.SEEPAGE: self.seepage_rate * dt
+            EVAPORATION: self.evap_rate * dt,
+            SEEPAGE: self.seepage_rate * dt
         }
 ```
 

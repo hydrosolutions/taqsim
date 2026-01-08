@@ -1,4 +1,4 @@
-from taqsim.node.events import LossReason
+from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.strategies import LossRule, ReleaseRule, SplitStrategy
 
 
@@ -60,7 +60,7 @@ class TestLossRuleProtocol:
     def test_class_with_calculate_satisfies_protocol(self):
         class ValidLoss:
             def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
-                return {LossReason.EVAPORATION: storage * 0.01}
+                return {EVAPORATION: storage * 0.01}
 
         assert isinstance(ValidLoss(), LossRule)
 
@@ -77,14 +77,14 @@ class TestLossRuleProtocol:
         class ValidLoss:
             def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
                 return {
-                    LossReason.EVAPORATION: storage * 0.01 * dt,
-                    LossReason.SEEPAGE: storage * 0.005 * dt,
+                    EVAPORATION: storage * 0.01 * dt,
+                    SEEPAGE: storage * 0.005 * dt,
                 }
 
         rule = ValidLoss()
         result = rule.calculate(1000.0, 2000.0, 0, 1.0)
-        assert result[LossReason.EVAPORATION] == 10.0
-        assert result[LossReason.SEEPAGE] == 5.0
+        assert result[EVAPORATION] == 10.0
+        assert result[SEEPAGE] == 5.0
 
 
 class TestProtocolNonSatisfaction:
@@ -104,7 +104,7 @@ class TestProtocolNonSatisfaction:
 
     def test_class_with_wrong_method_name_does_not_satisfy_loss_rule(self):
         class WrongMethod:
-            def compute_loss(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+            def compute_loss(self, storage: float, capacity: float, t: int, dt: float) -> dict[str, float]:
                 return {}
 
         assert not isinstance(WrongMethod(), LossRule)

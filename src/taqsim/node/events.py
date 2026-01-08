@@ -1,10 +1,6 @@
 from dataclasses import dataclass
-from enum import Enum, auto
 
-
-class LossReason(Enum):
-    EVAPORATION = auto()
-    SEEPAGE = auto()
+from taqsim.common import LossReason
 
 
 @dataclass(frozen=True, slots=True)

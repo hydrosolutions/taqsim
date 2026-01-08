@@ -1,7 +1,7 @@
 import pytest
 
+from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.events import (
-    LossReason,
     WaterDistributed,
     WaterLost,
     WaterReceived,
@@ -210,7 +210,7 @@ class TestStorageLose:
         storage = make_storage(
             capacity=1000.0,
             initial_storage=500.0,
-            losses={LossReason.EVAPORATION: 10.0},
+            losses={EVAPORATION: 10.0},
         )
         total_loss = storage.lose(t=0, dt=1.0)
 
@@ -221,14 +221,14 @@ class TestStorageLose:
         storage = make_storage(
             capacity=1000.0,
             initial_storage=500.0,
-            losses={LossReason.EVAPORATION: 10.0},
+            losses={EVAPORATION: 10.0},
         )
         storage.lose(t=0, dt=1.0)
 
         events = storage.events_of_type(WaterLost)
         assert len(events) == 1
         assert events[0].amount == 10.0
-        assert events[0].reason == LossReason.EVAPORATION
+        assert events[0].reason == EVAPORATION
         assert events[0].t == 0
 
     def test_lose_multiple_reasons(self):
@@ -236,8 +236,8 @@ class TestStorageLose:
             capacity=1000.0,
             initial_storage=500.0,
             losses={
-                LossReason.EVAPORATION: 10.0,
-                LossReason.SEEPAGE: 5.0,
+                EVAPORATION: 10.0,
+                SEEPAGE: 5.0,
             },
         )
         total_loss = storage.lose(t=0, dt=1.0)
@@ -248,13 +248,13 @@ class TestStorageLose:
         events = storage.events_of_type(WaterLost)
         assert len(events) == 2
         reasons = {e.reason for e in events}
-        assert reasons == {LossReason.EVAPORATION, LossReason.SEEPAGE}
+        assert reasons == {EVAPORATION, SEEPAGE}
 
     def test_lose_clamps_to_available_storage(self):
         storage = make_storage(
             capacity=1000.0,
             initial_storage=10.0,
-            losses={LossReason.EVAPORATION: 100.0},
+            losses={EVAPORATION: 100.0},
         )
         total_loss = storage.lose(t=0, dt=1.0)
 
@@ -266,15 +266,15 @@ class TestStorageLose:
             capacity=1000.0,
             initial_storage=10.0,
             losses={
-                LossReason.EVAPORATION: 80.0,
-                LossReason.SEEPAGE: 20.0,
+                EVAPORATION: 80.0,
+                SEEPAGE: 20.0,
             },
         )
         storage.lose(t=0, dt=1.0)
 
         events = storage.events_of_type(WaterLost)
-        evap = next(e for e in events if e.reason == LossReason.EVAPORATION)
-        seep = next(e for e in events if e.reason == LossReason.SEEPAGE)
+        evap = next(e for e in events if e.reason == EVAPORATION)
+        seep = next(e for e in events if e.reason == SEEPAGE)
 
         assert evap.amount == pytest.approx(8.0)
         assert seep.amount == pytest.approx(2.0)
@@ -296,7 +296,7 @@ class TestStorageLose:
         storage = make_storage(
             capacity=1000.0,
             initial_storage=500.0,
-            losses={LossReason.EVAPORATION: 0.0},
+            losses={EVAPORATION: 0.0},
         )
         storage.lose(t=0, dt=1.0)
 
@@ -421,7 +421,7 @@ class TestStorageUpdate:
         storage = make_storage(
             capacity=1000.0,
             initial_storage=100.0,
-            losses={LossReason.EVAPORATION: 10.0},
+            losses={EVAPORATION: 10.0},
         )
         storage.update(t=0, dt=1.0)
 
@@ -481,7 +481,7 @@ class TestStorageUpdate:
         storage = make_storage(
             capacity=1000.0,
             initial_storage=100.0,
-            losses={LossReason.EVAPORATION: 10.0},
+            losses={EVAPORATION: 10.0},
             release_amount=50.0,
         )
         storage.receive(50.0, "source", t=0)
@@ -501,8 +501,8 @@ class TestStorageUpdate:
             capacity=capacity,
             initial_storage=initial,
             losses={
-                LossReason.EVAPORATION: evap_loss,
-                LossReason.SEEPAGE: seep_loss,
+                EVAPORATION: evap_loss,
+                SEEPAGE: seep_loss,
             },
             release_amount=release_amt,
             targets=["downstream"],

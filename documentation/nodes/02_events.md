@@ -46,14 +46,18 @@ WaterReleased(amount=20.0, t=0)
 
 ### WaterLost
 
-Physical losses (evaporation, seepage, spillway).
+Physical losses (evaporation, seepage, overflow, or custom reasons).
 
 ```python
-from taqsim.node import LossReason
+from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW
 
-WaterLost(amount=5.0, reason=LossReason.EVAPORATION, t=0)
-WaterLost(amount=2.0, reason=LossReason.SEEPAGE, t=0)
-WaterLost(amount=100.0, reason=LossReason.SPILLWAY, t=0)
+# Using standard constants
+WaterLost(amount=5.0, reason=EVAPORATION, t=0)
+WaterLost(amount=2.0, reason=SEEPAGE, t=0)
+WaterLost(amount=100.0, reason=OVERFLOW, t=0)
+
+# Custom loss reasons
+WaterLost(amount=10.0, reason=LossReason("infiltration"), t=0)
 ```
 
 ### WaterConsumed
@@ -125,10 +129,10 @@ stored = node.events_of_type(WaterStored)
 # Total losses
 losses = sum(e.amount for e in node.events_of_type(WaterLost))
 
-# Losses by reason
+# Losses by reason (using constants from taqsim.common)
 evap = sum(
     e.amount for e in node.events_of_type(WaterLost)
-    if e.reason == LossReason.EVAPORATION
+    if e.reason == EVAPORATION
 )
 ```
 

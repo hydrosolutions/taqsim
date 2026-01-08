@@ -1,6 +1,6 @@
 from typing import Protocol, runtime_checkable
 
-from .events import LossReason
+from taqsim.common import LossReason
 
 
 @runtime_checkable

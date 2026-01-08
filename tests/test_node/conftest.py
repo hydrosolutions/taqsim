@@ -1,6 +1,6 @@
 import pytest
 
-from taqsim.node.events import LossReason
+from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.timeseries import TimeSeries
 
 
@@ -37,8 +37,8 @@ class FakeLossRule:
 
     def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
         return {
-            LossReason.EVAPORATION: storage * self.evap_rate * dt,
-            LossReason.SEEPAGE: storage * self.seepage_rate * dt,
+            EVAPORATION: storage * self.evap_rate * dt,
+            SEEPAGE: storage * self.seepage_rate * dt,
         }
 
 
