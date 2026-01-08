@@ -7,7 +7,6 @@ from .strategies import SplitStrategy
 
 @dataclass
 class Splitter(BaseNode):
-    targets: list[str] = field(default_factory=list)
     split_strategy: SplitStrategy | None = field(default=None)
     _received_this_step: float = field(default=0.0, init=False, repr=False)
 

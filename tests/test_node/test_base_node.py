@@ -17,6 +17,42 @@ class TestBaseNodeInit:
         node = BaseNode(id="unique_identifier_123")
         assert node.id == "unique_identifier_123"
 
+    def test_starts_with_empty_targets(self):
+        node = BaseNode(id="test")
+        assert node.targets == []
+
+
+class TestTargetManagement:
+    def test_targets_property_returns_list(self):
+        node = BaseNode(id="test")
+        assert isinstance(node.targets, list)
+
+    def test_set_targets_populates_targets(self):
+        node = BaseNode(id="test")
+        node._set_targets(["target_a", "target_b"])
+        assert node.targets == ["target_a", "target_b"]
+
+    def test_set_targets_replaces_existing_targets(self):
+        node = BaseNode(id="test")
+        node._set_targets(["old_target"])
+        node._set_targets(["new_target_1", "new_target_2"])
+        assert node.targets == ["new_target_1", "new_target_2"]
+
+    def test_set_targets_with_empty_list(self):
+        node = BaseNode(id="test")
+        node._set_targets(["target_a"])
+        node._set_targets([])
+        assert node.targets == []
+
+    def test_targets_not_included_in_init(self):
+        node = BaseNode(id="test")
+        assert not hasattr(node, "targets") or node.targets == []
+
+    def test_internal_targets_field_is_private(self):
+        node = BaseNode(id="test")
+        node._set_targets(["t1"])
+        assert node._targets == ["t1"]
+
 
 class TestEventRecording:
     def test_record_appends_event(self):

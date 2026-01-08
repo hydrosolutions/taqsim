@@ -30,8 +30,3 @@ class Loses(Protocol):
 @runtime_checkable
 class Consumes(Protocol):
     def consume(self, amount: float, t: int, dt: float) -> tuple[float, float]: ...
-
-
-@runtime_checkable
-class Gives(Protocol):
-    def distribute(self, amount: float, t: int) -> dict[str, float]: ...

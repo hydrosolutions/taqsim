@@ -1,4 +1,4 @@
-from taqsim.node.protocols import Consumes, Generates, Gives, Loses, Receives, Stores
+from taqsim.node.protocols import Consumes, Generates, Loses, Receives, Stores
 
 
 class TestGeneratesProtocol:
@@ -170,30 +170,6 @@ class TestConsumesProtocol:
         assert remaining == 75.0
 
 
-class TestGivesProtocol:
-    def test_class_with_distribute_satisfies_protocol(self):
-        class HasDistribute:
-            def distribute(self, amount: float, t: int) -> dict[str, float]:
-                return {"target": amount}
-
-        assert isinstance(HasDistribute(), Gives)
-
-    def test_class_without_distribute_does_not_satisfy(self):
-        class NoDistribute:
-            pass
-
-        assert not isinstance(NoDistribute(), Gives)
-
-    def test_distribute_returns_dict(self):
-        class ValidGiver:
-            def distribute(self, amount: float, t: int) -> dict[str, float]:
-                return {"target": amount}
-
-        giver = ValidGiver()
-        result = giver.distribute(100.0, 0)
-        assert result == {"target": 100.0}
-
-
 class TestProtocolCombinations:
     def test_class_can_implement_multiple_protocols(self):
         class MultiCapable:
@@ -230,4 +206,3 @@ class TestProtocolCombinations:
         assert not isinstance(node, Stores)
         assert not isinstance(node, Loses)
         assert not isinstance(node, Consumes)
-        assert not isinstance(node, Gives)

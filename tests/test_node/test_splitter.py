@@ -1,7 +1,7 @@
 import pytest
 
 from taqsim.node.events import WaterDistributed, WaterReceived
-from taqsim.node.protocols import Gives, Receives
+from taqsim.node.protocols import Receives
 from taqsim.node.splitter import Splitter
 
 
@@ -41,9 +41,10 @@ class TestSplitterInit:
         with pytest.raises(ValueError, match="split_strategy is required"):
             Splitter(id="splitter_1")
 
-    def test_creates_with_targets(self):
+    def test_sets_targets_via_set_targets(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1", "t2"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1", "t2"])
         assert splitter.targets == ["t1", "t2"]
 
 
@@ -67,7 +68,8 @@ class TestSplitterReceive:
 
     def test_receive_accumulates_for_distribution(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1"])
         splitter.receive(amount=30.0, source_id="a", t=0)
         splitter.receive(amount=20.0, source_id="b", t=0)
         splitter.update(t=0, dt=1.0)
@@ -79,20 +81,23 @@ class TestSplitterReceive:
 class TestSplitterDistribute:
     def test_distribute_uses_strategy(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1", "t2"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1", "t2"])
         allocation = splitter.distribute(amount=100.0, t=0)
         assert allocation == {"t1": 50.0, "t2": 50.0}
 
     def test_distribute_records_events(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1", "t2"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1", "t2"])
         splitter.distribute(amount=100.0, t=0)
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 2
 
     def test_distribute_records_correct_target_ids(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["target_a", "target_b"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["target_a", "target_b"])
         splitter.distribute(amount=80.0, t=3)
         distributed = splitter.events_of_type(WaterDistributed)
         target_ids = {e.target_id for e in distributed}
@@ -100,25 +105,28 @@ class TestSplitterDistribute:
 
     def test_distribute_empty_targets_returns_empty(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=[], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
         allocation = splitter.distribute(amount=100.0, t=0)
         assert allocation == {}
 
     def test_distribute_zero_amount_returns_empty(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1"])
         allocation = splitter.distribute(amount=0.0, t=0)
         assert allocation == {}
 
     def test_distribute_negative_amount_returns_empty(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1"])
         allocation = splitter.distribute(amount=-10.0, t=0)
         assert allocation == {}
 
     def test_distribute_with_fixed_ratios(self):
         strategy = FakeFixedSplitStrategy(ratios={"t1": 0.7, "t2": 0.3})
-        splitter = Splitter(id="splitter_1", targets=["t1", "t2"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1", "t2"])
         allocation = splitter.distribute(amount=100.0, t=0)
         assert allocation["t1"] == pytest.approx(70.0)
         assert allocation["t2"] == pytest.approx(30.0)
@@ -127,7 +135,8 @@ class TestSplitterDistribute:
 class TestSplitterUpdate:
     def test_update_distributes_received_water(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1"])
         splitter.receive(amount=100.0, source_id="source", t=0)
         splitter.update(t=0, dt=1.0)
         distributed = splitter.events_of_type(WaterDistributed)
@@ -136,7 +145,8 @@ class TestSplitterUpdate:
 
     def test_update_resets_received_for_next_step(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1"])
         splitter.receive(amount=100.0, source_id="source", t=0)
         splitter.update(t=0, dt=1.0)
         splitter.update(t=1, dt=1.0)
@@ -145,7 +155,8 @@ class TestSplitterUpdate:
 
     def test_update_across_multiple_timesteps(self):
         strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", targets=["t1"], split_strategy=strategy)
+        splitter = Splitter(id="splitter_1", split_strategy=strategy)
+        splitter._set_targets(["t1"])
         splitter.receive(amount=50.0, source_id="s", t=0)
         splitter.update(t=0, dt=1.0)
 
@@ -163,8 +174,3 @@ class TestSplitterProtocols:
         strategy = FakeEqualSplitStrategy()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         assert isinstance(splitter, Receives)
-
-    def test_implements_gives_protocol(self):
-        strategy = FakeEqualSplitStrategy()
-        splitter = Splitter(id="splitter_1", split_strategy=strategy)
-        assert isinstance(splitter, Gives)

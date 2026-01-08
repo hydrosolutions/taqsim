@@ -5,9 +5,7 @@ from taqsim.edge.strategies import EdgeLossRule
 class TestEdgeLossRuleProtocol:
     def test_class_with_calculate_satisfies_protocol(self):
         class ValidLoss:
-            def calculate(
-                self, flow: float, capacity: float, t: int, dt: float
-            ) -> dict[LossReason, float]:
+            def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
                 return {EVAPORATION: flow * 0.01}
 
         assert isinstance(ValidLoss(), EdgeLossRule)
@@ -23,9 +21,7 @@ class TestEdgeLossRuleProtocol:
 
     def test_calculate_returns_dict_with_loss_reasons(self):
         class ValidLoss:
-            def calculate(
-                self, flow: float, capacity: float, t: int, dt: float
-            ) -> dict[LossReason, float]:
+            def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
                 return {
                     EVAPORATION: flow * 0.01 * dt,
                     SEEPAGE: flow * 0.005 * dt,
@@ -48,9 +44,7 @@ class TestEdgeLossRuleProtocol:
 class TestProtocolNonSatisfaction:
     def test_class_with_wrong_method_name_does_not_satisfy(self):
         class WrongMethod:
-            def compute_loss(
-                self, flow: float, capacity: float, t: int, dt: float
-            ) -> dict[str, float]:
+            def compute_loss(self, flow: float, capacity: float, t: int, dt: float) -> dict[str, float]:
                 return {}
 
         assert not isinstance(WrongMethod(), EdgeLossRule)

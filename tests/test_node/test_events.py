@@ -10,6 +10,8 @@ from taqsim.node.events import (
     WaterDistributed,
     WaterGenerated,
     WaterLost,
+    WaterOutput,
+    WaterPassedThrough,
     WaterReceived,
     WaterReleased,
     WaterSpilled,
@@ -62,6 +64,16 @@ class TestEventImmutability:
         event = DeficitRecorded(required=100.0, actual=80.0, deficit=20.0, t=7)
         with pytest.raises(FrozenInstanceError):
             event.deficit = 30.0
+
+    def test_water_output_is_frozen(self):
+        event = WaterOutput(amount=100.0, t=8)
+        with pytest.raises(FrozenInstanceError):
+            event.amount = 200.0
+
+    def test_water_passed_through_is_frozen(self):
+        event = WaterPassedThrough(amount=50.0, t=9)
+        with pytest.raises(FrozenInstanceError):
+            event.amount = 100.0
 
 
 class TestEventCreation:
@@ -119,6 +131,16 @@ class TestEventCreation:
         assert event.deficit == 20.0
         assert event.t == 3
 
+    def test_water_output_stores_amount_and_t(self):
+        event = WaterOutput(amount=120.0, t=8)
+        assert event.amount == 120.0
+        assert event.t == 8
+
+    def test_water_passed_through_stores_amount_and_t(self):
+        event = WaterPassedThrough(amount=85.0, t=9)
+        assert event.amount == 85.0
+        assert event.t == 9
+
 
 class TestLossReason:
     def test_is_str_subclass(self):
@@ -175,4 +197,12 @@ class TestNodeEventProtocol:
 
     def test_deficit_recorded_is_node_event(self):
         event = DeficitRecorded(required=100.0, actual=80.0, deficit=20.0, t=7)
+        assert isinstance(event, NodeEvent)
+
+    def test_water_output_is_node_event(self):
+        event = WaterOutput(amount=100.0, t=8)
+        assert isinstance(event, NodeEvent)
+
+    def test_water_passed_through_is_node_event(self):
+        event = WaterPassedThrough(amount=50.0, t=9)
         assert isinstance(event, NodeEvent)

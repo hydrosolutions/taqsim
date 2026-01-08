@@ -9,15 +9,17 @@ from .events import (
     WaterDistributed,
     WaterGenerated,
     WaterLost,
+    WaterOutput,
+    WaterPassedThrough,
     WaterReceived,
     WaterReleased,
     WaterSpilled,
     WaterStored,
 )
+from .passthrough import PassThrough
 from .protocols import (
     Consumes,
     Generates,
-    Gives,
     Loses,
     Receives,
     Stores,
@@ -43,6 +45,8 @@ __all__ = [
     "WaterDistributed",
     "WaterGenerated",
     "WaterLost",
+    "WaterOutput",
+    "WaterPassedThrough",
     "WaterReceived",
     "WaterReleased",
     "WaterSpilled",
@@ -50,7 +54,6 @@ __all__ = [
     # Protocols
     "Consumes",
     "Generates",
-    "Gives",
     "Loses",
     "Receives",
     "Stores",
@@ -63,6 +66,7 @@ __all__ = [
     "BaseNode",
     # Nodes
     "Demand",
+    "PassThrough",
     "Sink",
     "Source",
     "Splitter",

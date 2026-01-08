@@ -78,24 +78,54 @@ class TestEdgeEventProtocol:
         event = FlowReceived(amount=100.0, t=0)
         assert isinstance(event, FlowReceived)
         # EdgeEvent is a type alias union, check event is one of the types
-        assert type(event).__name__ in ["FlowReceived", "FlowLost", "FlowDelivered", "CapacityExceeded", "RequirementUnmet"]
+        assert type(event).__name__ in [
+            "FlowReceived",
+            "FlowLost",
+            "FlowDelivered",
+            "CapacityExceeded",
+            "RequirementUnmet",
+        ]
 
     def test_flow_lost_is_edge_event(self):
         event = FlowLost(amount=10.0, reason=EVAPORATION, t=1)
         assert isinstance(event, FlowLost)
-        assert type(event).__name__ in ["FlowReceived", "FlowLost", "FlowDelivered", "CapacityExceeded", "RequirementUnmet"]
+        assert type(event).__name__ in [
+            "FlowReceived",
+            "FlowLost",
+            "FlowDelivered",
+            "CapacityExceeded",
+            "RequirementUnmet",
+        ]
 
     def test_flow_delivered_is_edge_event(self):
         event = FlowDelivered(amount=90.0, t=2)
         assert isinstance(event, FlowDelivered)
-        assert type(event).__name__ in ["FlowReceived", "FlowLost", "FlowDelivered", "CapacityExceeded", "RequirementUnmet"]
+        assert type(event).__name__ in [
+            "FlowReceived",
+            "FlowLost",
+            "FlowDelivered",
+            "CapacityExceeded",
+            "RequirementUnmet",
+        ]
 
     def test_capacity_exceeded_is_edge_event(self):
         event = CapacityExceeded(excess=50.0, t=3)
         assert isinstance(event, CapacityExceeded)
-        assert type(event).__name__ in ["FlowReceived", "FlowLost", "FlowDelivered", "CapacityExceeded", "RequirementUnmet"]
+        assert type(event).__name__ in [
+            "FlowReceived",
+            "FlowLost",
+            "FlowDelivered",
+            "CapacityExceeded",
+            "RequirementUnmet",
+        ]
 
     def test_requirement_unmet_is_edge_event(self):
         event = RequirementUnmet(required=100.0, actual=80.0, deficit=20.0, t=4)
         assert isinstance(event, RequirementUnmet)
-        assert type(event).__name__ in ["FlowReceived", "FlowLost", "FlowDelivered", "CapacityExceeded", "RequirementUnmet"]
+        assert type(event).__name__ in [
+            "FlowReceived",
+            "FlowLost",
+            "FlowDelivered",
+            "CapacityExceeded",
+            "RequirementUnmet",
+        ]

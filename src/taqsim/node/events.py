@@ -62,6 +62,22 @@ class DeficitRecorded:
     t: int
 
 
+@dataclass(frozen=True, slots=True)
+class WaterOutput:
+    """Water available for downstream. Used by single-output nodes."""
+
+    amount: float
+    t: int
+
+
+@dataclass(frozen=True, slots=True)
+class WaterPassedThrough:
+    """Records water passing through (for analysis, e.g., turbine power)."""
+
+    amount: float
+    t: int
+
+
 NodeEvent = (
     WaterGenerated
     | WaterReceived
@@ -72,4 +88,6 @@ NodeEvent = (
     | WaterConsumed
     | WaterDistributed
     | DeficitRecorded
+    | WaterOutput
+    | WaterPassedThrough
 )

@@ -6,7 +6,15 @@ from .events import NodeEvent
 @dataclass
 class BaseNode:
     id: str
-    events: list[NodeEvent] = field(default_factory=list, init=False)
+    events: list[NodeEvent] = field(default_factory=list, init=False, repr=False)
+    _targets: list[str] = field(default_factory=list, init=False, repr=False)
+
+    @property
+    def targets(self) -> list[str]:
+        return self._targets
+
+    def _set_targets(self, targets: list[str]) -> None:
+        self._targets = targets
 
     def record(self, event: NodeEvent) -> None:
         self.events.append(event)

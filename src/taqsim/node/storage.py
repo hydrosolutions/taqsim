@@ -2,14 +2,14 @@ from dataclasses import dataclass, field
 
 from .base import BaseNode
 from .events import (
-    WaterDistributed,
     WaterLost,
+    WaterOutput,
     WaterReceived,
     WaterReleased,
     WaterSpilled,
     WaterStored,
 )
-from .strategies import LossRule, ReleaseRule, SplitStrategy
+from .strategies import LossRule, ReleaseRule
 
 
 @dataclass
@@ -18,8 +18,6 @@ class Storage(BaseNode):
     initial_storage: float = 0.0
     release_rule: ReleaseRule | None = field(default=None)
     loss_rule: LossRule | None = field(default=None)
-    split_strategy: SplitStrategy | None = field(default=None)
-    targets: list[str] = field(default_factory=list)
     _current_storage: float = field(init=False, repr=False)
     _received_this_step: float = field(default=0.0, init=False, repr=False)
 
@@ -34,8 +32,6 @@ class Storage(BaseNode):
             raise ValueError("release_rule is required")
         if self.loss_rule is None:
             raise ValueError("loss_rule is required")
-        if self.split_strategy is None:
-            raise ValueError("split_strategy is required")
         self._current_storage = self.initial_storage
 
     @property
@@ -86,14 +82,6 @@ class Storage(BaseNode):
 
         return actual_release
 
-    def distribute(self, amount: float, t: int) -> dict[str, float]:
-        if not self.targets or amount <= 0:
-            return {}
-        allocation = self.split_strategy.split(amount, self.targets, t)
-        for target_id, alloc_amount in allocation.items():
-            self.record(WaterDistributed(amount=alloc_amount, target_id=target_id, t=t))
-        return allocation
-
     def update(self, t: int, dt: float) -> None:
         inflow = self._received_this_step
 
@@ -106,8 +94,9 @@ class Storage(BaseNode):
         # 3. Release
         released = self.release(inflow, t, dt)
 
-        # 4. Distribute (released + spilled goes downstream)
+        # 4. Record output (released + spilled goes downstream)
         total_outflow = released + spilled
-        self.distribute(total_outflow, t)
+        if total_outflow > 0:
+            self.record(WaterOutput(amount=total_outflow, t=t))
 
         self._received_this_step = 0.0

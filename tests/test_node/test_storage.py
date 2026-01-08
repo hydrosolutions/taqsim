@@ -2,14 +2,14 @@ import pytest
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.events import (
-    WaterDistributed,
     WaterLost,
+    WaterOutput,
     WaterReceived,
     WaterReleased,
     WaterSpilled,
     WaterStored,
 )
-from taqsim.node.protocols import Gives, Loses, Receives, Stores
+from taqsim.node.protocols import Loses, Receives, Stores
 from taqsim.node.storage import Storage
 
 
@@ -29,26 +29,11 @@ class FakeLossRule:
         return self._losses
 
 
-class FakeSplitStrategy:
-    def __init__(self, split_mode: str = "equal"):
-        self._split_mode = split_mode
-
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
-        if not targets:
-            return {}
-        if self._split_mode == "equal":
-            share = amount / len(targets)
-            return dict.fromkeys(targets, share)
-        return {targets[0]: amount}
-
-
 def make_storage(
     capacity: float = 1000.0,
     initial_storage: float = 0.0,
     release_amount: float = 0.0,
     losses: dict[LossReason, float] | None = None,
-    targets: list[str] | None = None,
-    split_mode: str = "equal",
 ) -> Storage:
     return Storage(
         id="test_storage",
@@ -56,8 +41,6 @@ def make_storage(
         initial_storage=initial_storage,
         release_rule=FakeReleaseRule(release_amount),
         loss_rule=FakeLossRule(losses),
-        split_strategy=FakeSplitStrategy(split_mode),
-        targets=targets or [],
     )
 
 
@@ -94,7 +77,6 @@ class TestStorageInit:
                 capacity=1000.0,
                 release_rule=None,
                 loss_rule=FakeLossRule(),
-                split_strategy=FakeSplitStrategy(),
             )
 
     def test_loss_rule_required(self):
@@ -104,17 +86,6 @@ class TestStorageInit:
                 capacity=1000.0,
                 release_rule=FakeReleaseRule(),
                 loss_rule=None,
-                split_strategy=FakeSplitStrategy(),
-            )
-
-    def test_split_strategy_required(self):
-        with pytest.raises(ValueError, match="split_strategy is required"):
-            Storage(
-                id="test",
-                capacity=1000.0,
-                release_rule=FakeReleaseRule(),
-                loss_rule=FakeLossRule(),
-                split_strategy=None,
             )
 
 
@@ -363,49 +334,6 @@ class TestStorageRelease:
         assert storage.storage == 500.0
 
 
-class TestStorageDistribute:
-    def test_distribute_to_single_target(self):
-        storage = make_storage(targets=["downstream"])
-        allocation = storage.distribute(100.0, t=0)
-
-        assert allocation == {"downstream": 100.0}
-
-    def test_distribute_to_multiple_targets_equal_split(self):
-        storage = make_storage(targets=["target_a", "target_b"])
-        allocation = storage.distribute(100.0, t=0)
-
-        assert allocation == {"target_a": 50.0, "target_b": 50.0}
-
-    def test_distribute_records_water_distributed_events(self):
-        storage = make_storage(targets=["target_a", "target_b"])
-        storage.distribute(100.0, t=0)
-
-        events = storage.events_of_type(WaterDistributed)
-        assert len(events) == 2
-        targets = {e.target_id: e.amount for e in events}
-        assert targets == {"target_a": 50.0, "target_b": 50.0}
-
-    def test_distribute_no_targets_returns_empty(self):
-        storage = make_storage(targets=[])
-        allocation = storage.distribute(100.0, t=0)
-
-        assert allocation == {}
-        assert len(storage.events_of_type(WaterDistributed)) == 0
-
-    def test_distribute_zero_amount_returns_empty(self):
-        storage = make_storage(targets=["downstream"])
-        allocation = storage.distribute(0.0, t=0)
-
-        assert allocation == {}
-        assert len(storage.events_of_type(WaterDistributed)) == 0
-
-    def test_distribute_negative_amount_returns_empty(self):
-        storage = make_storage(targets=["downstream"])
-        allocation = storage.distribute(-10.0, t=0)
-
-        assert allocation == {}
-
-
 class TestStorageUpdate:
     def test_update_stores_received_water(self):
         storage = make_storage(capacity=1000.0, initial_storage=0.0)
@@ -437,33 +365,43 @@ class TestStorageUpdate:
 
         assert storage.storage == 80.0
 
-    def test_update_distributes_released_water(self):
+    def test_update_records_water_output_for_released_water(self):
         storage = make_storage(
             capacity=1000.0,
             initial_storage=100.0,
             release_amount=50.0,
-            targets=["downstream"],
         )
         storage.update(t=0, dt=1.0)
 
-        events = storage.events_of_type(WaterDistributed)
+        events = storage.events_of_type(WaterOutput)
         assert len(events) == 1
         assert events[0].amount == 50.0
-        assert events[0].target_id == "downstream"
+        assert events[0].t == 0
 
-    def test_update_distributes_spilled_plus_released(self):
+    def test_update_records_water_output_for_spilled_plus_released(self):
         storage = make_storage(
             capacity=100.0,
             initial_storage=90.0,
             release_amount=10.0,
-            targets=["downstream"],
         )
         storage.receive(30.0, "source", t=0)
         storage.update(t=0, dt=1.0)
 
-        events = storage.events_of_type(WaterDistributed)
+        events = storage.events_of_type(WaterOutput)
         assert len(events) == 1
         assert events[0].amount == 30.0
+        assert events[0].t == 0
+
+    def test_update_no_water_output_when_zero_outflow(self):
+        storage = make_storage(
+            capacity=1000.0,
+            initial_storage=100.0,
+            release_amount=0.0,
+        )
+        storage.update(t=0, dt=1.0)
+
+        events = storage.events_of_type(WaterOutput)
+        assert len(events) == 0
 
     def test_update_resets_received_for_next_step(self):
         storage = make_storage(capacity=1000.0, initial_storage=0.0)
@@ -505,7 +443,6 @@ class TestStorageUpdate:
                 SEEPAGE: seep_loss,
             },
             release_amount=release_amt,
-            targets=["downstream"],
         )
         storage.receive(received, "source", t=0)
         storage.update(t=0, dt=1.0)
@@ -513,8 +450,8 @@ class TestStorageUpdate:
         expected_storage = initial + received - evap_loss - seep_loss - release_amt
         assert storage.storage == pytest.approx(expected_storage)
 
-        distributed = storage.events_of_type(WaterDistributed)
-        assert distributed[0].amount == release_amt
+        output_events = storage.events_of_type(WaterOutput)
+        assert output_events[0].amount == release_amt
 
 
 class TestStorageProtocolCompliance:
@@ -529,10 +466,6 @@ class TestStorageProtocolCompliance:
     def test_satisfies_loses_protocol(self):
         storage = make_storage()
         assert isinstance(storage, Loses)
-
-    def test_satisfies_gives_protocol(self):
-        storage = make_storage()
-        assert isinstance(storage, Gives)
 
     def test_storage_property_returns_float(self):
         storage = make_storage(initial_storage=250.0)
