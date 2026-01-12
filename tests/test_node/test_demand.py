@@ -1,7 +1,11 @@
+import pytest
+
+from taqsim.common import INEFFICIENCY
 from taqsim.node.demand import Demand
 from taqsim.node.events import (
     DeficitRecorded,
     WaterConsumed,
+    WaterLost,
     WaterOutput,
     WaterReceived,
 )
@@ -248,15 +252,11 @@ class TestDemandConsumptionFractionValidation:
         assert node.consumption_fraction == 1.0
 
     def test_rejects_negative_consumption_fraction(self):
-        import pytest
-
         ts = FakeTimeSeries(default=10.0)
         with pytest.raises(ValueError, match="must be between 0.0 and 1.0"):
             Demand(id="d1", requirement=ts, consumption_fraction=-0.1)
 
     def test_rejects_consumption_fraction_above_one(self):
-        import pytest
-
         ts = FakeTimeSeries(default=10.0)
         with pytest.raises(ValueError, match="must be between 0.0 and 1.0"):
             Demand(id="d1", requirement=ts, consumption_fraction=1.5)
@@ -337,3 +337,135 @@ class TestDemandConsumptionFractionBehavior:
         assert len(output_events) == 1
         # 70 excess + 15 returned = 85
         assert output_events[0].amount == 85.0
+
+
+class TestDemandEfficiencyValidation:
+    def test_defaults_to_fully_efficient(self):
+        ts = FakeTimeSeries(default=10.0)
+        node = Demand(id="d1", requirement=ts)
+        assert node.efficiency == 1.0
+
+    def test_rejects_zero_efficiency(self):
+        ts = FakeTimeSeries(default=10.0)
+        with pytest.raises(ValueError, match="greater than 0.0"):
+            Demand(id="d1", requirement=ts, efficiency=0.0)
+
+    def test_rejects_negative_efficiency(self):
+        ts = FakeTimeSeries(default=10.0)
+        with pytest.raises(ValueError):
+            Demand(id="d1", requirement=ts, efficiency=-0.5)
+
+    def test_rejects_efficiency_above_one(self):
+        ts = FakeTimeSeries(default=10.0)
+        with pytest.raises(ValueError, match="at most 1.0"):
+            Demand(id="d1", requirement=ts, efficiency=1.5)
+
+    def test_accepts_efficiency_of_one(self):
+        ts = FakeTimeSeries(default=10.0)
+        node = Demand(id="d1", requirement=ts, efficiency=1.0)
+        assert node.efficiency == 1.0
+
+    def test_accepts_small_positive_efficiency(self):
+        ts = FakeTimeSeries(default=10.0)
+        node = Demand(id="d1", requirement=ts, efficiency=0.01)
+        assert node.efficiency == 0.01
+
+
+class TestDemandEfficiencyBehavior:
+    def test_full_efficiency_no_water_lost(self):
+        ts = FakeTimeSeries(values={0: 50.0})
+        node = Demand(id="d1", requirement=ts, efficiency=1.0)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        lost_events = node.events_of_type(WaterLost)
+        assert len(lost_events) == 0
+
+    def test_efficiency_records_water_lost_with_inefficiency_reason(self):
+        ts = FakeTimeSeries(values={0: 80.0})
+        node = Demand(id="d1", requirement=ts, efficiency=0.8)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        lost_events = node.events_of_type(WaterLost)
+        assert len(lost_events) == 1
+        assert lost_events[0].reason == INEFFICIENCY
+
+    def test_efficiency_water_lost_amount_correct(self):
+        # efficiency=0.8, require 80, receive 100: withdraw 100, deliver 80, lose 20
+        ts = FakeTimeSeries(values={0: 80.0})
+        node = Demand(id="d1", requirement=ts, efficiency=0.8)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        lost_events = node.events_of_type(WaterLost)
+        assert len(lost_events) == 1
+        assert lost_events[0].amount == pytest.approx(20.0)
+
+    def test_efficiency_with_insufficient_water(self):
+        # efficiency=0.8, require 80, receive 50: withdraw 50, deliver 40, lose 10, deficit 40
+        ts = FakeTimeSeries(values={0: 80.0})
+        node = Demand(id="d1", requirement=ts, efficiency=0.8)
+        node._received_this_step = 50.0
+        node.update(t=0, dt=1.0)
+
+        lost_events = node.events_of_type(WaterLost)
+        assert len(lost_events) == 1
+        assert lost_events[0].amount == pytest.approx(10.0)
+
+        deficits = node.events_of_type(DeficitRecorded)
+        assert len(deficits) == 1
+        assert deficits[0].deficit == pytest.approx(40.0)
+
+    def test_deficit_based_on_delivered_not_withdrawal(self):
+        # efficiency=0.8, require 80, receive 50: withdraw 50, deliver 40
+        # DeficitRecorded.actual should be 40 (delivered), not 50 (withdrawn)
+        ts = FakeTimeSeries(values={0: 80.0})
+        node = Demand(id="d1", requirement=ts, efficiency=0.8)
+        node._received_this_step = 50.0
+        node.update(t=0, dt=1.0)
+
+        deficits = node.events_of_type(DeficitRecorded)
+        assert len(deficits) == 1
+        assert deficits[0].actual == pytest.approx(40.0)
+
+
+class TestDemandEfficiencyWithConsumptionFraction:
+    def test_efficiency_applied_before_consumption_fraction(self):
+        # efficiency=0.8, consumption_fraction=0.5, require 80, receive 100
+        # withdraw 100, deliver 80, lose 20, consume 40, return 40
+        ts = FakeTimeSeries(values={0: 80.0})
+        node = Demand(id="d1", requirement=ts, efficiency=0.8, consumption_fraction=0.5)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        lost_events = node.events_of_type(WaterLost)
+        assert len(lost_events) == 1
+        assert lost_events[0].amount == pytest.approx(20.0)
+
+        consumed_events = node.events_of_type(WaterConsumed)
+        assert len(consumed_events) == 1
+        assert consumed_events[0].amount == pytest.approx(40.0)
+
+        output_events = node.events_of_type(WaterOutput)
+        assert len(output_events) == 1
+        assert output_events[0].amount == pytest.approx(40.0)
+
+    def test_mass_balance_with_both_params(self):
+        # verify received = lost + consumed + output
+        ts = FakeTimeSeries(values={0: 80.0})
+        node = Demand(id="d1", requirement=ts, efficiency=0.8, consumption_fraction=0.5)
+        received = 100.0
+        node._received_this_step = received
+        node.update(t=0, dt=1.0)
+
+        lost_events = node.events_of_type(WaterLost)
+        lost = lost_events[0].amount if lost_events else 0.0
+
+        consumed_events = node.events_of_type(WaterConsumed)
+        consumed = consumed_events[0].amount if consumed_events else 0.0
+
+        output_events = node.events_of_type(WaterOutput)
+        output = output_events[0].amount if output_events else 0.0
+
+        assert received == pytest.approx(lost + consumed + output)

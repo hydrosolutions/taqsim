@@ -13,6 +13,7 @@ class LossReason(str):
 EVAPORATION = LossReason("evaporation")
 SEEPAGE = LossReason("seepage")
 OVERFLOW = LossReason("overflow")
+INEFFICIENCY = LossReason("inefficiency")
 
 
 def summarize_losses(events: list) -> dict[str, float]:
@@ -49,6 +50,7 @@ class Strategy:
 @dataclass(frozen=True, slots=True)
 class ParamSpec:
     """Describes a single tunable parameter in the system."""
-    path: str              # e.g., "dam.release_rule.rate"
-    value: float           # flattened scalar value
+
+    path: str  # e.g., "dam.release_rule.rate"
+    value: float  # flattened scalar value
     index: int | None = None  # position in tuple, None for scalar

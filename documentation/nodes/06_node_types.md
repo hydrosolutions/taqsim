@@ -146,6 +146,7 @@ Consumption node. Receives water, consumes requirement, passes remainder downstr
 | `id` | `str` | Yes | Unique identifier |
 | `requirement` | `TimeSeries` | Yes | Demand rates per timestep |
 | `consumption_fraction` | `float` | No | Fraction of met demand consumed (0.0-1.0, default: 1.0) |
+| `efficiency` | `float` | No | Delivery efficiency (0.0-1.0 exclusive-inclusive, default: 1.0) |
 
 ### Consumption Fraction
 
@@ -162,10 +163,28 @@ Controls how much of the met demand is physically consumed (leaves the system) v
 - Excess: 100 - 80 = 20 m³
 - Total output: 56 + 20 = 76 m³ (recorded as `WaterOutput`)
 
+### Efficiency
+
+Models delivery losses (conveyance, distribution, application inefficiencies). To deliver a given amount to the demand point, the system must withdraw more water:
+
+- `1.0` (default): No delivery losses
+- `0.8`: 80% efficient - to deliver 80 m³, must withdraw 100 m³ (20 m³ lost)
+
+Losses are recorded as `WaterLost` events with reason `INEFFICIENCY`.
+
+**Combined example**: With `efficiency=0.8` and `consumption_fraction=0.5`:
+- Requirement: 80 m³, Available: 100 m³
+- Withdrawal: 100 m³ (to deliver 80)
+- Loss: 20 m³ (recorded as WaterLost)
+- Delivered: 80 m³
+- Consumed: 40 m³ (50% of delivered)
+- Returned: 40 m³ (in WaterOutput)
+
 ### Events Recorded
 
 - `WaterReceived(amount, source_id, t)` — when water arrives
 - `WaterConsumed(amount, t)` — physically consumed portion of met demand
+- `WaterLost(amount, reason, t)` — delivery losses when efficiency < 1.0
 - `DeficitRecorded(required, actual, deficit, t)` — if demand not met
 - `WaterOutput(amount, t)` — remaining water for downstream
 

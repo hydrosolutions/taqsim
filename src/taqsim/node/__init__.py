@@ -1,4 +1,4 @@
-from taqsim.common import EVAPORATION, OVERFLOW, SEEPAGE, LossReason, summarize_losses
+from taqsim.common import EVAPORATION, INEFFICIENCY, OVERFLOW, SEEPAGE, LossReason, summarize_losses
 
 from .base import BaseNode
 from .demand import Demand
@@ -34,6 +34,7 @@ from .timeseries import TimeSeries
 __all__ = [
     # Common
     "EVAPORATION",
+    "INEFFICIENCY",
     "LossReason",
     "OVERFLOW",
     "SEEPAGE",
