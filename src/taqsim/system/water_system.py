@@ -328,6 +328,7 @@ class WaterSystem:
         ax.set_title("Water System Network")
         ax.legend(loc="best")
         ax.grid(True, alpha=0.3)
+        ax.ticklabel_format(useOffset=False)
 
         plt.tight_layout()
 
