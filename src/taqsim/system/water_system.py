@@ -264,13 +264,16 @@ class WaterSystem:
         """Compute geodesic lengths for all edges where both endpoints have locations."""
         return {edge_id: length for edge_id in self._edges if (length := self.edge_length(edge_id)) is not None}
 
-    def visualize(self, save_to: str | None = None) -> None:
+    def visualize(self, save_to: str | None = None, figsize: tuple[int, int] = (12, 8)) -> None:
         """Visualize the water network on a geographic plot.
 
         Plots nodes at their (lon, lat) positions with colors/markers by type.
         Draws edges as arrows between connected nodes.
         """
         import matplotlib.pyplot as plt
+        import seaborn as sns
+
+        sns.set_context("paper", font_scale=1.3)
 
         # Filter nodes with locations
         located_nodes = {nid: node for nid, node in self._nodes.items() if node.location is not None}
@@ -288,7 +291,7 @@ class WaterSystem:
             PassThrough: {"color": "cyan", "marker": "h", "label": "PassThrough"},
         }
 
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=figsize)
 
         # Collect positions: (lon, lat) -> (x, y)
         positions = {}
@@ -308,7 +311,7 @@ class WaterSystem:
                     break
 
             # Add node ID label
-            ax.annotate(nid, (x, y), textcoords="offset points", xytext=(5, 5), fontsize=9, zorder=4)
+            ax.annotate(nid, (x, y), textcoords="offset points", xytext=(5, 5), zorder=4)
 
         # Draw edges as arrows
         for edge in self._edges.values():
@@ -331,6 +334,7 @@ class WaterSystem:
         ax.ticklabel_format(useOffset=False)
 
         plt.tight_layout()
+        sns.despine(fig=fig)
 
         if save_to:
             plt.savefig(save_to, dpi=150, bbox_inches="tight")
