@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
-from taqsim.common import ParamSpec, Strategy
+from taqsim.common import ParamSpec
 from taqsim.edge import Edge
 from taqsim.node import BaseNode, Receives, Sink, Source, Splitter
 from taqsim.node.events import WaterDistributed, WaterOutput

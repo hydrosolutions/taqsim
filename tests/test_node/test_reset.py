@@ -1,8 +1,5 @@
-import pytest
 
-from taqsim.node import Source, Storage, Demand, Splitter, PassThrough, Sink, TimeSeries
-from taqsim.common import EVAPORATION
-
+from taqsim.node import Demand, PassThrough, Source, Splitter, Storage, TimeSeries
 
 # Use fixtures from conftest.py for fake strategies
 

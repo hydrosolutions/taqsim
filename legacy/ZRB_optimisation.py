@@ -18,9 +18,10 @@
 """
 from datetime import datetime
 
-from taqsim import DeapOptimizer, ParetoVisualizer
 from taqsim.io_utils import load_parameters_from_file, save_optimized_parameters
-from ZRB_system_creator import create_ZRB_system
+
+from taqsim import DeapOptimizer, ParetoVisualizer
+from legacy.ZRB_system_creator import create_ZRB_system
 
 if __name__ == "__main__":
 

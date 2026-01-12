@@ -14,6 +14,7 @@ dependencies = [
     "plotly>=5.14",
     "deap>=1.4",
     "pyzmq>=27.1.0",
+    "ipykernel>=7.1.0",
 ]
 
 [build-system]

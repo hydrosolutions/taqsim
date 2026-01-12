@@ -17,9 +17,10 @@
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
 
-from taqsim import ParetoVisualizer, WaterSystemVisualizer
 from taqsim.io_utils import load_optimized_parameters, load_parameters_from_file
-from ZRB_system_creator import create_ZRB_system
+
+from taqsim import ParetoVisualizer, WaterSystemVisualizer
+from legacy.ZRB_system_creator import create_ZRB_system
 
 if __name__ == "__main__":
 

@@ -3,7 +3,7 @@ from typing import ClassVar
 
 import pytest
 
-from taqsim.common import Strategy, ParamSpec
+from taqsim.common import ParamSpec, Strategy
 
 
 class TestStrategy:
