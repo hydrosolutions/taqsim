@@ -27,6 +27,7 @@ class EdgeLossRule(Protocol):
 `LossReason` is an enum with values:
 - `LossReason.EVAPORATION`
 - `LossReason.SEEPAGE`
+- `LossReason.CAPACITY_EXCEEDED`
 
 ## Custom Implementations
 
@@ -102,7 +103,6 @@ class CombinedLoss:
 
 ```python
 from taqsim.edge import Edge
-from taqsim.node import TimeSeries
 
 # Create loss rule
 loss_rule = PercentageLoss(fraction=0.05)
@@ -113,8 +113,7 @@ edge = Edge(
     source="reservoir",
     target="farm",
     capacity=100.0,
-    loss_rule=loss_rule,
-    requirement=TimeSeries(values=[10.0, 15.0, 20.0])
+    loss_rule=loss_rule
 )
 ```
 

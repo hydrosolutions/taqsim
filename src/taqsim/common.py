@@ -14,6 +14,7 @@ EVAPORATION = LossReason("evaporation")
 SEEPAGE = LossReason("seepage")
 OVERFLOW = LossReason("overflow")
 INEFFICIENCY = LossReason("inefficiency")
+CAPACITY_EXCEEDED = LossReason("capacity_exceeded")
 
 
 def summarize_losses(events: list) -> dict[str, float]:

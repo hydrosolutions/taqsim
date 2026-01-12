@@ -1,14 +1,12 @@
 from dataclasses import dataclass, field
 
-from taqsim.node.timeseries import TimeSeries
+from taqsim.common import CAPACITY_EXCEEDED
 
 from .events import (
-    CapacityExceeded,
     EdgeEvent,
-    FlowDelivered,
-    FlowLost,
-    FlowReceived,
-    RequirementUnmet,
+    WaterDelivered,
+    WaterLost,
+    WaterReceived,
 )
 from .losses import EdgeLossRule
 
@@ -19,7 +17,6 @@ class Edge:
     source: str
     target: str
     capacity: float
-    requirement: TimeSeries | None = None
     loss_rule: EdgeLossRule | None = field(default=None)
     targets: list[str] = field(default_factory=list)
 
@@ -48,7 +45,7 @@ class Edge:
         self.events.clear()
 
     def receive(self, amount: float, t: int) -> float:
-        self.record(FlowReceived(amount=amount, t=t))
+        self.record(WaterReceived(amount=amount, t=t))
         self._received_this_step += amount
         return amount
 
@@ -59,7 +56,7 @@ class Edge:
         excess = 0.0
         if received > self.capacity:
             excess = received - self.capacity
-            self.record(CapacityExceeded(excess=excess, t=t))
+            self.record(WaterLost(amount=excess, reason=CAPACITY_EXCEEDED, t=t))
             received = self.capacity
 
         # 2-3. Calculate and record losses
@@ -74,31 +71,18 @@ class Edge:
 
         for reason, amount in losses.items():
             if amount > 0:
-                self.record(FlowLost(amount=amount, reason=reason, t=t))
+                self.record(WaterLost(amount=amount, reason=reason, t=t))
 
         # 4. Calculate delivered
         delivered = received - total_loss
 
-        # 5. Check requirement
-        if self.requirement is not None:
-            required = self.requirement[t] * dt
-            if delivered < required:
-                self.record(
-                    RequirementUnmet(
-                        required=required,
-                        actual=delivered,
-                        deficit=required - delivered,
-                        t=t,
-                    )
-                )
+        # 5. Record delivery
+        self.record(WaterDelivered(amount=delivered, t=t))
 
-        # 6. Record delivery
-        self.record(FlowDelivered(amount=delivered, t=t))
-
-        # 7. Reset
+        # 6. Reset
         self._received_this_step = 0.0
 
-        # 8. Return
+        # 7. Return
         return delivered
 
     def reset(self) -> None:

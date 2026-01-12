@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `Edge` class represents a connection between two nodes, handling water transport with capacity constraints, losses, and minimum flow requirements.
+The `Edge` class represents a connection between two nodes, handling water transport with capacity constraints and losses.
 
 ## Parameters
 
@@ -13,7 +13,6 @@ The `Edge` class represents a connection between two nodes, handling water trans
 | `target` | `str` | Yes | - | Target node ID |
 | `capacity` | `float` | Yes | - | Maximum flow capacity |
 | `loss_rule` | `EdgeLossRule` | Yes | - | Loss calculation strategy |
-| `requirement` | `TimeSeries \| None` | No | `None` | Minimum flow requirement per timestep |
 | `targets` | `list[str]` | No | `[]` | Additional target nodes |
 
 ## Validation Rules
@@ -42,7 +41,7 @@ Accept water from the source node.
 
 ```python
 received = edge.receive(100.0, t=0)
-# Records FlowReceived event
+# Records WaterReceived event
 # Returns amount received
 ```
 
@@ -60,7 +59,7 @@ delivered = edge.update(t=0, dt=1.0)
 Append an event to the event log.
 
 ```python
-edge.record(FlowReceived(amount=50.0, t=0))
+edge.record(WaterReceived(amount=50.0, t=0))
 ```
 
 ### events_of_type(event_type) -> list[T]
@@ -68,8 +67,8 @@ edge.record(FlowReceived(amount=50.0, t=0))
 Filter events by type.
 
 ```python
-deliveries = edge.events_of_type(FlowDelivered)
-losses = edge.events_of_type(FlowLost)
+deliveries = edge.events_of_type(WaterDelivered)
+losses = edge.events_of_type(WaterLost)
 ```
 
 ### clear_events() -> None
@@ -85,15 +84,14 @@ assert len(edge.events) == 0
 
 The `update()` method performs these steps:
 
-1. **Capacity Check**: If received > capacity, record `CapacityExceeded` and cap flow
+1. **Capacity Check**: If received > capacity, record `WaterLost(reason=CAPACITY_EXCEEDED)` and cap flow
 2. **Loss Calculation**: Apply `loss_rule.calculate()` to determine losses
 3. **Loss Scaling**: If total losses > available flow, scale proportionally
-4. **Record Losses**: Create `FlowLost` event for each loss type
+4. **Record Losses**: Create `WaterLost` event for each loss type
 5. **Calculate Delivered**: delivered = received - total_losses
-6. **Requirement Check**: If requirement set and delivered < required, record `RequirementUnmet`
-7. **Record Delivery**: Create `FlowDelivered` event
-8. **Reset**: Clear accumulated flow for next timestep
-9. **Return**: Return delivered amount
+6. **Record Delivery**: Create `WaterDelivered` event
+7. **Reset**: Clear accumulated flow for next timestep
+8. **Return**: Return delivered amount
 
 ## Usage Examples
 
@@ -148,32 +146,11 @@ delivered = edge.update(t=0, dt=1.0)
 assert delivered == 90.0  # 100 - 10% loss
 ```
 
-### Edge with Minimum Requirement
-
-```python
-from taqsim.node import TimeSeries
-
-edge = Edge(
-    id="environmental_flow",
-    source="dam",
-    target="river",
-    capacity=1000.0,
-    loss_rule=ZeroLoss(),
-    requirement=TimeSeries(values=[50.0, 50.0, 100.0])  # minimum flow per timestep
-)
-
-edge.receive(30.0, t=0)  # below requirement
-delivered = edge.update(t=0, dt=1.0)
-
-# Check for unmet requirement
-unmet = edge.events_of_type(RequirementUnmet)
-assert len(unmet) == 1
-assert unmet[0].deficit == 20.0  # 50 required - 30 delivered
-```
-
 ### Capacity Exceeded
 
 ```python
+from taqsim.common import LossReason
+
 edge = Edge(
     id="small_pipe",
     source="tank",
@@ -187,9 +164,13 @@ delivered = edge.update(t=0, dt=1.0)
 
 assert delivered == 50.0  # capped at capacity
 
-exceeded = edge.events_of_type(CapacityExceeded)
-assert len(exceeded) == 1
-assert exceeded[0].excess == 50.0  # 100 - 50 capacity
+# Check for capacity exceeded via WaterLost events
+capacity_losses = [
+    e for e in edge.events_of_type(WaterLost)
+    if e.reason == LossReason.CAPACITY_EXCEEDED
+]
+assert len(capacity_losses) == 1
+assert capacity_losses[0].amount == 50.0  # 100 - 50 capacity
 ```
 
 ## Properties

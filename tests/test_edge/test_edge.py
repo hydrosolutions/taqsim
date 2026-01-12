@@ -1,15 +1,12 @@
 import pytest
 
-from taqsim.common import EVAPORATION, SEEPAGE, LossReason
+from taqsim.common import CAPACITY_EXCEEDED, EVAPORATION, SEEPAGE, LossReason
 from taqsim.edge.edge import Edge
 from taqsim.edge.events import (
-    CapacityExceeded,
-    FlowDelivered,
-    FlowLost,
-    FlowReceived,
-    RequirementUnmet,
+    WaterDelivered,
+    WaterLost,
+    WaterReceived,
 )
-from taqsim.node.timeseries import TimeSeries
 
 from .conftest import FakeEdgeLossRule
 
@@ -19,7 +16,6 @@ def make_edge(
     source: str = "source_node",
     target: str = "target_node",
     capacity: float = 100.0,
-    requirement: TimeSeries | None = None,
     losses: dict[LossReason, float] | None = None,
 ) -> Edge:
     return Edge(
@@ -27,7 +23,6 @@ def make_edge(
         source=source,
         target=target,
         capacity=capacity,
-        requirement=requirement,
         loss_rule=FakeEdgeLossRule(losses),
     )
 
@@ -75,27 +70,23 @@ class TestEdgeInit:
         assert edge.target == "node_b"
         assert edge.capacity == 500.0
 
-    def test_edge_requirement_optional(self):
-        edge = make_edge()
-        assert edge.requirement is None
-
 
 class TestEdgeReceive:
-    def test_receive_records_flow_received_event(self):
+    def test_receive_records_water_received_event(self):
         edge = make_edge()
         edge.receive(50.0, t=0)
 
-        events = edge.events_of_type(FlowReceived)
+        events = edge.events_of_type(WaterReceived)
         assert len(events) == 1
         assert events[0].amount == 50.0
         assert events[0].t == 0
 
-    def test_receive_accumulates_flow(self):
+    def test_receive_accumulates_water(self):
         edge = make_edge()
         edge.receive(50.0, t=0)
         edge.receive(30.0, t=0)
 
-        events = edge.events_of_type(FlowReceived)
+        events = edge.events_of_type(WaterReceived)
         assert len(events) == 2
         assert sum(e.amount for e in events) == 80.0
 
@@ -106,12 +97,12 @@ class TestEdgeReceive:
 
 
 class TestEdgeUpdate:
-    def test_update_records_flow_delivered(self):
+    def test_update_records_water_delivered(self):
         edge = make_edge()
         edge.receive(50.0, t=0)
         edge.update(t=0, dt=1.0)
 
-        events = edge.events_of_type(FlowDelivered)
+        events = edge.events_of_type(WaterDelivered)
         assert len(events) == 1
         assert events[0].amount == 50.0
         assert events[0].t == 0
@@ -131,7 +122,7 @@ class TestEdgeUpdate:
         delivered = edge.update(t=1, dt=1.0)
         assert delivered == 0.0
 
-        events = edge.events_of_type(FlowDelivered)
+        events = edge.events_of_type(WaterDelivered)
         t1_events = [e for e in events if e.t == 1]
         assert len(t1_events) == 1
         assert t1_events[0].amount == 0.0
@@ -141,10 +132,11 @@ class TestEdgeUpdate:
         edge.receive(150.0, t=0)
         edge.update(t=0, dt=1.0)
 
-        events = edge.events_of_type(CapacityExceeded)
-        assert len(events) == 1
-        assert events[0].excess == 50.0
-        assert events[0].t == 0
+        events = edge.events_of_type(WaterLost)
+        capacity_exceeded_events = [e for e in events if e.reason == CAPACITY_EXCEEDED]
+        assert len(capacity_exceeded_events) == 1
+        assert capacity_exceeded_events[0].amount == 50.0
+        assert capacity_exceeded_events[0].t == 0
 
     def test_update_clamps_to_capacity(self):
         edge = make_edge(capacity=100.0)
@@ -161,27 +153,27 @@ class TestEdgeUpdate:
 
         assert delivered == 90.0
 
-    def test_update_records_flow_lost_events(self):
+    def test_update_records_water_lost_events(self):
         edge = make_edge(losses={EVAPORATION: 10.0, SEEPAGE: 5.0})
         edge.receive(100.0, t=0)
         edge.update(t=0, dt=1.0)
 
-        events = edge.events_of_type(FlowLost)
+        events = edge.events_of_type(WaterLost)
         assert len(events) == 2
         reasons = {e.reason: e.amount for e in events}
         assert reasons[EVAPORATION] == 10.0
         assert reasons[SEEPAGE] == 5.0
 
-    def test_update_scales_losses_if_exceed_flow(self):
-        # Losses (80 + 20 = 100) exceed flow (10)
+    def test_update_scales_losses_if_exceed_water(self):
+        # Losses (80 + 20 = 100) exceed water (10)
         edge = make_edge(losses={EVAPORATION: 80.0, SEEPAGE: 20.0})
         edge.receive(10.0, t=0)
         delivered = edge.update(t=0, dt=1.0)
 
-        # All flow lost, nothing delivered
+        # All water lost, nothing delivered
         assert delivered == 0.0
 
-        events = edge.events_of_type(FlowLost)
+        events = edge.events_of_type(WaterLost)
         evap = next(e for e in events if e.reason == EVAPORATION)
         seep = next(e for e in events if e.reason == SEEPAGE)
 
@@ -189,30 +181,8 @@ class TestEdgeUpdate:
         assert evap.amount == pytest.approx(8.0)
         assert seep.amount == pytest.approx(2.0)
 
-    def test_update_requirement_unmet_recorded(self):
-        requirement = TimeSeries([100.0] * 12)
-        edge = make_edge(requirement=requirement)
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
-
-        events = edge.events_of_type(RequirementUnmet)
-        assert len(events) == 1
-        assert events[0].required == 100.0
-        assert events[0].actual == 50.0
-        assert events[0].deficit == 50.0
-        assert events[0].t == 0
-
-    def test_update_no_requirement_unmet_when_met(self):
-        requirement = TimeSeries([50.0] * 12)
-        edge = make_edge(requirement=requirement)
-        edge.receive(100.0, t=0)
-        edge.update(t=0, dt=1.0)
-
-        events = edge.events_of_type(RequirementUnmet)
-        assert len(events) == 0
-
     def test_update_mass_balance(self):
-        # Test: delivered + losses + excess = received
+        # Test: delivered + losses (including capacity exceeded) = received
         losses = {EVAPORATION: 10.0, SEEPAGE: 5.0}
         edge = make_edge(capacity=100.0, losses=losses)
 
@@ -220,20 +190,20 @@ class TestEdgeUpdate:
         edge.receive(received, t=0)
         delivered = edge.update(t=0, dt=1.0)
 
-        # excess = 120 - 100 = 20
+        # excess = 120 - 100 = 20 (recorded as WaterLost with CAPACITY_EXCEEDED)
         # received after clamping = 100
-        # total_loss = 10 + 5 = 15
+        # total_loss from rules = 10 + 5 = 15
         # delivered = 100 - 15 = 85
 
-        excess_events = edge.events_of_type(CapacityExceeded)
-        excess = excess_events[0].excess if excess_events else 0.0
-
-        loss_events = edge.events_of_type(FlowLost)
+        loss_events = edge.events_of_type(WaterLost)
         total_loss = sum(e.amount for e in loss_events)
+        capacity_exceeded_loss = sum(
+            e.amount for e in loss_events if e.reason == CAPACITY_EXCEEDED
+        )
 
-        # Mass balance: after_clamping = capacity, delivered + losses = after_clamping
-        assert delivered + total_loss == 100.0
-        assert excess == 20.0
+        # Mass balance: delivered + all losses = received
+        assert delivered + total_loss == received
+        assert capacity_exceeded_loss == 20.0
         assert delivered == 85.0
 
 
@@ -243,9 +213,9 @@ class TestEdgeEventRecording:
         edge.receive(50.0, t=0)
         edge.update(t=0, dt=1.0)
 
-        received_events = edge.events_of_type(FlowReceived)
-        lost_events = edge.events_of_type(FlowLost)
-        delivered_events = edge.events_of_type(FlowDelivered)
+        received_events = edge.events_of_type(WaterReceived)
+        lost_events = edge.events_of_type(WaterLost)
+        delivered_events = edge.events_of_type(WaterDelivered)
 
         assert len(received_events) == 1
         assert len(lost_events) == 1
@@ -262,7 +232,7 @@ class TestEdgeEventRecording:
 
     def test_record_appends_event(self):
         edge = make_edge()
-        event = FlowReceived(amount=42.0, t=99)
+        event = WaterReceived(amount=42.0, t=99)
         edge.record(event)
 
         assert event in edge.events

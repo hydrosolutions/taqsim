@@ -21,9 +21,10 @@ def _():
         WaterDistributed,
         DeficitRecorded,
     )
-    from taqsim.edge import Edge, EdgeLossRule, CapacityExceeded, FlowDelivered
+    from taqsim.edge import Edge, EdgeLossRule, WaterDelivered, WaterLost
+    from taqsim.common import CAPACITY_EXCEEDED
     return (
-        CapacityExceeded,
+        CAPACITY_EXCEEDED,
         DeficitRecorded,
         Demand,
         EVAPORATION,
@@ -35,7 +36,9 @@ def _():
         Splitter,
         Storage,
         TimeSeries,
+        WaterDelivered,
         WaterDistributed,
+        WaterLost,
         dataclass,
         mo,
     )
@@ -283,7 +286,7 @@ def _(
 
 
 @app.cell
-def _(Edge, TransportLoss, ZeroEdgeLoss, city_requirement):
+def _(Edge, TransportLoss, ZeroEdgeLoss):
     # === CREATE EDGES ===
 
     # River to Dam (high capacity, some seepage)
@@ -329,7 +332,6 @@ def _(Edge, TransportLoss, ZeroEdgeLoss, city_requirement):
         target="city",
         capacity=100.0,  # FLOOD THRESHOLD
         loss_rule=ZeroEdgeLoss(),
-        requirement=city_requirement,  # minimum environmental flow
     )
 
     edges = {
@@ -353,7 +355,7 @@ def _(mo):
 
 
 @app.cell
-def _(CapacityExceeded, DeficitRecorded, WaterDistributed, edges, nodes):
+def _(CAPACITY_EXCEEDED, DeficitRecorded, WaterDistributed, WaterLost, edges, nodes):
     def simulate_timestep(t: int, dt: float = 1.0):
         """Simulate one timestep of the water system."""
 
@@ -456,8 +458,8 @@ def _(CapacityExceeded, DeficitRecorded, WaterDistributed, edges, nodes):
         results["farm_deficit"].append(sum(farm_def_t))
 
         # City flood excess
-        city_exceeded = edges["junction_to_city"].events_of_type(CapacityExceeded)
-        city_excess_t = [e.excess for e in city_exceeded if e.t == t]
+        city_losses = edges["junction_to_city"].events_of_type(WaterLost)
+        city_excess_t = [e.amount for e in city_losses if e.t == t and e.reason == CAPACITY_EXCEEDED]
         results["city_flood_excess"].append(sum(city_excess_t))
 
     results

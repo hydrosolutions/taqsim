@@ -8,75 +8,50 @@ The `taqsim.edge` module uses event sourcing. All events are frozen dataclasses 
 
 All events share:
 - `t: int` - timestep when event occurred
-- `amount: float` - water volume in m3 (except CapacityExceeded)
+- `amount: float` - water volume in m3
 
 ## Event Types
 
-### FlowReceived
+### WaterReceived
 
 Edge receives water from source node.
 
 ```python
-FlowReceived(amount=100.0, t=0)
+WaterReceived(amount=100.0, t=0)
 ```
 
-### FlowLost
+### WaterLost
 
-Transport losses (seepage, evaporation).
+Transport losses (seepage, evaporation, capacity exceeded).
 
 ```python
 from taqsim.common import LossReason
 
-FlowLost(amount=5.0, reason=LossReason.SEEPAGE, t=0)
-FlowLost(amount=2.0, reason=LossReason.EVAPORATION, t=0)
+WaterLost(amount=5.0, reason=LossReason.SEEPAGE, t=0)
+WaterLost(amount=2.0, reason=LossReason.EVAPORATION, t=0)
+WaterLost(amount=50.0, reason=LossReason.CAPACITY_EXCEEDED, t=0)
 ```
 
-### FlowDelivered
+### WaterDelivered
 
 Water successfully transported to target node.
 
 ```python
-FlowDelivered(amount=93.0, t=0)
+WaterDelivered(amount=93.0, t=0)
 ```
-
-### CapacityExceeded
-
-Flow exceeds edge capacity.
-
-```python
-CapacityExceeded(excess=20.0, t=0)
-```
-
-Fields:
-- `excess: float` - amount over capacity (not `amount`)
-- `t: int` - timestep
-
-### RequirementUnmet
-
-Flow below minimum requirement.
-
-```python
-RequirementUnmet(required=100.0, actual=80.0, deficit=20.0, t=0)
-```
-
-Fields:
-- `required: float` - minimum flow requirement
-- `actual: float` - actual delivered flow
-- `deficit: float` - shortfall (required - actual)
-- `t: int` - timestep
 
 ## Deriving State from Events
 
 Total delivered:
 
 ```python
-total = sum(e.amount for e in edge.events_of_type(FlowDelivered))
+total = sum(e.amount for e in edge.events_of_type(WaterDelivered))
 ```
 
 Total losses:
 
 ```python
-losses = sum(e.amount for e in edge.events_of_type(FlowLost))
+losses = sum(e.amount for e in edge.events_of_type(WaterLost))
 ```
 
 Losses by reason:
@@ -85,44 +60,51 @@ Losses by reason:
 from taqsim.common import LossReason
 
 seepage = sum(
-    e.amount for e in edge.events_of_type(FlowLost)
+    e.amount for e in edge.events_of_type(WaterLost)
     if e.reason == LossReason.SEEPAGE
 )
 ```
 
-Total excess (over capacity):
+Capacity exceeded losses:
 
 ```python
-excess = sum(e.excess for e in edge.events_of_type(CapacityExceeded))
+capacity_losses = sum(
+    e.amount for e in edge.events_of_type(WaterLost)
+    if e.reason == LossReason.CAPACITY_EXCEEDED
+)
 ```
 
 ## Event Ordering
 
 Within a timestep, events are recorded in `update()` execution order:
 
-1. FlowReceived (during receive calls)
-2. CapacityExceeded (if over capacity)
-3. FlowLost (transport losses)
-4. RequirementUnmet (if below minimum)
-5. FlowDelivered
+1. WaterReceived (during receive calls)
+2. WaterLost (capacity exceeded, transport losses)
+3. WaterDelivered
 
 ## Querying Events
 
 ```python
 # All delivery events
-deliveries = edge.events_of_type(FlowDelivered)
+deliveries = edge.events_of_type(WaterDelivered)
 
 # Total losses
-losses = sum(e.amount for e in edge.events_of_type(FlowLost))
+losses = sum(e.amount for e in edge.events_of_type(WaterLost))
 
-# Check for capacity issues
-exceeded = edge.events_of_type(CapacityExceeded)
-if exceeded:
-    print(f"Capacity exceeded {len(exceeded)} times")
+# Check for capacity exceeded
+capacity_exceeded = [
+    e for e in edge.events_of_type(WaterLost)
+    if e.reason == LossReason.CAPACITY_EXCEEDED
+]
+if capacity_exceeded:
+    total_excess = sum(e.amount for e in capacity_exceeded)
+    print(f"Capacity exceeded {len(capacity_exceeded)} times, total: {total_excess}")
 
-# Check for requirement violations
-unmet = edge.events_of_type(RequirementUnmet)
-total_deficit = sum(e.deficit for e in unmet)
+# Filter losses by reason
+seepage_losses = [
+    e for e in edge.events_of_type(WaterLost)
+    if e.reason == LossReason.SEEPAGE
+]
 ```
 
 ## EdgeEvent Union Type
@@ -130,5 +112,5 @@ total_deficit = sum(e.deficit for e in unmet)
 All event types are part of the `EdgeEvent` union:
 
 ```python
-EdgeEvent = FlowReceived | FlowLost | FlowDelivered | CapacityExceeded | RequirementUnmet
+EdgeEvent = WaterReceived | WaterLost | WaterDelivered
 ```

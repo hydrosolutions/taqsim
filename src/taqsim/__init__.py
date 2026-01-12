@@ -12,8 +12,8 @@ Core modules:
     - taqsim.common: Shared types (LossReason)
 """
 
-from .common import EVAPORATION, INEFFICIENCY, OVERFLOW, SEEPAGE, LossReason, ParamSpec, Strategy, summarize_losses
-from .edge import Edge, EdgeEvent, EdgeLossRule, FlowDelivered, FlowLost, FlowReceived
+from .common import CAPACITY_EXCEEDED, EVAPORATION, INEFFICIENCY, OVERFLOW, SEEPAGE, LossReason, ParamSpec, Strategy, summarize_losses
+from .edge import Edge, EdgeEvent, EdgeLossRule, WaterDelivered, WaterLost, WaterReceived
 from .node import (
     BaseNode,
     Demand,
@@ -29,6 +29,7 @@ from .system import WaterSystem
 __all__ = [
     # Common
     "LossReason",
+    "CAPACITY_EXCEEDED",
     "EVAPORATION",
     "INEFFICIENCY",
     "OVERFLOW",
@@ -49,9 +50,9 @@ __all__ = [
     "Edge",
     "EdgeEvent",
     "EdgeLossRule",
-    "FlowReceived",
-    "FlowLost",
-    "FlowDelivered",
+    "WaterReceived",
+    "WaterLost",
+    "WaterDelivered",
     # System
     "WaterSystem",
 ]
