@@ -12,7 +12,7 @@ Core modules:
     - taqsim.common: Shared types (LossReason)
 """
 
-from .common import EVAPORATION, OVERFLOW, SEEPAGE, LossReason, summarize_losses
+from .common import EVAPORATION, OVERFLOW, SEEPAGE, LossReason, summarize_losses, Strategy, ParamSpec
 from .edge import Edge, EdgeEvent, EdgeLossRule, FlowDelivered, FlowLost, FlowReceived
 from .node import (
     BaseNode,
@@ -33,6 +33,8 @@ __all__ = [
     "SEEPAGE",
     "OVERFLOW",
     "summarize_losses",
+    "Strategy",
+    "ParamSpec",
     # Nodes
     "BaseNode",
     "Source",

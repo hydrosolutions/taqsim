@@ -19,3 +19,8 @@ class PassThrough(BaseNode):
             self.record(WaterPassedThrough(amount=amount, t=t))
             self.record(WaterOutput(amount=amount, t=t))
         self._received_this_step = 0.0
+
+    def reset(self) -> None:
+        """Reset pass-through node for a fresh simulation run."""
+        super().reset()
+        self._received_this_step = 0.0

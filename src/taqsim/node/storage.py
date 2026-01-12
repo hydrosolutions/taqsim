@@ -100,3 +100,9 @@ class Storage(BaseNode):
             self.record(WaterOutput(amount=total_outflow, t=t))
 
         self._received_this_step = 0.0
+
+    def reset(self) -> None:
+        """Reset storage to initial state for a fresh simulation run."""
+        super().reset()
+        self._current_storage = self.initial_storage
+        self._received_this_step = 0.0

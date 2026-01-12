@@ -33,3 +33,8 @@ class Demand(BaseNode):
         if remaining > 0:
             self.record(WaterOutput(amount=remaining, t=t))
         self._received_this_step = 0.0
+
+    def reset(self) -> None:
+        """Reset demand node for a fresh simulation run."""
+        super().reset()
+        self._received_this_step = 0.0

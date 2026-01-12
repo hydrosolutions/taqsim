@@ -1,5 +1,5 @@
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
-from taqsim.edge.strategies import EdgeLossRule
+from taqsim.edge.losses import EdgeLossRule
 
 
 class TestEdgeLossRuleProtocol:

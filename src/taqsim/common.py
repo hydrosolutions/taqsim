@@ -1,3 +1,9 @@
+from dataclasses import dataclass, replace
+from typing import ClassVar, Self
+
+ParamValue = float | tuple[float, ...]
+
+
 class LossReason(str):
     """A typed string representing a loss reason."""
 
@@ -15,3 +21,34 @@ def summarize_losses(events: list) -> dict[str, float]:
     for e in events:
         totals[e.reason] = totals.get(e.reason, 0) + e.amount
     return totals
+
+
+class Strategy:
+    """Mixin for operational strategies with tunable parameters.
+
+    Concrete strategies should:
+    1. Inherit from Strategy
+    2. Be frozen dataclasses
+    3. Declare __params__ listing optimizable field names
+    """
+
+    __params__: ClassVar[tuple[str, ...]] = ()
+
+    def params(self) -> dict[str, ParamValue]:
+        """Return current parameter values."""
+        return {name: getattr(self, name) for name in self.__params__}
+
+    def with_params(self, **kwargs: ParamValue) -> Self:
+        """Create new instance with updated parameters (immutable)."""
+        invalid = set(kwargs) - set(self.__params__)
+        if invalid:
+            raise ValueError(f"Unknown parameters: {invalid}")
+        return replace(self, **kwargs)
+
+
+@dataclass(frozen=True, slots=True)
+class ParamSpec:
+    """Describes a single tunable parameter in the system."""
+    path: str              # e.g., "dam.release_rule.rate"
+    value: float           # flattened scalar value
+    index: int | None = None  # position in tuple, None for scalar

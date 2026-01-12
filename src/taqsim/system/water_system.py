@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 import networkx as nx
 
+from taqsim.common import ParamSpec, Strategy
 from taqsim.edge import Edge
 from taqsim.node import BaseNode, Receives, Sink, Source, Splitter
 from taqsim.node.events import WaterDistributed, WaterOutput
@@ -156,3 +157,123 @@ class WaterSystem:
     @property
     def edges(self) -> dict[str, Edge]:
         return self._edges
+
+    def param_schema(self) -> list[ParamSpec]:
+        """Discover all tunable parameters from node strategies.
+
+        Returns a sorted list of ParamSpec objects describing each
+        tunable parameter. Only operational strategies (inheriting from
+        Strategy) are included - physical models are excluded.
+        """
+        specs: list[ParamSpec] = []
+
+        for node_id, node in sorted(self._nodes.items()):
+            for strategy_name, strategy in node.strategies().items():
+                for param_name, value in strategy.params().items():
+                    path = f"{node_id}.{strategy_name}.{param_name}"
+                    specs.extend(self._flatten_param(path, value))
+
+        return sorted(specs, key=lambda s: (s.path, s.index or 0))
+
+    def to_vector(self) -> list[float]:
+        """Flatten all tunable parameters to a vector for GA optimization."""
+        return [spec.value for spec in self.param_schema()]
+
+    def with_vector(self, vector: list[float]) -> "WaterSystem":
+        """Create a new WaterSystem with parameters from vector.
+
+        The original system is unchanged (immutable pattern).
+        """
+        schema = self.param_schema()
+        if len(vector) != len(schema):
+            raise ValueError(
+                f"Vector length {len(vector)} does not match schema length {len(schema)}"
+            )
+
+        # Group values by node.strategy path
+        updates: dict[str, dict[str, float | tuple[float, ...]]] = {}
+
+        for spec, value in zip(schema, vector):
+            parts = spec.path.split(".")
+            node_id = parts[0]
+            strategy_name = parts[1]
+            param_name = parts[2]
+
+            key = f"{node_id}.{strategy_name}"
+            if key not in updates:
+                updates[key] = {}
+
+            if spec.index is not None:
+                # Tuple value - accumulate
+                if param_name not in updates[key]:
+                    updates[key][param_name] = []
+                updates[key][param_name].append((spec.index, value))
+            else:
+                # Scalar value
+                updates[key][param_name] = value
+
+        # Convert accumulated tuple values
+        for key, params in updates.items():
+            for param_name, val in list(params.items()):
+                if isinstance(val, list):
+                    sorted_values = sorted(val, key=lambda x: x[0])
+                    params[param_name] = tuple(v for _, v in sorted_values)
+
+        # Build new system with updated strategies
+        return self._clone_with_updates(updates)
+
+    def reset(self) -> None:
+        """Reset all nodes and edges for a fresh simulation run.
+
+        Preserves topology and strategies, clears all events and
+        resets accumulators to initial state.
+        """
+        for node in self._nodes.values():
+            node.reset()
+        for edge in self._edges.values():
+            edge.reset()
+
+    def _flatten_param(self, path: str, value: float | tuple[float, ...]) -> list[ParamSpec]:
+        """Flatten a parameter value to ParamSpec(s)."""
+        if isinstance(value, tuple):
+            return [
+                ParamSpec(path=path, value=v, index=i)
+                for i, v in enumerate(value)
+            ]
+        return [ParamSpec(path=path, value=value, index=None)]
+
+    def _clone_with_updates(
+        self, updates: dict[str, dict[str, float | tuple[float, ...]]]
+    ) -> "WaterSystem":
+        """Create a new system with updated strategy parameters."""
+        import copy
+
+        new_system = WaterSystem(dt=self.dt)
+
+        # Clone nodes with updated strategies
+        for node_id, node in self._nodes.items():
+            new_node = copy.deepcopy(node)
+            new_node.reset()  # Clear events and state
+
+            # Apply strategy updates
+            for strategy_name, strategy in node.strategies().items():
+                key = f"{node_id}.{strategy_name}"
+                if key in updates:
+                    new_strategy = strategy.with_params(**updates[key])
+                    setattr(new_node, strategy_name, new_strategy)
+
+            new_system._nodes[node_id] = new_node
+            new_system._graph.add_node(node_id)
+
+        # Clone edges
+        for edge_id, edge in self._edges.items():
+            new_edge = copy.deepcopy(edge)
+            new_edge.reset()
+            new_system._edges[edge_id] = new_edge
+
+        # Rebuild graph edges
+        for edge in new_system._edges.values():
+            new_system._graph.add_edge(edge.source, edge.target, edge_id=edge.id)
+
+        new_system._validated = False
+        return new_system

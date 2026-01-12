@@ -1,4 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+
+from taqsim.common import Strategy
 
 from .events import NodeEvent
 
@@ -30,3 +32,23 @@ class BaseNode:
 
     def update(self, t: int, dt: float) -> None:
         raise NotImplementedError("Subclasses must implement update()")
+
+    def strategies(self) -> dict[str, Strategy]:
+        """Return all Strategy-typed fields (operational policies only).
+
+        Auto-discovers fields that inherit from Strategy. Physical models
+        like LossRule do not inherit from Strategy and are excluded.
+        """
+        return {
+            f.name: getattr(self, f.name)
+            for f in fields(self)
+            if isinstance(getattr(self, f.name), Strategy)
+        }
+
+    def reset(self) -> None:
+        """Reset node to initial state for a fresh simulation run.
+
+        Clears accumulated events. Subclasses should override to reset
+        additional state, calling super().reset() first.
+        """
+        self.clear_events()

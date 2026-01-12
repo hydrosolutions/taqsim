@@ -30,3 +30,8 @@ class Splitter(BaseNode):
     def update(self, t: int, dt: float) -> None:
         self.distribute(self._received_this_step, t)
         self._received_this_step = 0.0
+
+    def reset(self) -> None:
+        """Reset splitter node for a fresh simulation run."""
+        super().reset()
+        self._received_this_step = 0.0

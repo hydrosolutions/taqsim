@@ -7,7 +7,7 @@ from .events import (
     FlowReceived,
     RequirementUnmet,
 )
-from .strategies import EdgeLossRule
+from .losses import EdgeLossRule
 
 __all__ = [
     # Events

@@ -10,7 +10,7 @@ from .events import (
     FlowReceived,
     RequirementUnmet,
 )
-from .strategies import EdgeLossRule
+from .losses import EdgeLossRule
 
 
 @dataclass
@@ -100,3 +100,11 @@ class Edge:
 
         # 8. Return
         return delivered
+
+    def reset(self) -> None:
+        """Reset edge to initial state for a fresh simulation run.
+
+        Clears accumulated events and step accumulator.
+        """
+        self.clear_events()
+        self._received_this_step = 0.0
