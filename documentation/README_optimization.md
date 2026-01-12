@@ -31,6 +31,27 @@ MyProblem = DeapOptimizer(
 ```
 >**Note:** The start year and start month of the optimization are defined when setting up the `WaterSystem`
 
+## Parameter Discovery
+
+Before optimization, discover tunable parameters using the vectorization API:
+
+```python
+# Get parameter schema
+schema = system.param_schema()
+for spec in schema:
+    print(f"{spec.path}: {spec.value}")
+
+# Extract as vector for optimization
+vector = system.to_vector()
+
+# After optimization, apply results
+optimized_system = system.with_vector(best_vector)
+```
+
+Only operational strategies (`ReleaseRule`, `SplitStrategy`) are included. Physical models like `LossRule` are excluded.
+
+See [Parameter Exposure](system/03_parameter_exposure.md) for complete documentation.
+
 ## 2. Customize your Objective Functions
 In order to choose the number of objective functions and its components to be optimised the user has to define an objective weight dictionary.
 

@@ -4,6 +4,43 @@
 
 Strategies define configurable behaviors for nodes. Each is a `Protocol` that allows custom implementations to be injected at node creation.
 
+## Strategy Base Class
+
+Operational strategies inherit from the `Strategy` mixin class, which provides parameter introspection for optimization.
+
+### Declaration Pattern
+
+```python
+from dataclasses import dataclass
+from typing import ClassVar
+from taqsim.common import Strategy
+
+@dataclass(frozen=True)
+class FixedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: float = 50.0
+
+    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+        return min(self.rate * dt, storage)
+```
+
+### Key Elements
+
+| Element | Purpose |
+|---------|---------|
+| `Strategy` base | Enables parameter discovery via `node.strategies()` |
+| `@dataclass(frozen=True)` | Immutable instances for safe optimization |
+| `__params__` | Declares which fields are tunable parameters |
+
+### Methods Provided
+
+- `params() -> dict[str, float | tuple]` — Returns current parameter values
+- `with_params(**kwargs) -> Self` — Creates new instance with updated values
+
+### Note on Physical Models
+
+`LossRule` implementations do **not** inherit from `Strategy`. They are physical models representing infrastructure, not operational policies. Only `ReleaseRule` and `SplitStrategy` are optimizable.
+
 ## Protocol Definitions
 
 ### ReleaseRule

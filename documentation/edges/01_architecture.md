@@ -60,6 +60,14 @@ receive(amount) -> capacity check -> loss calculation -> requirement check -> de
 FlowReceived    CapacityExceeded      FlowLost        RequirementUnmet   FlowDelivered
 ```
 
+## Edge Interface
+
+Key methods:
+
+- `receive(amount, t)` - Accept flow from upstream node
+- `update(t, dt)` - Process flow and record events
+- `reset()` - Clears events and step accumulator
+
 ## Update Cycle
 
 1. **Receive**: Edge accumulates water via `receive()` calls

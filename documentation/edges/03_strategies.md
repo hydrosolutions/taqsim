@@ -1,5 +1,7 @@
 # Strategy Protocols
 
+> **Note**: `EdgeLossRule` is a physical model representing transport losses, not an operational strategy. It does **not** inherit from `Strategy` and is not included in parameter optimization. For optimizable strategies, see [Node Strategies](../nodes/05_strategies.md).
+
 ## Overview
 
 Strategies define configurable behaviors for edges. Each is a `Protocol` that allows custom implementations to be injected at edge creation.
@@ -121,7 +123,7 @@ edge = Edge(
 Strategies satisfy protocols via structural typing:
 
 ```python
-from taqsim.edge import EdgeLossRule
+from taqsim.edge.losses import EdgeLossRule
 
 loss = ZeroLoss()
 assert isinstance(loss, EdgeLossRule)

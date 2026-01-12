@@ -72,6 +72,7 @@ class BaseNode:
     def events_at(t) → list       # filter by timestep
     def events_of_type(T) → list  # filter by event class
     def clear_events() → None     # reset (for testing)
+    def reset() → None            # clears events and resets state for fresh simulation
     def update(t, dt) → None      # MUST be implemented by subclasses
 ```
 

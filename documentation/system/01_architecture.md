@@ -167,3 +167,32 @@ For each timestep t:
    - `edge.receive(amount, t)`
    - `delivered = edge.update(t, dt)` (applies losses)
    - `target_node.receive(delivered, edge_id, t)`
+
+## Parameter Exposure
+
+WaterSystem provides methods for parameter discovery and manipulation, enabling optimization workflows.
+
+### Methods
+
+| Method | Purpose |
+|--------|---------|
+| `param_schema()` | Returns list of all tunable parameters as `ParamSpec` objects |
+| `to_vector()` | Flattens parameters to `list[float]` for optimization |
+| `with_vector(vector)` | Creates new system with parameters from vector (immutable) |
+| `reset()` | Clears all events and resets node state for fresh simulation |
+
+### Example
+
+```python
+# Discover parameters
+schema = system.param_schema()
+for spec in schema:
+    print(f"{spec.path}: {spec.value}")
+
+# Vectorize and modify
+vector = system.to_vector()
+new_system = system.with_vector(modified_vector)
+new_system.simulate(12)
+```
+
+See [Parameter Exposure](03_parameter_exposure.md) for complete documentation.
