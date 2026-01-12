@@ -63,23 +63,28 @@ def simple_timeseries() -> TimeSeries:
 def make_source(
     id: str = "source",
     inflow: TimeSeries | None = None,
+    location: tuple[float, float] | None = None,
 ) -> Source:
     if inflow is None:
         inflow = TimeSeries([100.0] * 12)
-    return Source(id=id, inflow=inflow)
+    return Source(id=id, inflow=inflow, location=location)
 
 
-def make_sink(id: str = "sink") -> Sink:
-    return Sink(id=id)
+def make_sink(
+    id: str = "sink",
+    location: tuple[float, float] | None = None,
+) -> Sink:
+    return Sink(id=id, location=location)
 
 
 def make_splitter(
     id: str = "splitter",
     split_strategy: FakeSplitStrategy | None = None,
+    location: tuple[float, float] | None = None,
 ) -> Splitter:
     if split_strategy is None:
         split_strategy = FakeSplitStrategy()
-    return Splitter(id=id, split_strategy=split_strategy)
+    return Splitter(id=id, split_strategy=split_strategy, location=location)
 
 
 def make_storage(
@@ -88,6 +93,7 @@ def make_storage(
     initial_storage: float = 500.0,
     release_rule: FakeReleaseRule | None = None,
     loss_rule: FakeLossRule | None = None,
+    location: tuple[float, float] | None = None,
 ) -> Storage:
     if release_rule is None:
         release_rule = FakeReleaseRule()
@@ -99,6 +105,7 @@ def make_storage(
         initial_storage=initial_storage,
         release_rule=release_rule,
         loss_rule=loss_rule,
+        location=location,
     )
 
 

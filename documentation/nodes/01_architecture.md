@@ -101,3 +101,31 @@ Distributed        Stored               Consumed          (terminal)
                    Released
                    Distributed
 ```
+
+## Node Location
+
+Nodes can optionally have a geographic location specified as WGS84 coordinates (EPSG:4326):
+
+```python
+@dataclass
+class BaseNode:
+    id: str
+    location: tuple[float, float] | None = None  # (lat, lon)
+```
+
+The location tuple contains:
+- First element: latitude (-90 to +90 degrees)
+- Second element: longitude (-180 to +180 degrees)
+
+Example:
+```python
+source = Source(
+    id="river_intake",
+    inflow=TimeSeries([100.0] * 12),
+    location=(31.7683, 35.2137),  # Jerusalem
+)
+```
+
+Location is used by `WaterSystem` for:
+- Geographic visualization via `visualize()`
+- Edge length computation via `edge_length()` and `edge_lengths()`

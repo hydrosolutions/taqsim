@@ -4,7 +4,8 @@ import networkx as nx
 
 from taqsim.common import ParamSpec
 from taqsim.edge import Edge
-from taqsim.node import BaseNode, Receives, Sink, Source, Splitter
+from taqsim.geo import haversine
+from taqsim.node import BaseNode, Demand, PassThrough, Receives, Sink, Source, Splitter, Storage
 from taqsim.node.events import WaterDistributed, WaterOutput
 
 from .validation import ValidationError
@@ -186,9 +187,7 @@ class WaterSystem:
         """
         schema = self.param_schema()
         if len(vector) != len(schema):
-            raise ValueError(
-                f"Vector length {len(vector)} does not match schema length {len(schema)}"
-            )
+            raise ValueError(f"Vector length {len(vector)} does not match schema length {len(schema)}")
 
         # Group values by node.strategy path
         updates: dict[str, dict[str, float | tuple[float, ...]]] = {}
@@ -236,15 +235,109 @@ class WaterSystem:
     def _flatten_param(self, path: str, value: float | tuple[float, ...]) -> list[ParamSpec]:
         """Flatten a parameter value to ParamSpec(s)."""
         if isinstance(value, tuple):
-            return [
-                ParamSpec(path=path, value=v, index=i)
-                for i, v in enumerate(value)
-            ]
+            return [ParamSpec(path=path, value=v, index=i) for i, v in enumerate(value)]
         return [ParamSpec(path=path, value=value, index=None)]
 
-    def _clone_with_updates(
-        self, updates: dict[str, dict[str, float | tuple[float, ...]]]
-    ) -> "WaterSystem":
+    def edge_length(self, edge_id: str) -> float | None:
+        """Compute geodesic length of an edge in meters.
+
+        Returns None if edge doesn't exist or either endpoint lacks location.
+        """
+        if edge_id not in self._edges:
+            return None
+
+        edge = self._edges[edge_id]
+        source_node = self._nodes.get(edge.source)
+        target_node = self._nodes.get(edge.target)
+
+        if source_node is None or target_node is None:
+            return None
+        if source_node.location is None or target_node.location is None:
+            return None
+
+        lat1, lon1 = source_node.location
+        lat2, lon2 = target_node.location
+
+        return haversine(lat1, lon1, lat2, lon2)
+
+    def edge_lengths(self) -> dict[str, float]:
+        """Compute geodesic lengths for all edges where both endpoints have locations."""
+        return {edge_id: length for edge_id in self._edges if (length := self.edge_length(edge_id)) is not None}
+
+    def visualize(self, save_to: str | None = None) -> None:
+        """Visualize the water network on a geographic plot.
+
+        Plots nodes at their (lon, lat) positions with colors/markers by type.
+        Draws edges as arrows between connected nodes.
+        """
+        import matplotlib.pyplot as plt
+
+        # Filter nodes with locations
+        located_nodes = {nid: node for nid, node in self._nodes.items() if node.location is not None}
+
+        if not located_nodes:
+            raise ValueError("No nodes have locations set. Cannot visualize.")
+
+        # Node type styling
+        node_styles = {
+            Source: {"color": "blue", "marker": "^", "label": "Source"},
+            Storage: {"color": "green", "marker": "s", "label": "Storage"},
+            Demand: {"color": "orange", "marker": "o", "label": "Demand"},
+            Sink: {"color": "gray", "marker": "v", "label": "Sink"},
+            Splitter: {"color": "purple", "marker": "D", "label": "Splitter"},
+            PassThrough: {"color": "cyan", "marker": "h", "label": "PassThrough"},
+        }
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        # Collect positions: (lon, lat) -> (x, y)
+        positions = {}
+        for nid, node in located_nodes.items():
+            lat, lon = node.location
+            positions[nid] = (lon, lat)  # x=lon, y=lat
+
+        # Plot nodes by type
+        plotted_types: set[type] = set()
+        for nid, node in located_nodes.items():
+            x, y = positions[nid]
+            for node_type, style in node_styles.items():
+                if isinstance(node, node_type):
+                    label = style["label"] if node_type not in plotted_types else None
+                    ax.scatter(x, y, c=style["color"], marker=style["marker"], s=150, zorder=3, label=label)
+                    plotted_types.add(node_type)
+                    break
+
+            # Add node ID label
+            ax.annotate(nid, (x, y), textcoords="offset points", xytext=(5, 5), fontsize=9, zorder=4)
+
+        # Draw edges as arrows
+        for edge in self._edges.values():
+            if edge.source in positions and edge.target in positions:
+                x1, y1 = positions[edge.source]
+                x2, y2 = positions[edge.target]
+                ax.annotate(
+                    "",
+                    xy=(x2, y2),
+                    xytext=(x1, y1),
+                    arrowprops={"arrowstyle": "->", "color": "black", "lw": 1.5},
+                    zorder=2,
+                )
+
+        ax.set_xlabel("Longitude")
+        ax.set_ylabel("Latitude")
+        ax.set_title("Water System Network")
+        ax.legend(loc="best")
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        if save_to:
+            plt.savefig(save_to, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+        else:
+            plt.show()
+
+    def _clone_with_updates(self, updates: dict[str, dict[str, float | tuple[float, ...]]]) -> "WaterSystem":
         """Create a new system with updated strategy parameters."""
         import copy
 

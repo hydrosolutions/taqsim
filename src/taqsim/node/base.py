@@ -8,6 +8,7 @@ from .events import NodeEvent
 @dataclass
 class BaseNode:
     id: str
+    location: tuple[float, float] | None = field(default=None, kw_only=True)  # (lat, lon) in WGS84
     events: list[NodeEvent] = field(default_factory=list, init=False, repr=False)
     _targets: list[str] = field(default_factory=list, init=False, repr=False)
 
@@ -39,11 +40,7 @@ class BaseNode:
         Auto-discovers fields that inherit from Strategy. Physical models
         like LossRule do not inherit from Strategy and are excluded.
         """
-        return {
-            f.name: getattr(self, f.name)
-            for f in fields(self)
-            if isinstance(getattr(self, f.name), Strategy)
-        }
+        return {f.name: getattr(self, f.name) for f in fields(self) if isinstance(getattr(self, f.name), Strategy)}
 
     def reset(self) -> None:
         """Reset node to initial state for a fresh simulation run.

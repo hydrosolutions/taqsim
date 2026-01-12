@@ -196,3 +196,41 @@ new_system.simulate(12)
 ```
 
 See [Parameter Exposure](03_parameter_exposure.md) for complete documentation.
+
+## Visualization
+
+`WaterSystem.visualize()` renders the network on a geographic plot:
+
+```python
+system.visualize()                    # Interactive display
+system.visualize(save_to="map.png")   # Save to file
+```
+
+Features:
+- Nodes plotted at (longitude, latitude) positions
+- Different colors/markers per node type:
+  - Source: blue triangle
+  - Storage: green square
+  - Demand: orange circle
+  - Sink: gray triangle
+  - Splitter: purple diamond
+  - PassThrough: cyan hexagon
+- Edges drawn as arrows
+- Node IDs as labels
+
+Raises `ValueError` if no nodes have locations set.
+
+## Edge Length Computation
+
+Compute geodesic distances between connected nodes:
+
+```python
+# Single edge (returns meters or None)
+length = system.edge_length("pipeline_1")
+
+# All edges with located endpoints
+lengths = system.edge_lengths()  # dict[str, float]
+```
+
+Uses the Haversine formula for WGS84 great-circle distance.
+Returns `None` for edges where either endpoint lacks a location.
