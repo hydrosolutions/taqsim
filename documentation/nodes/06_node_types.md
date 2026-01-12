@@ -195,8 +195,9 @@ Reservoir node. Receives, stores, loses, releases, and outputs water.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
-| `capacity` | `float` | Yes | Maximum storage volume |
-| `initial_storage` | `float` | No | Starting volume (default: 0) |
+| `capacity` | `float` | Yes | Maximum storage volume [m³] |
+| `initial_storage` | `float` | No | Starting volume (default: 0) [m³] |
+| `dead_storage` | `float` | No | Volume of water that cannot be released (default: 0.0) [m³] |
 | `release_rule` | `ReleaseRule` | Yes | Release calculation |
 | `loss_rule` | `LossRule` | Yes | Loss calculation |
 
@@ -204,6 +205,12 @@ Reservoir node. Receives, stores, loses, releases, and outputs water.
 
 - `capacity` must be positive
 - `initial_storage` must be >= 0 and <= capacity
+- `dead_storage` cannot be negative
+- `dead_storage` cannot exceed capacity
+
+### Note on Dead Storage
+
+Water below the dead storage level cannot be released (it is below the lowest outlet), but losses still apply to the full storage volume. Water at dead level can still evaporate or seep.
 
 ### Events Recorded
 

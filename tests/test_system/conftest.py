@@ -18,7 +18,7 @@ class FakeReleaseRule:
     def __init__(self, fraction: float = 0.5):
         self.fraction = fraction
 
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
         return storage * self.fraction
 
 

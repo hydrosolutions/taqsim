@@ -17,7 +17,42 @@ class FakeReleaseRule:
     def __init__(self, release_amount: float = 0.0):
         self._release_amount = release_amount
 
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+    def release(
+        self,
+        storage: float,
+        dead_storage: float,
+        capacity: float,
+        inflow: float,
+        t: int,
+        dt: float,
+    ) -> float:
+        return self._release_amount
+
+
+class SpyReleaseRule:
+    def __init__(self, release_amount: float = 0.0):
+        self._release_amount = release_amount
+        self.calls: list[dict] = []
+
+    def release(
+        self,
+        storage: float,
+        dead_storage: float,
+        capacity: float,
+        inflow: float,
+        t: int,
+        dt: float,
+    ) -> float:
+        self.calls.append(
+            {
+                "storage": storage,
+                "dead_storage": dead_storage,
+                "capacity": capacity,
+                "inflow": inflow,
+                "t": t,
+                "dt": dt,
+            }
+        )
         return self._release_amount
 
 
@@ -87,6 +122,40 @@ class TestStorageInit:
                 release_rule=FakeReleaseRule(),
                 loss_rule=None,
             )
+
+    def test_dead_storage_cannot_be_negative(self):
+        with pytest.raises(ValueError, match="dead_storage cannot be negative"):
+            Storage(
+                id="test",
+                capacity=1000.0,
+                dead_storage=-1.0,
+                release_rule=FakeReleaseRule(),
+                loss_rule=FakeLossRule(),
+            )
+
+    def test_dead_storage_cannot_exceed_capacity(self):
+        with pytest.raises(ValueError, match="dead_storage cannot exceed capacity"):
+            Storage(
+                id="test",
+                capacity=1000.0,
+                dead_storage=1500.0,
+                release_rule=FakeReleaseRule(),
+                loss_rule=FakeLossRule(),
+            )
+
+    def test_dead_storage_defaults_to_zero(self):
+        storage = make_storage(capacity=1000.0)
+        assert storage.dead_storage == 0.0
+
+    def test_dead_storage_equals_capacity_is_valid(self):
+        storage = Storage(
+            id="test",
+            capacity=1000.0,
+            dead_storage=1000.0,
+            release_rule=FakeReleaseRule(),
+            loss_rule=FakeLossRule(),
+        )
+        assert storage.dead_storage == 1000.0
 
 
 class TestStorageReceive:
@@ -332,6 +401,69 @@ class TestStorageRelease:
 
         assert released == 0.0
         assert storage.storage == 500.0
+
+    def test_release_capped_by_available_above_dead_storage(self):
+        storage = Storage(
+            id="test",
+            capacity=1000.0,
+            initial_storage=500.0,
+            dead_storage=200.0,
+            release_rule=FakeReleaseRule(1000.0),
+            loss_rule=FakeLossRule(),
+        )
+        released = storage.release(inflow=0.0, t=0, dt=1.0)
+
+        assert released == 300.0
+        assert storage.storage == 200.0
+
+    def test_release_zero_when_storage_at_dead_storage(self):
+        storage = Storage(
+            id="test",
+            capacity=1000.0,
+            initial_storage=200.0,
+            dead_storage=200.0,
+            release_rule=FakeReleaseRule(100.0),
+            loss_rule=FakeLossRule(),
+        )
+        released = storage.release(inflow=0.0, t=0, dt=1.0)
+
+        assert released == 0.0
+        assert storage.storage == 200.0
+
+    def test_release_zero_when_storage_below_dead_storage(self):
+        storage = Storage(
+            id="test",
+            capacity=1000.0,
+            initial_storage=100.0,
+            dead_storage=200.0,
+            release_rule=FakeReleaseRule(50.0),
+            loss_rule=FakeLossRule(),
+        )
+        released = storage.release(inflow=0.0, t=0, dt=1.0)
+
+        assert released == 0.0
+        assert storage.storage == 100.0
+
+    def test_release_passes_dead_storage_to_rule(self):
+        spy_rule = SpyReleaseRule(50.0)
+        storage = Storage(
+            id="test",
+            capacity=1000.0,
+            initial_storage=500.0,
+            dead_storage=150.0,
+            release_rule=spy_rule,
+            loss_rule=FakeLossRule(),
+        )
+        storage.release(inflow=25.0, t=3, dt=2.0)
+
+        assert len(spy_rule.calls) == 1
+        call = spy_rule.calls[0]
+        assert call["dead_storage"] == 150.0
+        assert call["storage"] == 500.0
+        assert call["capacity"] == 1000.0
+        assert call["inflow"] == 25.0
+        assert call["t"] == 3
+        assert call["dt"] == 2.0
 
 
 class TestStorageUpdate:

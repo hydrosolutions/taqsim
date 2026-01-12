@@ -20,8 +20,9 @@ class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: float = 50.0
 
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
-        return min(self.rate * dt, storage)
+    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+        available = storage - dead_storage
+        return min(self.rate * dt, available)
 ```
 
 ### Key Elements
@@ -52,12 +53,13 @@ Controls how storage nodes release water.
 class ReleaseRule(Protocol):
     def release(
         self,
-        storage: float,    # current storage volume
-        capacity: float,   # maximum capacity
-        inflow: float,     # inflow this timestep
-        t: int,            # timestep
-        dt: float          # timestep duration
-    ) -> float: ...        # amount to release
+        storage: float,      # current storage volume
+        dead_storage: float, # volume that cannot be released (below lowest outlet)
+        capacity: float,     # maximum capacity
+        inflow: float,       # inflow this timestep
+        t: int,              # timestep
+        dt: float            # timestep duration
+    ) -> float: ...          # amount to release
 ```
 
 ### SplitStrategy
@@ -145,9 +147,10 @@ class FixedRelease:
     rate: float  # constant release rate
 
     def release(
-        self, storage: float, capacity: float, inflow: float, t: int, dt: float
+        self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float
     ) -> float:
-        return min(self.rate * dt, storage)
+        available = storage - dead_storage
+        return min(self.rate * dt, available)
 ```
 
 ### Percentage Release Rule
@@ -158,9 +161,10 @@ class PercentageRelease:
     fraction: float  # 0.0 to 1.0
 
     def release(
-        self, storage: float, capacity: float, inflow: float, t: int, dt: float
+        self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float
     ) -> float:
-        return storage * self.fraction
+        available = storage - dead_storage
+        return available * self.fraction
 ```
 
 ### Zero Loss Rule

@@ -3,8 +3,8 @@ from typing import ClassVar
 
 import pytest
 
-from taqsim import WaterSystem, Source, Storage, Splitter, Sink, TimeSeries, Edge
-from taqsim.common import Strategy, ParamSpec
+from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSystem
+from taqsim.common import Strategy
 
 
 # Create proper strategy classes for testing
@@ -13,7 +13,7 @@ class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: float = 50.0
 
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
         return min(self.rate * dt, storage)
 
 

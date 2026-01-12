@@ -22,7 +22,7 @@ class FakeReleaseRule(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("fraction",)
     fraction: float = 0.5
 
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
         return storage * self.fraction
 
 

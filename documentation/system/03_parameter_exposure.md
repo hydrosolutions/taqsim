@@ -58,8 +58,9 @@ class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: float = 50.0
 
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
-        return min(self.rate * dt, storage)
+    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+        available = storage - dead_storage
+        return min(self.rate * dt, available)
 ```
 
 ### Non-Optimizable Fields

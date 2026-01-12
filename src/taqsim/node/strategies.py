@@ -5,7 +5,15 @@ from taqsim.common import LossReason
 
 @runtime_checkable
 class ReleaseRule(Protocol):
-    def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float: ...
+    def release(
+        self,
+        storage: float,
+        dead_storage: float,
+        capacity: float,
+        inflow: float,
+        t: int,
+        dt: float,
+    ) -> float: ...
 
 
 @runtime_checkable

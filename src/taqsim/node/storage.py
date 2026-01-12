@@ -16,6 +16,7 @@ from .strategies import LossRule, ReleaseRule
 class Storage(BaseNode):
     capacity: float
     initial_storage: float = 0.0
+    dead_storage: float = 0.0
     release_rule: ReleaseRule | None = field(default=None)
     loss_rule: LossRule | None = field(default=None)
     _current_storage: float = field(init=False, repr=False)
@@ -28,6 +29,10 @@ class Storage(BaseNode):
             raise ValueError("initial_storage cannot be negative")
         if self.initial_storage > self.capacity:
             raise ValueError("initial_storage cannot exceed capacity")
+        if self.dead_storage < 0:
+            raise ValueError("dead_storage cannot be negative")
+        if self.dead_storage > self.capacity:
+            raise ValueError("dead_storage cannot exceed capacity")
         if self.release_rule is None:
             raise ValueError("release_rule is required")
         if self.loss_rule is None:
@@ -73,8 +78,11 @@ class Storage(BaseNode):
         return total_loss
 
     def release(self, inflow: float, t: int, dt: float) -> float:
-        raw_release = self.release_rule.release(self._current_storage, self.capacity, inflow, t, dt)
-        actual_release = max(0.0, min(raw_release, self._current_storage))
+        raw_release = self.release_rule.release(
+            self._current_storage, self.dead_storage, self.capacity, inflow, t, dt
+        )
+        available = max(0.0, self._current_storage - self.dead_storage)
+        actual_release = max(0.0, min(raw_release, available))
 
         if actual_release > 0:
             self._current_storage -= actual_release

@@ -5,7 +5,7 @@ from taqsim.node.strategies import LossRule, ReleaseRule, SplitStrategy
 class TestReleaseRuleProtocol:
     def test_class_with_release_satisfies_protocol(self):
         class ValidRelease:
-            def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+            def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
                 return storage * 0.5
 
         assert isinstance(ValidRelease(), ReleaseRule)
@@ -21,11 +21,11 @@ class TestReleaseRuleProtocol:
 
     def test_release_returns_float(self):
         class ValidRelease:
-            def release(self, storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
+            def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
                 return min(storage, inflow)
 
         rule = ValidRelease()
-        result = rule.release(100.0, 200.0, 50.0, 0, 1.0)
+        result = rule.release(100.0, 0.0, 200.0, 50.0, 0, 1.0)
         assert result == 50.0
 
 
