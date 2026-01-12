@@ -1,44 +1,56 @@
 """
-taqsim
+taqsim - Water system simulation framework using event sourcing.
 
-This package provides a framework for simulating and optimizing water flow in a network system.
+This package provides a DAG-based framework for simulating water flow through
+a network of nodes (sources, storage, demand, sinks) connected by edges
+(rivers, canals, pipes).
 
-The package includes classes for representing different types of nodes in a water system
-(such as supply sources, storage facilities, and demand points), as well as edges
-representing connections between these nodes.
-
-Classes:
-    WaterSystem: The main class for creating and managing a water system simulation.
-    Node: Base class for all types of nodes in the water system.
-    SupplyNode: Represents a water supply source.
-    SinkNode: Represents a point where water exits the system.
-    DemandNode: Represents a point of water demand (e.g., agricultural, domestic, or industrial use).
-    StorageNode: Represents a water storage facility (e.g., a reservoir).
-    HydroWorks: Represents a point where water can be redistributed, combining diversion and confluence functionality.
-    Edge: Represents a connection between two nodes in the water system. This can either represent a river or a canal.
+Core modules:
+    - taqsim.node: Node types and events
+    - taqsim.edge: Edge class and events
+    - taqsim.system: WaterSystem orchestrator
+    - taqsim.common: Shared types (LossReason)
 """
 
-from .edge import Edge
-from .nodes import DemandNode, HydroWorks, RunoffNode, SinkNode, StorageNode, SupplyNode
-from .optimization.optimizer import DeapOptimizer
-from .optimization.pareto_visualization import ParetoVisualizer
-from .visualization import WaterSystemVisualizer
-from .water_system import WaterSystem
+from .common import EVAPORATION, OVERFLOW, SEEPAGE, LossReason, summarize_losses
+from .edge import Edge, EdgeEvent, EdgeLossRule, FlowDelivered, FlowLost, FlowReceived
+from .node import (
+    BaseNode,
+    Demand,
+    PassThrough,
+    Sink,
+    Source,
+    Splitter,
+    Storage,
+    TimeSeries,
+)
+from .system import WaterSystem
 
-# Define what should be imported with "from taqsim import *"
 __all__ = [
-    "WaterSystem",
-    "SupplyNode",
-    "SinkNode",
-    "DemandNode",
-    "StorageNode",
-    "HydroWorks",
-    "RunoffNode",
+    # Common
+    "LossReason",
+    "EVAPORATION",
+    "SEEPAGE",
+    "OVERFLOW",
+    "summarize_losses",
+    # Nodes
+    "BaseNode",
+    "Source",
+    "Storage",
+    "Demand",
+    "Splitter",
+    "PassThrough",
+    "Sink",
+    "TimeSeries",
+    # Edges
     "Edge",
-    "WaterSystemVisualizer",
-    "ParetoVisualizer",
-    "DeapOptimizer",
+    "EdgeEvent",
+    "EdgeLossRule",
+    "FlowReceived",
+    "FlowLost",
+    "FlowDelivered",
+    # System
+    "WaterSystem",
 ]
 
-# Package version
-__version__ = "0.2.0"
+__version__ = "0.3.0"

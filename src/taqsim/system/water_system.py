@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import networkx as nx
 
 from taqsim.edge import Edge
-from taqsim.node import BaseNode, Sink, Source, Splitter
+from taqsim.node import BaseNode, Receives, Sink, Source, Splitter
 from taqsim.node.events import WaterDistributed, WaterOutput
 
 from .validation import ValidationError
@@ -146,7 +146,7 @@ class WaterSystem:
 
         # Route to target node
         target_node = self._nodes[edge.target]
-        if hasattr(target_node, "receive"):
+        if isinstance(target_node, Receives):
             target_node.receive(delivered, edge.id, t)
 
     @property
