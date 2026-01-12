@@ -62,7 +62,10 @@ WaterLost(amount=10.0, reason=LossReason("infiltration"), t=0)
 
 ### WaterConsumed
 
-Water removed from system by demand.
+Water physically consumed (leaving the water system). For partially consumptive
+demands (e.g., cooling water where only a fraction evaporates), this records
+only the portion that leaves the system. Water returned downstream appears in
+`WaterOutput` instead.
 
 ```python
 WaterConsumed(amount=40.0, t=0)

@@ -145,11 +145,27 @@ Consumption node. Receives water, consumes requirement, passes remainder downstr
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
 | `requirement` | `TimeSeries` | Yes | Demand rates per timestep |
+| `consumption_fraction` | `float` | No | Fraction of met demand consumed (0.0-1.0, default: 1.0) |
+
+### Consumption Fraction
+
+Controls how much of the met demand is physically consumed (leaves the system) vs returned downstream:
+
+- `1.0` (default): Fully consumptive (irrigation, drinking water) - all met demand leaves system
+- `0.0`: Fully non-consumptive (hydropower, cooling return) - all met demand returns downstream
+- `0.0-1.0`: Partially consumptive (cooling tower with evaporative loss)
+
+**Example**: With `consumption_fraction=0.3`, if demand receives 100 m³ and requirement is 80 m³:
+- Met demand: 80 m³
+- Consumed: 80 × 0.3 = 24 m³ (recorded as `WaterConsumed`)
+- Returned: 80 × 0.7 = 56 m³
+- Excess: 100 - 80 = 20 m³
+- Total output: 56 + 20 = 76 m³ (recorded as `WaterOutput`)
 
 ### Events Recorded
 
 - `WaterReceived(amount, source_id, t)` — when water arrives
-- `WaterConsumed(amount, t)` — amount consumed
+- `WaterConsumed(amount, t)` — physically consumed portion of met demand
 - `DeficitRecorded(required, actual, deficit, t)` — if demand not met
 - `WaterOutput(amount, t)` — remaining water for downstream
 

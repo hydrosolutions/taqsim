@@ -43,6 +43,8 @@ class WaterSpilled:
 
 @dataclass(frozen=True, slots=True)
 class WaterConsumed:
+    """Water physically consumed (leaving the water system)."""
+
     amount: float
     t: int
 
@@ -64,7 +66,11 @@ class DeficitRecorded:
 
 @dataclass(frozen=True, slots=True)
 class WaterOutput:
-    """Water available for downstream. Used by single-output nodes."""
+    """Water available for downstream routing.
+
+    For Demand nodes, includes both excess water and returned
+    non-consumptive portion.
+    """
 
     amount: float
     t: int

@@ -239,3 +239,101 @@ class TestDemandProtocolCompliance:
         result = node.consume(available=10.0, t=0, dt=1.0)
         assert isinstance(result, tuple)
         assert len(result) == 2
+
+
+class TestDemandConsumptionFractionValidation:
+    def test_defaults_to_fully_consumptive(self):
+        ts = FakeTimeSeries(default=10.0)
+        node = Demand(id="d1", requirement=ts)
+        assert node.consumption_fraction == 1.0
+
+    def test_rejects_negative_consumption_fraction(self):
+        import pytest
+
+        ts = FakeTimeSeries(default=10.0)
+        with pytest.raises(ValueError, match="must be between 0.0 and 1.0"):
+            Demand(id="d1", requirement=ts, consumption_fraction=-0.1)
+
+    def test_rejects_consumption_fraction_above_one(self):
+        import pytest
+
+        ts = FakeTimeSeries(default=10.0)
+        with pytest.raises(ValueError, match="must be between 0.0 and 1.0"):
+            Demand(id="d1", requirement=ts, consumption_fraction=1.5)
+
+    def test_accepts_zero_consumption_fraction(self):
+        ts = FakeTimeSeries(default=10.0)
+        node = Demand(id="d1", requirement=ts, consumption_fraction=0.0)
+        assert node.consumption_fraction == 0.0
+
+    def test_accepts_one_consumption_fraction(self):
+        ts = FakeTimeSeries(default=10.0)
+        node = Demand(id="d1", requirement=ts, consumption_fraction=1.0)
+        assert node.consumption_fraction == 1.0
+
+
+class TestDemandConsumptionFractionBehavior:
+    def test_fully_consumptive_all_met_demand_consumed(self):
+        ts = FakeTimeSeries(values={0: 50.0})
+        node = Demand(id="d1", requirement=ts, consumption_fraction=1.0)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        consumed_events = node.events_of_type(WaterConsumed)
+        assert len(consumed_events) == 1
+        assert consumed_events[0].amount == 50.0
+
+    def test_fully_non_consumptive_zero_consumed(self):
+        ts = FakeTimeSeries(values={0: 50.0})
+        node = Demand(id="d1", requirement=ts, consumption_fraction=0.0)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        consumed_events = node.events_of_type(WaterConsumed)
+        assert len(consumed_events) == 1
+        assert consumed_events[0].amount == 0.0
+
+        output_events = node.events_of_type(WaterOutput)
+        assert len(output_events) == 1
+        assert output_events[0].amount == 100.0
+
+    def test_partial_consumption_splits_correctly(self):
+        ts = FakeTimeSeries(values={0: 100.0})
+        node = Demand(id="d1", requirement=ts, consumption_fraction=0.3)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        consumed_events = node.events_of_type(WaterConsumed)
+        assert len(consumed_events) == 1
+        assert consumed_events[0].amount == 30.0  # 30% of 100 met demand
+
+        output_events = node.events_of_type(WaterOutput)
+        assert len(output_events) == 1
+        assert output_events[0].amount == 70.0  # 70% returned
+
+    def test_deficit_based_on_met_not_consumed(self):
+        ts = FakeTimeSeries(values={0: 100.0})
+        node = Demand(id="d1", requirement=ts, consumption_fraction=0.3)
+        node._received_this_step = 60.0
+        node.update(t=0, dt=1.0)
+
+        deficits = node.events_of_type(DeficitRecorded)
+        assert len(deficits) == 1
+        assert deficits[0].required == 100.0
+        assert deficits[0].actual == 60.0  # met demand, not consumed amount
+        assert deficits[0].deficit == 40.0
+
+    def test_excess_water_passes_through_unchanged(self):
+        ts = FakeTimeSeries(values={0: 30.0})
+        node = Demand(id="d1", requirement=ts, consumption_fraction=0.5)
+        node._received_this_step = 100.0
+        node.update(t=0, dt=1.0)
+
+        consumed_events = node.events_of_type(WaterConsumed)
+        assert len(consumed_events) == 1
+        assert consumed_events[0].amount == 15.0  # 50% of 30 met demand
+
+        output_events = node.events_of_type(WaterOutput)
+        assert len(output_events) == 1
+        # 70 excess + 15 returned = 85
+        assert output_events[0].amount == 85.0
