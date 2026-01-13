@@ -1,15 +1,10 @@
 import pytest
 
-from taqsim.common import EVAPORATION, SEEPAGE
 from taqsim.edge import Edge
-from taqsim.edge.events import WaterDelivered
-from taqsim.edge.events import WaterLost as EdgeWaterLost
 from taqsim.node import Sink, Source, Storage
 from taqsim.node.events import DeficitRecorded, WaterSpilled
-from taqsim.node.events import WaterLost as NodeWaterLost
-from taqsim.node.events import WaterReceived as NodeWaterReceived
 from taqsim.node.timeseries import TimeSeries
-from taqsim.objective.builtins import deficit, delivery, loss, spill
+from taqsim.objective.builtins import deficit, spill
 from taqsim.system import WaterSystem
 
 
@@ -123,67 +118,6 @@ class TestDeficitObjective:
 
     def test_raises_for_missing_node(self, simple_system: WaterSystem) -> None:
         obj = deficit("nonexistent")
-
-        with pytest.raises(ValueError, match="not found"):
-            obj.evaluate(simple_system)
-
-
-class TestDeliveryObjective:
-    def test_sums_delivered_for_edge(self, simple_system: WaterSystem) -> None:
-        edge = simple_system.edges["e1"]
-        edge.record(WaterDelivered(amount=100.0, t=0))
-        edge.record(WaterDelivered(amount=200.0, t=1))
-
-        obj = delivery("e1")
-        result = obj.evaluate(simple_system)
-
-        assert result == 300.0
-
-    def test_sums_received_for_node(self, simple_system: WaterSystem) -> None:
-        node = simple_system.nodes["reservoir"]
-        node.record(NodeWaterReceived(amount=50.0, source_id="e1", t=0))
-        node.record(NodeWaterReceived(amount=75.0, source_id="e1", t=1))
-
-        obj = delivery("reservoir")
-        result = obj.evaluate(simple_system)
-
-        assert result == 125.0
-
-    def test_raises_for_missing_target(self, simple_system: WaterSystem) -> None:
-        obj = delivery("nonexistent")
-
-        with pytest.raises(ValueError, match="not found"):
-            obj.evaluate(simple_system)
-
-    def test_has_maximize_direction(self) -> None:
-        obj = delivery("any_target")
-        assert obj.direction == "maximize"
-
-
-class TestLossObjective:
-    def test_sums_node_losses(self, simple_system: WaterSystem) -> None:
-        node = simple_system.nodes["reservoir"]
-        node.record(NodeWaterLost(amount=10.0, reason=EVAPORATION, t=0))
-        node.record(NodeWaterLost(amount=5.0, reason=SEEPAGE, t=0))
-        node.record(NodeWaterLost(amount=15.0, reason=EVAPORATION, t=1))
-
-        obj = loss("reservoir")
-        result = obj.evaluate(simple_system)
-
-        assert result == 30.0
-
-    def test_sums_edge_losses(self, simple_system: WaterSystem) -> None:
-        edge = simple_system.edges["e1"]
-        edge.record(EdgeWaterLost(amount=8.0, reason=SEEPAGE, t=0))
-        edge.record(EdgeWaterLost(amount=12.0, reason=EVAPORATION, t=1))
-
-        obj = loss("e1")
-        result = obj.evaluate(simple_system)
-
-        assert result == 20.0
-
-    def test_raises_for_missing_target(self, simple_system: WaterSystem) -> None:
-        obj = loss("nonexistent")
 
         with pytest.raises(ValueError, match="not found"):
             obj.evaluate(simple_system)

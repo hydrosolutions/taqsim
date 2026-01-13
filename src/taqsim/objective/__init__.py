@@ -1,4 +1,4 @@
-from .builtins import deficit, delivery, loss, spill
+from .builtins import deficit, spill
 from .lift import lift
 from .objective import Direction, Objective
 from .registry import ObjectiveRegistry
@@ -9,9 +9,6 @@ maximize = ObjectiveRegistry("maximize")
 
 minimize.register("spill", spill)
 minimize.register("deficit", deficit)
-minimize.register("loss", loss)
-
-maximize.register("delivery", delivery)
 
 __all__ = [
     "Direction",
@@ -20,9 +17,7 @@ __all__ = [
     "ObjectiveRegistry",
     "Trace",
     "deficit",
-    "delivery",
     "lift",
-    "loss",
     "maximize",
     "minimize",
     "spill",
