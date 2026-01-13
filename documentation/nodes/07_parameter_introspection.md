@@ -117,9 +117,9 @@ for node_id, node in system.nodes.items():
 ### Example Output
 
 ```
-river_intake.split_strategy: {"weights": {"canal_a": 0.6, "canal_b": 0.4}}
+river_intake.split_rule: {"weights": {"canal_a": 0.6, "canal_b": 0.4}}
 reservoir.release_rule: {"rate": 50.0}
-junction.split_strategy: {"weights": {"farm_1": 0.5, "farm_2": 0.5}}
+junction.split_rule: {"weights": {"farm_1": 0.5, "farm_2": 0.5}}
 ```
 
 ---

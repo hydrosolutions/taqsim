@@ -102,7 +102,7 @@ Distribution node. Receives water and splits among multiple targets using a spli
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
-| `split_strategy` | `SplitRule` | Yes | Distribution strategy |
+| `split_rule` | `SplitRule` | Yes | Distribution strategy |
 
 > **Note**: Targets are derived from edges by `WaterSystem` and populated via `_set_targets()` during validation.
 
@@ -124,7 +124,7 @@ from taqsim.node import Splitter
 
 splitter = Splitter(
     id="canal_junction",
-    split_strategy=proportional_split
+    split_rule=proportional_split
 )
 ```
 

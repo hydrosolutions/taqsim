@@ -65,7 +65,7 @@ class TestSplitterReset:
     def test_reset_clears_received_accumulator(self, fake_split_rule):
         splitter = Splitter(
             id="junction",
-            split_strategy=fake_split_rule,
+            split_rule=fake_split_rule,
         )
         splitter._set_targets(["a", "b"])
 

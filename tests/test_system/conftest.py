@@ -85,7 +85,7 @@ def make_splitter(
 ) -> Splitter:
     if split_rule is None:
         split_rule = FakeSplitRule()
-    return Splitter(id=id, split_strategy=split_rule, location=location)
+    return Splitter(id=id, split_rule=split_rule, location=location)
 
 
 def make_storage(

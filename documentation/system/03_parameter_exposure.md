@@ -112,8 +112,8 @@ for spec in schema:
 Output:
 ```
 dam.release_rule.rate = 50.0
-junction.split_strategy.ratios = 0.6  (index=0)
-junction.split_strategy.ratios = 0.4  (index=1)
+junction.split_rule.ratios = 0.6  (index=0)
+junction.split_rule.ratios = 0.4  (index=1)
 ```
 
 ### to_vector()
@@ -140,8 +140,8 @@ for path, (low, high) in bounds.items():
 Output:
 ```
 dam.release_rule.rate: [0.0, 100.0]
-junction.split_strategy.ratios[0]: [0.0, 1.0]
-junction.split_strategy.ratios[1]: [0.0, 1.0]
+junction.split_rule.ratios[0]: [0.0, 1.0]
+junction.split_rule.ratios[1]: [0.0, 1.0]
 ```
 
 ### bounds_vector()
@@ -208,8 +208,8 @@ Schema output:
 
 | path | value | index |
 |------|-------|-------|
-| `junction.split_strategy.ratios` | `0.6` | `0` |
-| `junction.split_strategy.ratios` | `0.4` | `1` |
+| `junction.split_rule.ratios` | `0.6` | `0` |
+| `junction.split_rule.ratios` | `0.4` | `1` |
 
 Vector: `[0.6, 0.4]`
 

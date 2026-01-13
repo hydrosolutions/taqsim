@@ -68,7 +68,7 @@ class TestSplitStrategyProtocol:
             def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
-        splitter = Splitter(id="test", split_strategy=fake_split_rule)
+        splitter = Splitter(id="test", split_rule=fake_split_rule)
         splitter._set_targets(["a", "b"])
         strategy = ValidSplit()
         result = strategy.split(splitter, 100.0, 0)
@@ -123,7 +123,7 @@ class TestProtocolNonSatisfaction:
 
         assert not isinstance(WrongMethod(), ReleaseRule)
 
-    def test_class_with_wrong_method_name_does_not_satisfy_split_strategy(self):
+    def test_class_with_wrong_method_name_does_not_satisfy_split_rule(self):
         class WrongMethod:
             def divide(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
                 return {}

@@ -105,7 +105,7 @@ from taqsim.system import WaterSystem
 source = Source(id="river", inflow=TimeSeries([100.0] * 12))
 dam = Storage(id="dam", capacity=1000, release_rule=rule, loss_rule=losses)
 turbine = PassThrough(id="turbine")
-junction = Splitter(id="junction", split_strategy=equal_split)
+junction = Splitter(id="junction", split_rule=equal_split)
 farm = Demand(id="farm", requirement=TimeSeries([30.0] * 12))
 city = Sink(id="city")
 

@@ -75,7 +75,7 @@ source = Source(
     id="river_intake",
     inflow=inflow,
     targets=["reservoir_1"],
-    split_strategy=equal_split
+    split_rule=equal_split
 )
 ```
 
@@ -90,7 +90,7 @@ demand = Demand(
     id="irrigation",
     requirement=requirement,
     targets=["return_flow"],
-    split_strategy=equal_split
+    split_rule=equal_split
 )
 ```
 

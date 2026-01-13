@@ -261,7 +261,7 @@ source = Source(
     id="river",
     inflow=TimeSeries(values=[10.0, 15.0]),
     targets=["dam"],
-    split_strategy=split
+    split_rule=split
 )
 
 storage = Storage(
@@ -269,7 +269,7 @@ storage = Storage(
     capacity=1000.0,
     release_rule=release,
     loss_rule=loss,
-    split_strategy=split,
+    split_rule=split,
     targets=["downstream"]
 )
 ```

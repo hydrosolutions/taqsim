@@ -7,12 +7,12 @@ from .strategies import SplitRule
 
 @dataclass
 class Splitter(BaseNode):
-    split_strategy: SplitRule | None = field(default=None)
+    split_rule: SplitRule | None = field(default=None)
     _received_this_step: float = field(default=0.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        if self.split_strategy is None:
-            raise ValueError("split_strategy is required")
+        if self.split_rule is None:
+            raise ValueError("split_rule is required")
 
     def receive(self, amount: float, source_id: str, t: int) -> float:
         self.record(WaterReceived(amount=amount, source_id=source_id, t=t))
@@ -22,7 +22,7 @@ class Splitter(BaseNode):
     def distribute(self, amount: float, t: int) -> dict[str, float]:
         if not self.targets or amount <= 0:
             return {}
-        allocation = self.split_strategy.split(self, amount, t)  # type: ignore[union-attr]
+        allocation = self.split_rule.split(self, amount, t)  # type: ignore[union-attr]
         for target_id, alloc_amount in allocation.items():
             self.record(WaterDistributed(amount=alloc_amount, target_id=target_id, t=t))
         return allocation

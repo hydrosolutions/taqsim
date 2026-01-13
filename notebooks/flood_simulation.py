@@ -235,7 +235,7 @@ def _(
         id="river",
         inflow=river_inflow,
         targets=["dam"],
-        split_strategy=SingleTarget(),
+        split_rule=SingleTarget(),
     )
 
     # 2. Dam (Storage)
@@ -245,7 +245,7 @@ def _(
         initial_storage=initial_storage_slider.value,
         release_rule=FixedRelease(fraction=dam_release_slider.value),
         loss_rule=SimpleLoss(),
-        split_strategy=SingleTarget(),
+        split_rule=SingleTarget(),
         targets=["turbine"],
     )
 
@@ -253,14 +253,14 @@ def _(
     turbine = Splitter(
         id="turbine",
         targets=["junction"],
-        split_strategy=SingleTarget(),
+        split_rule=SingleTarget(),
     )
 
     # 4. Junction (splits between farm and city)
     junction = Splitter(
         id="junction",
         targets=["farm", "city"],
-        split_strategy=FarmFirstSplit(farm_demand=farm_demand),
+        split_rule=FarmFirstSplit(farm_demand=farm_demand),
     )
 
     # 5. Farm (Demand node)
@@ -268,7 +268,7 @@ def _(
         id="farm",
         requirement=farm_demand,
         targets=[],  # terminal for this branch
-        split_strategy=EqualSplit(),
+        split_rule=EqualSplit(),
     )
 
     # 6. City (Sink - receives remaining flow)

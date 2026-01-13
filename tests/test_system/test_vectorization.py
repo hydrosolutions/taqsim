@@ -78,7 +78,7 @@ def build_test_system() -> WaterSystem:
     system.add_node(
         Splitter(
             id="junction",
-            split_strategy=ProportionalSplit(ratios=(0.6, 0.4)),
+            split_rule=ProportionalSplit(ratios=(0.6, 0.4)),
         )
     )
     system.add_node(Sink(id="city"))
@@ -104,8 +104,8 @@ class TestParamSchema:
 
         # Should include release_rule params
         assert "dam.release_rule.rate" in paths
-        # Should include split_strategy params (tuple flattened)
-        assert any("junction.split_strategy.ratios" in p for p in paths)
+        # Should include split_rule params (tuple flattened)
+        assert any("junction.split_rule.ratios" in p for p in paths)
         # Should NOT include loss_rule (not a Strategy)
         assert not any("loss_rule" in p for p in paths)
 
@@ -255,10 +255,10 @@ class TestParamBounds:
         assert "dam.release_rule.rate" in bounds
         assert bounds["dam.release_rule.rate"] == (0.0, 200.0)
 
-        assert "junction.split_strategy.ratios[0]" in bounds
-        assert "junction.split_strategy.ratios[1]" in bounds
-        assert bounds["junction.split_strategy.ratios[0]"] == (0.0, 1.0)
-        assert bounds["junction.split_strategy.ratios[1]"] == (0.0, 1.0)
+        assert "junction.split_rule.ratios[0]" in bounds
+        assert "junction.split_rule.ratios[1]" in bounds
+        assert bounds["junction.split_rule.ratios[0]"] == (0.0, 1.0)
+        assert bounds["junction.split_rule.ratios[1]"] == (0.0, 1.0)
 
     def test_raises_for_missing_bounds(self):
         """Raises ValueError when strategy params lack bounds."""
@@ -285,8 +285,8 @@ class TestParamBounds:
 
         ratio_keys = [k for k in bounds if "ratios" in k]
         assert len(ratio_keys) == 2
-        assert "junction.split_strategy.ratios[0]" in ratio_keys
-        assert "junction.split_strategy.ratios[1]" in ratio_keys
+        assert "junction.split_rule.ratios[0]" in ratio_keys
+        assert "junction.split_rule.ratios[1]" in ratio_keys
 
 
 class TestBoundsVector:
