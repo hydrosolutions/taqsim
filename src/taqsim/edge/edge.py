@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from taqsim.common import CAPACITY_EXCEEDED
 
@@ -9,6 +10,9 @@ from .events import (
     WaterReceived,
 )
 from .losses import EdgeLossRule
+
+if TYPE_CHECKING:
+    from taqsim.objective import Trace
 
 
 @dataclass
@@ -40,6 +44,11 @@ class Edge:
 
     def events_of_type[T: EdgeEvent](self, event_type: type[T]) -> list[T]:
         return [e for e in self.events if isinstance(e, event_type)]
+
+    def trace[T: EdgeEvent](self, event_type: type[T], field: str = "amount") -> "Trace":
+        from taqsim.objective import Trace
+
+        return Trace.from_events(self.events_of_type(event_type), field=field)
 
     def clear_events(self) -> None:
         self.events.clear()

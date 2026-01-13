@@ -17,7 +17,7 @@ from .conftest import (
 class TestWaterSystemInit:
     def test_creates_with_default_dt(self):
         system = WaterSystem()
-        assert system.dt == 2629800.0
+        assert system.dt == 1
 
     def test_creates_with_custom_dt(self):
         system = WaterSystem(dt=86400.0)

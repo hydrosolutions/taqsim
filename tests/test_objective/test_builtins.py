@@ -1,0 +1,189 @@
+import pytest
+
+from taqsim.common import EVAPORATION, SEEPAGE
+from taqsim.edge import Edge
+from taqsim.edge.events import WaterDelivered
+from taqsim.edge.events import WaterLost as EdgeWaterLost
+from taqsim.node import Sink, Source, Storage
+from taqsim.node.events import DeficitRecorded, WaterSpilled
+from taqsim.node.events import WaterLost as NodeWaterLost
+from taqsim.node.events import WaterReceived as NodeWaterReceived
+from taqsim.node.timeseries import TimeSeries
+from taqsim.objective.builtins import deficit, delivery, loss, spill
+from taqsim.system import WaterSystem
+
+
+class FakeReleaseRule:
+    def release(
+        self,
+        storage: float,
+        dead_storage: float,
+        capacity: float,
+        inflow: float,
+        t: int,
+        dt: float,
+    ) -> float:
+        return 0.0
+
+
+class FakeLossRule:
+    def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[str, float]:
+        return {}
+
+
+class FakeEdgeLossRule:
+    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[str, float]:
+        return {}
+
+
+@pytest.fixture
+def simple_system() -> WaterSystem:
+    system = WaterSystem(dt=1.0)
+
+    source = Source(id="source", inflow=TimeSeries([100.0] * 12))
+    storage = Storage(
+        id="reservoir",
+        capacity=1000.0,
+        initial_storage=500.0,
+        release_rule=FakeReleaseRule(),
+        loss_rule=FakeLossRule(),
+    )
+    sink = Sink(id="outlet")
+
+    edge1 = Edge(
+        id="e1",
+        source="source",
+        target="reservoir",
+        capacity=1000.0,
+        loss_rule=FakeEdgeLossRule(),
+    )
+    edge2 = Edge(
+        id="e2",
+        source="reservoir",
+        target="outlet",
+        capacity=1000.0,
+        loss_rule=FakeEdgeLossRule(),
+    )
+
+    system.add_node(source)
+    system.add_node(storage)
+    system.add_node(sink)
+    system.add_edge(edge1)
+    system.add_edge(edge2)
+    system.validate()
+
+    return system
+
+
+class TestSpillObjective:
+    def test_sums_spill_events(self, simple_system: WaterSystem) -> None:
+        node = simple_system.nodes["reservoir"]
+        node.record(WaterSpilled(amount=100.0, t=0))
+        node.record(WaterSpilled(amount=50.0, t=1))
+        node.record(WaterSpilled(amount=25.0, t=2))
+
+        obj = spill("reservoir")
+        result = obj.evaluate(simple_system)
+
+        assert result == 175.0
+
+    def test_returns_zero_for_no_spill(self, simple_system: WaterSystem) -> None:
+        obj = spill("reservoir")
+        result = obj.evaluate(simple_system)
+
+        assert result == 0.0
+
+    def test_raises_for_missing_node(self, simple_system: WaterSystem) -> None:
+        obj = spill("nonexistent")
+
+        with pytest.raises(ValueError, match="not found"):
+            obj.evaluate(simple_system)
+
+    def test_has_minimize_direction(self) -> None:
+        obj = spill("any_node")
+        assert obj.direction == "minimize"
+
+
+class TestDeficitObjective:
+    def test_sums_deficit_events(self, simple_system: WaterSystem) -> None:
+        node = simple_system.nodes["reservoir"]
+        node.record(DeficitRecorded(required=100.0, actual=80.0, deficit=20.0, t=0))
+        node.record(DeficitRecorded(required=100.0, actual=70.0, deficit=30.0, t=1))
+
+        obj = deficit("reservoir")
+        result = obj.evaluate(simple_system)
+
+        assert result == 50.0
+
+    def test_returns_zero_for_no_deficit(self, simple_system: WaterSystem) -> None:
+        obj = deficit("reservoir")
+        result = obj.evaluate(simple_system)
+
+        assert result == 0.0
+
+    def test_raises_for_missing_node(self, simple_system: WaterSystem) -> None:
+        obj = deficit("nonexistent")
+
+        with pytest.raises(ValueError, match="not found"):
+            obj.evaluate(simple_system)
+
+
+class TestDeliveryObjective:
+    def test_sums_delivered_for_edge(self, simple_system: WaterSystem) -> None:
+        edge = simple_system.edges["e1"]
+        edge.record(WaterDelivered(amount=100.0, t=0))
+        edge.record(WaterDelivered(amount=200.0, t=1))
+
+        obj = delivery("e1")
+        result = obj.evaluate(simple_system)
+
+        assert result == 300.0
+
+    def test_sums_received_for_node(self, simple_system: WaterSystem) -> None:
+        node = simple_system.nodes["reservoir"]
+        node.record(NodeWaterReceived(amount=50.0, source_id="e1", t=0))
+        node.record(NodeWaterReceived(amount=75.0, source_id="e1", t=1))
+
+        obj = delivery("reservoir")
+        result = obj.evaluate(simple_system)
+
+        assert result == 125.0
+
+    def test_raises_for_missing_target(self, simple_system: WaterSystem) -> None:
+        obj = delivery("nonexistent")
+
+        with pytest.raises(ValueError, match="not found"):
+            obj.evaluate(simple_system)
+
+    def test_has_maximize_direction(self) -> None:
+        obj = delivery("any_target")
+        assert obj.direction == "maximize"
+
+
+class TestLossObjective:
+    def test_sums_node_losses(self, simple_system: WaterSystem) -> None:
+        node = simple_system.nodes["reservoir"]
+        node.record(NodeWaterLost(amount=10.0, reason=EVAPORATION, t=0))
+        node.record(NodeWaterLost(amount=5.0, reason=SEEPAGE, t=0))
+        node.record(NodeWaterLost(amount=15.0, reason=EVAPORATION, t=1))
+
+        obj = loss("reservoir")
+        result = obj.evaluate(simple_system)
+
+        assert result == 30.0
+
+    def test_sums_edge_losses(self, simple_system: WaterSystem) -> None:
+        edge = simple_system.edges["e1"]
+        edge.record(EdgeWaterLost(amount=8.0, reason=SEEPAGE, t=0))
+        edge.record(EdgeWaterLost(amount=12.0, reason=EVAPORATION, t=1))
+
+        obj = loss("e1")
+        result = obj.evaluate(simple_system)
+
+        assert result == 20.0
+
+    def test_raises_for_missing_target(self, simple_system: WaterSystem) -> None:
+        obj = loss("nonexistent")
+
+        with pytest.raises(ValueError, match="not found"):
+            obj.evaluate(simple_system)

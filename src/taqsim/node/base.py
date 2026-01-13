@@ -1,8 +1,12 @@
 from dataclasses import dataclass, field, fields
+from typing import TYPE_CHECKING
 
 from taqsim.common import Strategy
 
 from .events import NodeEvent
+
+if TYPE_CHECKING:
+    from taqsim.objective import Trace
 
 
 @dataclass
@@ -27,6 +31,11 @@ class BaseNode:
 
     def events_of_type[T: NodeEvent](self, event_type: type[T]) -> list[T]:
         return [e for e in self.events if isinstance(e, event_type)]
+
+    def trace[T: NodeEvent](self, event_type: type[T], field: str = "amount") -> "Trace":
+        from taqsim.objective import Trace
+
+        return Trace.from_events(self.events_of_type(event_type), field=field)
 
     def clear_events(self) -> None:
         self.events.clear()

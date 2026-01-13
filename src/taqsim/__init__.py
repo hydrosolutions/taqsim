@@ -10,9 +10,20 @@ Core modules:
     - taqsim.edge: Edge class and events
     - taqsim.system: WaterSystem orchestrator
     - taqsim.common: Shared types (LossReason)
+    - taqsim.objective: Optimization objectives and Trace arithmetics
 """
 
-from .common import CAPACITY_EXCEEDED, EVAPORATION, INEFFICIENCY, OVERFLOW, SEEPAGE, LossReason, ParamSpec, Strategy, summarize_losses
+from .common import (
+    CAPACITY_EXCEEDED,
+    EVAPORATION,
+    INEFFICIENCY,
+    OVERFLOW,
+    SEEPAGE,
+    LossReason,
+    ParamSpec,
+    Strategy,
+    summarize_losses,
+)
 from .edge import Edge, EdgeEvent, EdgeLossRule, WaterDelivered, WaterLost, WaterReceived
 from .node import (
     BaseNode,
@@ -23,6 +34,16 @@ from .node import (
     Splitter,
     Storage,
     TimeSeries,
+)
+from .objective import (
+    Direction,
+    HasTimestep,
+    Objective,
+    ObjectiveRegistry,
+    Trace,
+    lift,
+    maximize,
+    minimize,
 )
 from .system import WaterSystem
 
@@ -55,6 +76,15 @@ __all__ = [
     "WaterDelivered",
     # System
     "WaterSystem",
+    # Objectives
+    "Direction",
+    "HasTimestep",
+    "Objective",
+    "ObjectiveRegistry",
+    "Trace",
+    "lift",
+    "maximize",
+    "minimize",
 ]
 
 __version__ = "0.3.0"

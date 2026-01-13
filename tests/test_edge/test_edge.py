@@ -238,6 +238,67 @@ class TestEdgeEventRecording:
         assert event in edge.events
 
 
+class TestEdgeTrace:
+    def test_trace_returns_trace_object(self):
+        from taqsim.objective import Trace
+
+        edge = make_edge()
+        edge.receive(50.0, t=0)
+        edge.update(t=0, dt=1.0)
+
+        trace = edge.trace(WaterDelivered)
+        assert isinstance(trace, Trace)
+
+    def test_trace_extracts_delivered_events(self):
+        edge = make_edge()
+        edge.receive(50.0, t=0)
+        edge.update(t=0, dt=1.0)
+        edge.receive(30.0, t=1)
+        edge.update(t=1, dt=1.0)
+
+        trace = edge.trace(WaterDelivered)
+        assert trace.to_dict() == {0: 50.0, 1: 30.0}
+
+    def test_trace_extracts_received_events(self):
+        edge = make_edge()
+        edge.receive(50.0, t=0)
+        edge.receive(30.0, t=0)
+        edge.update(t=0, dt=1.0)
+
+        trace = edge.trace(WaterReceived)
+        assert trace[0] == 80.0
+
+    def test_trace_extracts_lost_events(self):
+        edge = make_edge(losses={EVAPORATION: 10.0})
+        edge.receive(100.0, t=0)
+        edge.update(t=0, dt=1.0)
+
+        trace = edge.trace(WaterLost)
+        assert trace[0] == 10.0
+
+    def test_trace_with_custom_field(self):
+        edge = make_edge(losses={EVAPORATION: 10.0})
+        edge.receive(100.0, t=0)
+        edge.update(t=0, dt=1.0)
+
+        trace = edge.trace(WaterDelivered, field="amount")
+        assert trace[0] == 90.0
+
+    def test_trace_empty_when_no_events(self):
+        edge = make_edge()
+
+        trace = edge.trace(WaterDelivered)
+        assert len(trace) == 0
+
+    def test_trace_aggregates_events_at_same_timestep(self):
+        edge = make_edge(losses={EVAPORATION: 5.0, SEEPAGE: 3.0})
+        edge.receive(100.0, t=0)
+        edge.update(t=0, dt=1.0)
+
+        trace = edge.trace(WaterLost)
+        assert trace[0] == 8.0
+
+
 class TestEdgeProtocolCompliance:
     def test_edge_has_record_method(self):
         edge = make_edge()
@@ -246,3 +307,7 @@ class TestEdgeProtocolCompliance:
     def test_edge_has_events_of_type_method(self):
         edge = make_edge()
         assert callable(getattr(edge, "events_of_type", None))
+
+    def test_edge_has_trace_method(self):
+        edge = make_edge()
+        assert callable(getattr(edge, "trace", None))
