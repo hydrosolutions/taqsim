@@ -6,6 +6,12 @@ Water system simulation framework using event sourcing.
 
 Taqsim models water systems as directed acyclic graphs (DAGs) of nodes connected by edges. Water flows from sources through the network, getting stored, consumed, split, and eventually reaching sinks. All operations emit events, providing a complete audit trail of the simulation.
 
+## Maintenance Status
+
+:large_green_circle: **Active Development**
+
+This repository is part of an ongoing project and actively maintained.
+
 ## Features
 
 - **Six node types**: Source, Storage, Demand, Sink, Splitter, PassThrough
