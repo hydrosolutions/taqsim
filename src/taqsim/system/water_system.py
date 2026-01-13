@@ -13,7 +13,7 @@ from .validation import ValidationError
 
 @dataclass
 class WaterSystem:
-    dt: float = 2629800.0
+    dt: float = 1
 
     _nodes: dict[str, BaseNode] = field(default_factory=dict, init=False, repr=False)
     _edges: dict[str, Edge] = field(default_factory=dict, init=False, repr=False)
