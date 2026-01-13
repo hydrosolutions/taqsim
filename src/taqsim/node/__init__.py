@@ -28,7 +28,7 @@ from .sink import Sink
 from .source import Source
 from .splitter import Splitter
 from .storage import Storage
-from .strategies import LossRule, ReleaseRule, SplitStrategy
+from .strategies import LossRule, ReleaseRule, SplitRule
 from .timeseries import TimeSeries
 
 __all__ = [
@@ -61,7 +61,7 @@ __all__ = [
     # Strategies
     "LossRule",
     "ReleaseRule",
-    "SplitStrategy",
+    "SplitRule",
     "TimeSeries",
     # Base
     "BaseNode",

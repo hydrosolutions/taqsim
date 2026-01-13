@@ -10,7 +10,7 @@ Not all configurable objects are optimizable. The system distinguishes between:
 
 | Type | Category | Optimizable | Examples |
 |------|----------|-------------|----------|
-| **Operational Policy** | Strategy | Yes | `ReleaseRule`, `SplitStrategy` |
+| **Operational Policy** | Strategy | Yes | `ReleaseRule`, `SplitRule` |
 | **Physical Model** | Rule | No | `LossRule`, `EdgeLossRule` |
 
 ### Why the Distinction?

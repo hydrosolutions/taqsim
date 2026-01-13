@@ -31,7 +31,7 @@ class FakeReleaseRule(Strategy):
 
 
 @dataclass(frozen=True)
-class FakeSplitStrategy(Strategy):
+class FakeSplitRule(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ()
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {}
 
@@ -61,8 +61,8 @@ def fake_release_rule() -> FakeReleaseRule:
 
 
 @pytest.fixture
-def fake_split_strategy() -> FakeSplitStrategy:
-    return FakeSplitStrategy()
+def fake_split_rule() -> FakeSplitRule:
+    return FakeSplitRule()
 
 
 @pytest.fixture

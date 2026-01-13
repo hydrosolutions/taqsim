@@ -13,7 +13,7 @@ class ReleaseRule(Protocol):
 
 
 @runtime_checkable
-class SplitStrategy(Protocol):
+class SplitRule(Protocol):
     def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]: ...
 
 

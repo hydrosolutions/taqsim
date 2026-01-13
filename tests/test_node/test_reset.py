@@ -62,10 +62,10 @@ class TestDemandReset:
 class TestSplitterReset:
     """Tests for Splitter.reset()."""
 
-    def test_reset_clears_received_accumulator(self, fake_split_strategy):
+    def test_reset_clears_received_accumulator(self, fake_split_rule):
         splitter = Splitter(
             id="junction",
-            split_strategy=fake_split_strategy,
+            split_strategy=fake_split_rule,
         )
         splitter._set_targets(["a", "b"])
 

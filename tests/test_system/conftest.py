@@ -6,7 +6,7 @@ from taqsim.node import Sink, Source, Splitter, Storage
 from taqsim.node.timeseries import TimeSeries
 
 
-class FakeSplitStrategy:
+class FakeSplitRule:
     def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
         targets = node.targets
         if not targets:
@@ -37,8 +37,8 @@ class FakeEdgeLossRule:
 
 
 @pytest.fixture
-def fake_split_strategy() -> FakeSplitStrategy:
-    return FakeSplitStrategy()
+def fake_split_rule() -> FakeSplitRule:
+    return FakeSplitRule()
 
 
 @pytest.fixture
@@ -80,12 +80,12 @@ def make_sink(
 
 def make_splitter(
     id: str = "splitter",
-    split_strategy: FakeSplitStrategy | None = None,
+    split_rule: FakeSplitRule | None = None,
     location: tuple[float, float] | None = None,
 ) -> Splitter:
-    if split_strategy is None:
-        split_strategy = FakeSplitStrategy()
-    return Splitter(id=id, split_strategy=split_strategy, location=location)
+    if split_rule is None:
+        split_rule = FakeSplitRule()
+    return Splitter(id=id, split_strategy=split_rule, location=location)
 
 
 def make_storage(

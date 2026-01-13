@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
-from taqsim.node.strategies import LossRule, ReleaseRule, SplitStrategy
+from taqsim.node.strategies import LossRule, ReleaseRule, SplitRule
 
 if TYPE_CHECKING:
     from taqsim.node.splitter import Splitter
@@ -50,25 +50,25 @@ class TestSplitStrategyProtocol:
             def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
-        assert isinstance(ValidSplit(), SplitStrategy)
+        assert isinstance(ValidSplit(), SplitRule)
 
     def test_class_without_split_does_not_satisfy(self):
         class NoSplit:
             pass
 
-        assert not isinstance(NoSplit(), SplitStrategy)
+        assert not isinstance(NoSplit(), SplitRule)
 
-    def test_fake_split_strategy_satisfies_protocol(self, fake_split_strategy):
-        assert isinstance(fake_split_strategy, SplitStrategy)
+    def test_fake_split_rule_satisfies_protocol(self, fake_split_rule):
+        assert isinstance(fake_split_rule, SplitRule)
 
-    def test_split_returns_dict(self, fake_split_strategy):
+    def test_split_returns_dict(self, fake_split_rule):
         from taqsim.node.splitter import Splitter
 
         class ValidSplit:
             def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
-        splitter = Splitter(id="test", split_strategy=fake_split_strategy)
+        splitter = Splitter(id="test", split_strategy=fake_split_rule)
         splitter._set_targets(["a", "b"])
         strategy = ValidSplit()
         result = strategy.split(splitter, 100.0, 0)
@@ -128,7 +128,7 @@ class TestProtocolNonSatisfaction:
             def divide(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
                 return {}
 
-        assert not isinstance(WrongMethod(), SplitStrategy)
+        assert not isinstance(WrongMethod(), SplitRule)
 
     def test_class_with_wrong_method_name_does_not_satisfy_loss_rule(self):
         class WrongMethod:
@@ -143,5 +143,5 @@ class TestProtocolNonSatisfaction:
 
         instance = EmptyClass()
         assert not isinstance(instance, ReleaseRule)
-        assert not isinstance(instance, SplitStrategy)
+        assert not isinstance(instance, SplitRule)
         assert not isinstance(instance, LossRule)

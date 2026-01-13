@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     pass
 
 
-class FakeEqualSplitStrategy:
+class FakeEqualSplitRule:
     def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
         targets = node.targets
         if not targets:
@@ -19,7 +19,7 @@ class FakeEqualSplitStrategy:
         return dict.fromkeys(targets, share)
 
 
-class FakeFixedSplitStrategy:
+class FakeFixedSplitRule:
     def __init__(self, ratios: dict[str, float]):
         self._ratios = ratios
 
@@ -29,17 +29,17 @@ class FakeFixedSplitStrategy:
 
 class TestSplitterInit:
     def test_creates_with_id_and_strategy(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         assert splitter.id == "splitter_1"
 
     def test_starts_with_empty_targets(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         assert splitter.targets == []
 
     def test_starts_with_empty_events(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         assert splitter.events == []
 
@@ -48,7 +48,7 @@ class TestSplitterInit:
             Splitter(id="splitter_1")
 
     def test_sets_targets_via_set_targets(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1", "t2"])
         assert splitter.targets == ["t1", "t2"]
@@ -56,13 +56,13 @@ class TestSplitterInit:
 
 class TestSplitterReceive:
     def test_receive_returns_amount(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         result = splitter.receive(amount=100.0, source_id="source_a", t=0)
         assert result == 100.0
 
     def test_receive_records_event(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter.receive(amount=50.0, source_id="upstream", t=5)
         assert len(splitter.events) == 1
@@ -73,7 +73,7 @@ class TestSplitterReceive:
         assert event.t == 5
 
     def test_receive_accumulates_for_distribution(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1"])
         splitter.receive(amount=30.0, source_id="a", t=0)
@@ -86,14 +86,14 @@ class TestSplitterReceive:
 
 class TestSplitterDistribute:
     def test_distribute_uses_strategy(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1", "t2"])
         allocation = splitter.distribute(amount=100.0, t=0)
         assert allocation == {"t1": 50.0, "t2": 50.0}
 
     def test_distribute_records_events(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1", "t2"])
         splitter.distribute(amount=100.0, t=0)
@@ -101,7 +101,7 @@ class TestSplitterDistribute:
         assert len(distributed) == 2
 
     def test_distribute_records_correct_target_ids(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["target_a", "target_b"])
         splitter.distribute(amount=80.0, t=3)
@@ -110,27 +110,27 @@ class TestSplitterDistribute:
         assert target_ids == {"target_a", "target_b"}
 
     def test_distribute_empty_targets_returns_empty(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         allocation = splitter.distribute(amount=100.0, t=0)
         assert allocation == {}
 
     def test_distribute_zero_amount_returns_empty(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1"])
         allocation = splitter.distribute(amount=0.0, t=0)
         assert allocation == {}
 
     def test_distribute_negative_amount_returns_empty(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1"])
         allocation = splitter.distribute(amount=-10.0, t=0)
         assert allocation == {}
 
     def test_distribute_with_fixed_ratios(self):
-        strategy = FakeFixedSplitStrategy(ratios={"t1": 0.7, "t2": 0.3})
+        strategy = FakeFixedSplitRule(ratios={"t1": 0.7, "t2": 0.3})
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1", "t2"])
         allocation = splitter.distribute(amount=100.0, t=0)
@@ -140,7 +140,7 @@ class TestSplitterDistribute:
 
 class TestSplitterUpdate:
     def test_update_distributes_received_water(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1"])
         splitter.receive(amount=100.0, source_id="source", t=0)
@@ -150,7 +150,7 @@ class TestSplitterUpdate:
         assert distributed[0].amount == 100.0
 
     def test_update_resets_received_for_next_step(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1"])
         splitter.receive(amount=100.0, source_id="source", t=0)
@@ -160,7 +160,7 @@ class TestSplitterUpdate:
         assert len(distributed) == 1
 
     def test_update_across_multiple_timesteps(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         splitter._set_targets(["t1"])
         splitter.receive(amount=50.0, source_id="s", t=0)
@@ -177,6 +177,6 @@ class TestSplitterUpdate:
 
 class TestSplitterProtocols:
     def test_implements_receives_protocol(self):
-        strategy = FakeEqualSplitStrategy()
+        strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_strategy=strategy)
         assert isinstance(splitter, Receives)

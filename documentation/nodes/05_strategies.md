@@ -41,7 +41,7 @@ class FixedRelease(Strategy):
 
 ### Note on Physical Models
 
-`LossRule` implementations do **not** inherit from `Strategy`. They are physical models representing infrastructure, not operational policies. Only `ReleaseRule` and `SplitStrategy` are optimizable.
+`LossRule` implementations do **not** inherit from `Strategy`. They are physical models representing infrastructure, not operational policies. Only `ReleaseRule` and `SplitRule` are optimizable.
 
 ## Protocol Definitions
 
@@ -61,13 +61,13 @@ class ReleaseRule(Protocol):
     ) -> float: ...     # amount to release
 ```
 
-### SplitStrategy
+### SplitRule
 
 Determines how water is distributed among multiple targets.
 
 ```python
 @runtime_checkable
-class SplitStrategy(Protocol):
+class SplitRule(Protocol):
     def split(
         self,
         node: Splitter,           # the splitter node (provides targets)
@@ -279,10 +279,10 @@ storage = Storage(
 Strategies satisfy protocols via structural typing:
 
 ```python
-from taqsim.node import SplitStrategy, ReleaseRule, LossRule
+from taqsim.node import SplitRule, ReleaseRule, LossRule
 
 split = EqualSplit()
-assert isinstance(split, SplitStrategy)
+assert isinstance(split, SplitRule)
 
 release = FixedRelease(rate=5.0)
 assert isinstance(release, ReleaseRule)

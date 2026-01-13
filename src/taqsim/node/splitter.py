@@ -2,12 +2,12 @@ from dataclasses import dataclass, field
 
 from .base import BaseNode
 from .events import WaterDistributed, WaterReceived
-from .strategies import SplitStrategy
+from .strategies import SplitRule
 
 
 @dataclass
 class Splitter(BaseNode):
-    split_strategy: SplitStrategy | None = field(default=None)
+    split_strategy: SplitRule | None = field(default=None)
     _received_this_step: float = field(default=0.0, init=False, repr=False)
 
     def __post_init__(self) -> None:
