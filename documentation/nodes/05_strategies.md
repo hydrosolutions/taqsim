@@ -145,7 +145,7 @@ class CapacityBoundedRelease(Strategy):
 
 ## Custom Implementations
 
-### Equal Split Strategy
+### Equal Split Rule
 
 ```python
 from dataclasses import dataclass
@@ -161,7 +161,7 @@ class EqualSplit:
         return {target: share for target in targets}
 ```
 
-### Proportional Split Strategy
+### Proportional Split Rule
 
 ```python
 @dataclass

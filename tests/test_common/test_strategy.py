@@ -25,11 +25,11 @@ class TestStrategy:
 
     def test_params_handles_tuple_values(self):
         @dataclass(frozen=True)
-        class SplitStrategy(Strategy):
+        class SplitRule(Strategy):
             __params__: ClassVar[tuple[str, ...]] = ("ratios",)
             ratios: tuple[float, ...] = (0.6, 0.4)
 
-        strategy = SplitStrategy()
+        strategy = SplitRule()
         params = strategy.params()
 
         assert params == {"ratios": (0.6, 0.4)}
@@ -78,8 +78,8 @@ class TestParamSpec:
         assert spec.index is None
 
     def test_tuple_param_spec(self):
-        spec = ParamSpec(path="splitter.strategy.ratios", value=0.6, index=0)
-        assert spec.path == "splitter.strategy.ratios"
+        spec = ParamSpec(path="splitter.split_rule.ratios", value=0.6, index=0)
+        assert spec.path == "splitter.split_rule.ratios"
         assert spec.value == 0.6
         assert spec.index == 0
 

@@ -91,7 +91,7 @@ turbine = PassThrough(id="hydropower_turbine")
 
 ## Splitter
 
-Distribution node. Receives water and splits among multiple targets using a split strategy.
+Distribution node. Receives water and splits among multiple targets using a split rule.
 
 ### Capabilities
 
@@ -102,7 +102,7 @@ Distribution node. Receives water and splits among multiple targets using a spli
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
-| `split_rule` | `SplitRule` | Yes | Distribution strategy |
+| `split_rule` | `SplitRule` | Yes | Distribution rule |
 
 > **Note**: Targets are derived from edges by `WaterSystem` and populated via `_set_targets()` during validation.
 
@@ -113,7 +113,7 @@ Distribution node. Receives water and splits among multiple targets using a spli
 
 ### Update Cycle
 
-1. Apply split strategy to distribute water
+1. Apply split rule to distribute water
 2. Record `WaterDistributed` for each target
 3. Reset counter
 

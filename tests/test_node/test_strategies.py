@@ -44,7 +44,7 @@ class TestReleaseRuleProtocol:
         assert result == 50.0
 
 
-class TestSplitStrategyProtocol:
+class TestSplitRuleProtocol:
     def test_class_with_split_satisfies_protocol(self):
         class ValidSplit:
             def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
