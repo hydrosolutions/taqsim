@@ -8,7 +8,7 @@ Taqsim models water systems as directed acyclic graphs (DAGs) of nodes connected
 
 ## Maintenance Status
 
-:large_green_circle: **Active Development**
+🟢 **Active Development**
 
 This repository is part of an ongoing project and actively maintained.
 
