@@ -30,13 +30,12 @@ The `@lift` decorator transforms scalar functions to work on Traces, enabling cu
 ## Quick Example
 
 ```python
-from taqsim.objective import minimize, maximize, Objective
+from taqsim.objective import minimize
 
-# Use built-in objectives via registries
+# Use built-in objectives via the registry
 objectives = [
     minimize.spill("reservoir_1"),      # Minimize water spilled
     minimize.deficit("city_demand"),    # Minimize unmet demand
-    maximize.delivery("irrigation"),    # Maximize water delivered
 ]
 
 # Objectives evaluate against a simulated system
@@ -46,20 +45,30 @@ scores = [obj.evaluate(system) for obj in objectives]
 
 ## Registries
 
-Two registries provide fluent access to built-in objectives:
+Taqsim provides two objective registries: `minimize` and `maximize`.
 
-- `minimize` - objectives where lower is better (spill, deficit, loss)
-- `maximize` - objectives where higher is better (delivery)
+### minimize (built-in objectives)
+
+- `minimize.spill` - minimize water spilled (controllable via release timing)
+- `minimize.deficit` - minimize unmet demand (controllable via allocation)
 
 ```python
-from taqsim.objective import minimize, maximize
+from taqsim.objective import minimize
 
-# Fluent API
 obj1 = minimize.spill("reservoir")
-obj2 = maximize.delivery("downstream_node")
+obj2 = minimize.deficit("city_demand", priority=2)
+```
 
-# With priority for multi-objective optimization
-obj3 = minimize.deficit("demand", priority=2)
+### maximize (custom objectives)
+
+The `maximize` registry starts empty. Register custom objectives to use the fluent API:
+
+```python
+from taqsim.objective import maximize
+
+# After defining and registering hydropower (see 05_custom.md)
+maximize.register("hydropower", hydropower)
+obj = maximize.hydropower("reservoir", "turbine", efficiency=0.9)
 ```
 
 ## Custom Objectives

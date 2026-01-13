@@ -2,7 +2,9 @@
 
 ## Overview
 
-Taqsim provides four built-in objective factories covering common water system optimization goals. Access them via the `minimize` and `maximize` registries.
+Taqsim provides two built-in objective factories for common water system optimization goals. These objectives measure outcomes that can be influenced through operational strategies (release rules, allocation decisions).
+
+Access them via the `minimize` registry.
 
 ## minimize.spill
 
@@ -17,7 +19,7 @@ obj = minimize.spill("reservoir_1", priority=2)
 
 **What it measures:** Sum of `WaterSpilled` event amounts at the specified node.
 
-**Use case:** Reduce wasteful overflow from storage nodes. Spills indicate the reservoir exceeded capacity.
+**Use case:** Reduce wasteful overflow from storage nodes. Spills indicate the reservoir exceeded capacity—this can be avoided by releasing water earlier to make room for inflows.
 
 ## minimize.deficit
 
@@ -31,39 +33,7 @@ obj = minimize.deficit("city_demand")
 
 **What it measures:** Sum of `DeficitRecorded` event deficits at the specified node.
 
-**Use case:** Ensure demand nodes receive their required water. Deficits indicate supply fell short of requirements.
-
-## minimize.loss
-
-Minimize water lost from a node or edge.
-
-```python
-from taqsim.objective import minimize
-
-obj = minimize.loss("canal_1")        # Edge losses
-obj = minimize.loss("reservoir_1")    # Node losses (evaporation, seepage)
-```
-
-**What it measures:** Sum of `WaterLost` event amounts at the specified target.
-
-**Use case:** Reduce physical losses in the system. Works for both edge transmission losses and node storage losses.
-
-## maximize.delivery
-
-Maximize water delivered to a target.
-
-```python
-from taqsim.objective import maximize
-
-obj = maximize.delivery("irrigation_edge")  # Edge delivery
-obj = maximize.delivery("demand_node")      # Node received
-```
-
-**What it measures:**
-- For edges: Sum of `WaterDelivered` events
-- For nodes: Sum of `WaterReceived` events
-
-**Use case:** Maximize water reaching a destination. Useful for irrigation delivery, environmental flows, or downstream transfers.
+**Use case:** Ensure demand nodes receive their required water. Deficits indicate supply fell short of requirements—this can be reduced by allocating more water to this demand.
 
 ## Priority Parameter
 
@@ -81,9 +51,17 @@ Higher priority objectives carry more weight in optimization.
 
 ## Error Handling
 
-Objectives raise `ValueError` if the target node or edge doesn't exist:
+Objectives raise `ValueError` if the target node doesn't exist:
 
 ```python
 obj = minimize.spill("nonexistent")
 obj.evaluate(system)  # ValueError: Node 'nonexistent' not found
 ```
+
+## Why Only These Two?
+
+Objectives should measure outcomes that are **controllable through operational strategies**. Physical infrastructure properties like losses (evaporation, seepage, pipe inefficiency) are fixed by the system design—a GA optimizing release schedules cannot change them.
+
+The `maximize` registry has no built-in objectives for the same reason. Custom maximization objectives (like hydropower production) should be registered explicitly.
+
+For custom objectives that combine events or compute derived metrics, see [Creating Custom Objectives](./05_custom.md).

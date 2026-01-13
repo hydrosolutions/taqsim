@@ -78,8 +78,14 @@ def hydropower(
 Usage:
 
 ```python
+from taqsim.objective import maximize, minimize
+
+# Register once (typically at module initialization)
+maximize.register("hydropower", hydropower)
+
+# Use via fluent API
 objectives = [
-    hydropower("reservoir", "turbine", efficiency=0.9),
+    maximize.hydropower("reservoir", "turbine", efficiency=0.9),
     minimize.spill("reservoir"),
 ]
 ```
@@ -117,7 +123,7 @@ maximize.register("hydropower", hydropower)
 minimize.register("storage_target", storage_target)
 
 # Now accessible via fluent API
-obj = maximize.hydropower("turbine", head_m=50)
+obj = maximize.hydropower("reservoir", "turbine", efficiency=0.9)
 obj = minimize.storage_target("reservoir", target=1000000)
 ```
 
