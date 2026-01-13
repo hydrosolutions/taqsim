@@ -80,12 +80,8 @@ def create_notebook(name: str, output_dir: Path, description: str = "") -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create a new marimo notebook")
     parser.add_argument("name", help="Name of the notebook (without .py extension)")
-    parser.add_argument(
-        "-o", "--output", default=".", help="Output directory (default: current)"
-    )
-    parser.add_argument(
-        "-d", "--description", default="", help="Notebook description for the header"
-    )
+    parser.add_argument("-o", "--output", default=".", help="Output directory (default: current)")
+    parser.add_argument("-d", "--description", default="", help="Notebook description for the header")
 
     args = parser.parse_args()
     output_dir = Path(args.output)

@@ -1,10 +1,11 @@
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from taqsim.node import Source, Sink
-from taqsim.node.timeseries import TimeSeries
+import pytest
+
 from taqsim.edge import Edge
+from taqsim.node import Sink, Source
+from taqsim.node.timeseries import TimeSeries
 from taqsim.system import WaterSystem
 
 from .conftest import FakeEdgeLossRule
@@ -13,19 +14,9 @@ from .conftest import FakeEdgeLossRule
 def make_simple_system_with_locations() -> WaterSystem:
     """Create a simple Source -> Sink system with locations."""
     system = WaterSystem()
-    system.add_node(Source(
-        id="source",
-        inflow=TimeSeries([100.0] * 12),
-        location=(31.77, 35.21)
-    ))
+    system.add_node(Source(id="source", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
     system.add_node(Sink(id="sink", location=(31.78, 35.22)))
-    system.add_edge(Edge(
-        id="e1",
-        source="source",
-        target="sink",
-        capacity=100.0,
-        loss_rule=FakeEdgeLossRule()
-    ))
+    system.add_edge(Edge(id="e1", source="source", target="sink", capacity=100.0, loss_rule=FakeEdgeLossRule()))
     system.validate()
     return system
 

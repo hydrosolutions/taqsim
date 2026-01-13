@@ -19,11 +19,10 @@
 
 from taqsim.io_utils import load_optimized_parameters, load_parameters_from_file
 
-from taqsim import ParetoVisualizer, WaterSystemVisualizer
 from legacy.ZRB_system_creator import create_ZRB_system
+from taqsim import ParetoVisualizer, WaterSystemVisualizer
 
 if __name__ == "__main__":
-
     start_year = 2017
     start_month = 1
     num_time_steps = 12 * 6  # 6 years of monthly data
@@ -32,11 +31,18 @@ if __name__ == "__main__":
     system = create_ZRB_system(start_year, start_month, num_time_steps)
 
     # Load water allocation parameters from file
-    optimized_parameters=load_parameters_from_file("./data/ZRB_baseline/parameter/parameter_3obj_100gen_3000pop.json")
+    optimized_parameters = load_parameters_from_file("./data/ZRB_baseline/parameter/parameter_3obj_100gen_3000pop.json")
 
     # Create a ParetoVisualizer to visualize the optimization solutions
     # the objective_names are only used for visualization purposes
-    dashboard = ParetoVisualizer(optimized_parameters, objective_names=['Irrig. Supply Deficit [km³/a]', 'Industry Supply Deficit [km³/a]', 'Ecological Flow Deficit [km³/a]'])
+    dashboard = ParetoVisualizer(
+        optimized_parameters,
+        objective_names=[
+            "Irrig. Supply Deficit [km³/a]",
+            "Industry Supply Deficit [km³/a]",
+            "Ecological Flow Deficit [km³/a]",
+        ],
+    )
     dashboard.generate_full_report()
 
     # Load optimized parameters into the system,
@@ -49,7 +55,7 @@ if __name__ == "__main__":
 
     # Createing some visualizations of the water system in the model_output/figures folder
     # TO DO: more visualizations or adaptations of the existing ones in the water_system module (visualization.py)
-    vis=WaterSystemVisualizer(system, name=f'Solution_{sol_id}')
+    vis = WaterSystemVisualizer(system, name=f"Solution_{sol_id}")
     vis.plot_network_overview()
     vis.plot_minimum_flow_compliance()
     vis.plot_spills()
@@ -58,6 +64,3 @@ if __name__ == "__main__":
     vis.plot_demand_deficit_heatmap()
     vis.print_water_balance_summary()
     vis.plot_network_layout()
-
-
-

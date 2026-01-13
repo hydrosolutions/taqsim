@@ -1,6 +1,6 @@
 import pytest
 
-from taqsim.geo import haversine, EARTH_RADIUS_M
+from taqsim.geo import haversine
 
 
 class TestHaversine:

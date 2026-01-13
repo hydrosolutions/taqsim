@@ -16,15 +16,15 @@
 ║                                                                         ║
 ╚═════════════════════════════════════════════════════════════════════════╝
 """
+
 from datetime import datetime
 
 from taqsim.io_utils import load_parameters_from_file, save_optimized_parameters
 
-from taqsim import DeapOptimizer, ParetoVisualizer
 from legacy.ZRB_system_creator import create_ZRB_system
+from taqsim import DeapOptimizer, ParetoVisualizer
 
 if __name__ == "__main__":
-
     # Logging start time to measure execution time
     start = datetime.now()
 
@@ -45,9 +45,9 @@ if __name__ == "__main__":
     # For each objective, set the weights to 1 for the components you want to include, and 0 for those you want to ignore.
     # Example below:
     objective_weights = {
-        'objective_1': [1, 0, 0, 0, 0],  # Only regular demand deficit is minimized in this objective
-        'objective_2': [0, 1, 1, 0, 0],  # Priority demand deficit and spillage are minimized together
-        'objective_3': [0, 0, 0, 1, 0],  # Only minimum flow deficit at sinks is minimized
+        "objective_1": [1, 0, 0, 0, 0],  # Only regular demand deficit is minimized in this objective
+        "objective_2": [0, 1, 1, 0, 0],  # Priority demand deficit and spillage are minimized together
+        "objective_3": [0, 0, 0, 1, 0],  # Only minimum flow deficit at sinks is minimized
     }
 
     # Create the base water system
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         population_size=population_size,
         cxpb=crossover_probability,
         mutpb=mutation_probability,
-        objective_weights=objective_weights
+        objective_weights=objective_weights,
     )
 
     # Run the optimization
@@ -80,8 +80,13 @@ if __name__ == "__main__":
     print(f"\nNumber of non-dominated solutions: {len(results['pareto_front'])}")
 
     # Save the optimized parameters
-    save_optimized_parameters(results, f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
-    sol =load_parameters_from_file(f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json")
+    save_optimized_parameters(
+        results,
+        f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json",
+    )
+    sol = load_parameters_from_file(
+        f"./model_output/optimization/parameter/parameter_{len(objective_weights)}obj_{number_of_generations}gen_{population_size}pop.json"
+    )
     # Generate Pareto Front visualizations
     dashboard = ParetoVisualizer(sol)
     dashboard.generate_full_report()

@@ -1,4 +1,3 @@
-
 from taqsim.objective.lift import lift
 from taqsim.objective.trace import Trace
 

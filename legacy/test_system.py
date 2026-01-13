@@ -45,7 +45,7 @@ if __name__ == "__main__":
         constant_supply_rate=100,  # m³/s
         start_year=2020,
         start_month=1,
-        num_time_steps=12
+        num_time_steps=12,
     )
     my_water_system.add_node(supply1)
 
@@ -53,10 +53,10 @@ if __name__ == "__main__":
         id="Source2",
         easting=100,
         northing=200,
-        csv_file='./data/dummy_data/supply_timeseries.csv',
+        csv_file="./data/dummy_data/supply_timeseries.csv",
         start_year=2020,
         start_month=1,
-        num_time_steps=12
+        num_time_steps=12,
     )
     my_water_system.add_node(supply2)
 
@@ -66,10 +66,10 @@ if __name__ == "__main__":
         northing=500,
         area=50,  # km²
         runoff_coefficient=0.3,
-        rainfall_csv="./data/dummy_data/rainfall_timeseries.csv", # in mm
+        rainfall_csv="./data/dummy_data/rainfall_timeseries.csv",  # in mm
         start_year=2020,
         start_month=1,
-        num_time_steps=12
+        num_time_steps=12,
     )
     my_water_system.add_node(runoff)
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         constant_min_flow=10,
         start_year=2020,
         start_month=1,
-        num_time_steps=12
+        num_time_steps=12,
     )
     my_water_system.add_node(sink1)
 
@@ -90,31 +90,27 @@ if __name__ == "__main__":
         id="EnvFlow",
         easting=400,
         northing=400,
-        csv_file='./data/dummy_data/sink_min_flow.csv',
+        csv_file="./data/dummy_data/sink_min_flow.csv",
         start_year=2020,
         start_month=1,
-        num_time_steps=12
+        num_time_steps=12,
     )
     my_water_system.add_node(sink2)
 
-    hydrowork = HydroWorks(
-        id="HydroWorks1",
-        easting=300,
-        northing=300
-    )
+    hydrowork = HydroWorks(id="HydroWorks1", easting=300, northing=300)
     my_water_system.add_node(hydrowork)
 
     demand1 = DemandNode(
         id="agriculture",
         easting=300,
         northing=400,
-        csv_file='./data/dummy_data/demand_timeseries.csv',
+        csv_file="./data/dummy_data/demand_timeseries.csv",
         start_year=2020,
         start_month=1,
         num_time_steps=12,
         field_efficiency=0.8,
         conveyance_efficiency=0.7,
-        priority=2
+        priority=2,
     )
     my_water_system.add_node(demand1)
 
@@ -122,12 +118,12 @@ if __name__ == "__main__":
         id="Industry",
         easting=400,
         northing=200,
-        constant_demand_rate=60,   # m³/s
-        non_consumptive_rate=10,   # m³/s (returns to system)
+        constant_demand_rate=60,  # m³/s
+        non_consumptive_rate=10,  # m³/s (returns to system)
         start_year=2020,
         start_month=1,
         num_time_steps=12,
-        priority=1
+        priority=1,
     )
     my_water_system.add_node(demand2)
 
@@ -135,14 +131,14 @@ if __name__ == "__main__":
         id="Reservoir",
         easting=200,
         northing=300,
-        hv_file='./data/dummy_data/reservoir_hv.csv',  # Height-volume relationship
-        evaporation_file='./data/dummy_data/reservoir_ev_timeseries.csv', # Monthly reservoir evaporation in mm
+        hv_file="./data/dummy_data/reservoir_hv.csv",  # Height-volume relationship
+        evaporation_file="./data/dummy_data/reservoir_ev_timeseries.csv",  # Monthly reservoir evaporation in mm
         start_year=2020,
         start_month=1,
         num_time_steps=12,
-        initial_storage=5e6,              # m³
-        dead_storage=1e5,                 # m³
-        buffer_coef=0.5
+        initial_storage=5e6,  # m³
+        dead_storage=1e5,  # m³
+        buffer_coef=0.5,
     )
     my_water_system.add_node(storage)
 
@@ -160,25 +156,21 @@ if __name__ == "__main__":
 
     ## Setting up an Optimization problem
 
-
-    objectives = {'objective_1':[1,1,1,0,0]}
+    objectives = {"objective_1": [1, 1, 1, 0, 0]}
 
     MyProblem = DeapOptimizer(
-                    base_system=my_water_system,
-                    num_time_steps=12,  # 12 month are optimized
-                    objective_weights=objectives,
-                    ngen=100,        # Optimizing over 50 generations
-                    population_size=500, # A Population consists of 100 individuals
-                    cxpb=0.6,       # 0.6 probability for crossover
-                    mutpb=0.2,      # 0.2 probability for mutation
+        base_system=my_water_system,
+        num_time_steps=12,  # 12 month are optimized
+        objective_weights=objectives,
+        ngen=100,  # Optimizing over 50 generations
+        population_size=500,  # A Population consists of 100 individuals
+        cxpb=0.6,  # 0.6 probability for crossover
+        mutpb=0.2,  # 0.2 probability for mutation
     )
 
     # Run the optimization
     results = MyProblem.optimize()
-    save_optimized_parameters(
-        results,
-        filename="./data/dummy_data/optimization_results.json"
-    )
+    save_optimized_parameters(results, filename="./data/dummy_data/optimization_results.json")
 
     # Plot convergence and Pareto front
     MyProblem.plot_convergence()
@@ -188,7 +180,7 @@ if __name__ == "__main__":
     my_water_system = load_optimized_parameters(my_water_system, results, solution_id=0)
     my_water_system.simulate(time_steps=12)
 
-    vis = WaterSystemVisualizer(my_water_system, name='Dummy_Water_System_Visualization')
+    vis = WaterSystemVisualizer(my_water_system, name="Dummy_Water_System_Visualization")
     vis.plot_network_overview()
     vis.plot_minimum_flow_compliance()
     vis.plot_spills()
