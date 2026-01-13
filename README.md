@@ -1,153 +1,69 @@
-# Water System Simulation & Optimization
+# Taqsim
+
+Water system simulation framework using event sourcing.
 
 ## Overview
 
-This project provides an object-oriented Python framework for simulating and optimizing water resource systems. It models water systems as directed acyclic graphs (DAGs) of nodes (e.g., supply, demand, storage, sink, hydroworks, runoff) and edges (rivers, canals, etc.), supporting both simulation and multi-objective optimization of water allocation over multiple time steps.
-
----
+Taqsim models water systems as directed acyclic graphs (DAGs) of nodes connected by edges. Water flows from sources through the network, getting stored, consumed, split, and eventually reaching sinks. All operations emit events, providing a complete audit trail of the simulation.
 
 ## Features
 
-- **Flexible Node Types:**  
-  - Supply nodes (constant or time-varying inflow)
-  - Demand nodes (agricultural, industrial, domestic, with priorities and efficiencies)
-  - Storage nodes (reservoirs with evaporation, dead storage, rule curves)
-  - Sink nodes (system outlets, environmental flows)
-  - HydroWorks nodes (diversions, confluences, splitters)
-  - Runoff nodes (rainfall-runoff generation)
-- **Edge Representation:**  
-  - Capacity constraints, optional ecological flow, losses
-- **Simulation:**  
-  - Water balance for each node and edge over monthly time steps
-- **Optimization:**  
-  - Multi-objective optimization using DEAP/NSGA-II
-  - Customizable objective functions (demand deficit, spillage, minimum flows, etc.)
-- **Visualization:**  
-  - Network layout, time series, heatmaps, Pareto front
-- **CSV I/O:**  
-  - Input/output for time series, results, and water balances
-
----
-
-## Project Structure
-
-```
-taqsim/
-│
-├── __init__.py
-├── water_system.py
-├── edge.py
-├── nodes.py
-├── optimization/
-│   ├── optimizer.py
-│   ├── objectives.py
-│   └── pareto_visualization.py
-├── io_utils.py
-├── visualization.py
-├── validation_functions.py
-data/
-documentation/
-model_output/
-dummy_creator.py
-system_creator_simple.py
-system_creator_ZRB.py
-...
-```
-
----
+- **Six node types**: Source, Storage, Demand, Sink, Splitter, PassThrough
+- **Configurable behavior**: Pluggable strategies for release rules, loss calculations, and flow splitting
+- **Event sourcing**: Every water movement recorded as queryable events
+- **Validation**: Automatic network structure validation (acyclic, connected, proper terminals)
+- **Visualization**: Geographic network plotting with `system.visualize()`
 
 ## Installation
 
-1. **Clone the repository:**
-
-   ```sh
-   git clone https://github.com/hydrosolutions/water_system_simulation_optimization.git
-   cd water_system_simulation_optimization
-   ```
-
-2. **Install dependencies:**
-
-   ```sh
-   pip install networkx matplotlib pandas deap seaborn numpy
-   ```
-
----
-
-## Usage
-
-### 1. System Creation
-
-See [README_system_creation_example.md](documentation/README_system_creation_example.md) for a full, step-by-step guide.
-
-**Basic Example:**
-
-```python
-from taqsim import WaterSystem, SupplyNode, StorageNode, DemandNode, SinkNode, HydroWorks, RunoffNode, Edge
-
-dt = 30.44 * 24 * 3600  # seconds in a month
-my_water_system = WaterSystem(dt=dt, start_year=2020, start_month=1)
-
-# Add nodes (see documentation for all parameters)
-supply = SupplyNode(id="Source1", easting=100, northing=600, constant_supply_rate=100, start_year=2020, start_month=1, num_time_steps=12)
-my_water_system.add_node(supply)
-# ... add other nodes as needed
-
-# Add edges
-my_water_system.add_edge(Edge(supply, ... , capacity=100))
-# ... add other edges
-
-my_water_system._check_network()
+```sh
+git clone https://github.com/hydrosolutions/taqsim.git
+cd taqsim
+uv sync
 ```
 
-### 2. Optimization
-
-See [README_optimization.md](documentation/README_optimization.md) for details.
+## Quick Example
 
 ```python
-from taqsim import DeapOptimizer
+from taqsim import WaterSystem, Source, Demand, Sink, Edge, TimeSeries
 
-objectives = {'objective_1':[1,1,1,0,0]}  # See documentation for meaning
+# Simple loss rule that applies no losses
+class NoLoss:
+    def calculate(self, flow, capacity, t, dt):
+        return {}
 
-MyProblem = DeapOptimizer(
-    base_system=my_water_system,
-    num_time_steps=12,
-    objective_weights=objectives,
-    ngen=100,
-    population_size=500,
-    cxpb=0.6,
-    mutpb=0.2,
-)
+# Define nodes
+source = Source(id="river", inflow=TimeSeries([100.0] * 12))
+farm = Demand(id="farm", requirement=TimeSeries([30.0] * 12))
+outlet = Sink(id="outlet")
 
-results = MyProblem.optimize()
+# Build system
+system = WaterSystem(dt=1)
+system.add_node(source)
+system.add_node(farm)
+system.add_node(outlet)
+
+# Connect with edges
+system.add_edge(Edge(id="e1", source="river", target="farm", capacity=200, loss_rule=NoLoss()))
+system.add_edge(Edge(id="e2", source="farm", target="outlet", capacity=200, loss_rule=NoLoss()))
+
+# Simulate
+system.simulate(timesteps=12)
+
+# Query results via events
+from taqsim.node import WaterReceived, DeficitRecorded
+
+total_received = sum(e.amount for e in outlet.events_of_type(WaterReceived))
+deficits = farm.events_of_type(DeficitRecorded)
 ```
-
-### 3. Visualization
-
-```python
-from taqsim import WaterSystemVisualizer
-
-vis = WaterSystemVisualizer(my_water_system, name='Example_System_Visualization')
-vis.plot_network_overview()
-vis.plot_minimum_flow_compliance()
-vis.plot_spills()
-vis.plot_reservoir_volumes()
-vis.plot_system_demands_vs_inflow()
-vis.plot_demand_deficit_heatmap()
-vis.print_water_balance_summary()
-```
-
----
 
 ## Documentation
 
-- [README_system_creation_example.md](documentation/README_system_creation_example.md): Step-by-step system creation
-- [README_node_types.md](documentation/README_node_types.md): Node types and parameters
-- [README_optimization.md](documentation/README_optimization.md): Optimization setup and usage
-
----
+- [Node Architecture](documentation/nodes/01_architecture.md)
+- [Node Types](documentation/nodes/06_node_types.md)
+- [Edge Architecture](documentation/edges/01_architecture.md)
+- [System Architecture](documentation/system/01_architecture.md)
 
 ## Contact
 
-For questions or suggestions, please open an issue or contact Gianna Giovanoli ([giovanoli@hydrosolutions.ch](mailto:giovanoli@hydrosolutions.ch)) or Tobias Siegfried ([siegfried@hydrosolutions.ch](mailto:siegfried@hydrosolutions.ch)).
-
----
+For questions or suggestions, please open an issue or contact the maintainers at [hydrosolutions](mailto:info@hydrosolutions.ch).
