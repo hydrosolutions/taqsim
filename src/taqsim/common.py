@@ -1,7 +1,11 @@
 from dataclasses import dataclass, replace
-from typing import ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self
+
+if TYPE_CHECKING:
+    from taqsim.node.base import BaseNode
 
 ParamValue = float | tuple[float, ...]
+ParamBounds = tuple[float, float]
 
 
 class LossReason(str):
@@ -35,10 +39,15 @@ class Strategy:
     """
 
     __params__: ClassVar[tuple[str, ...]] = ()
+    __bounds__: ClassVar[dict[str, ParamBounds]] = {}
 
     def params(self) -> dict[str, ParamValue]:
         """Return current parameter values."""
         return {name: getattr(self, name) for name in self.__params__}
+
+    def bounds(self, node: "BaseNode") -> dict[str, ParamBounds]:
+        """Return parameter bounds, optionally derived from node properties."""
+        return dict(self.__bounds__)
 
     def with_params(self, **kwargs: ParamValue) -> Self:
         """Create new instance with updated parameters (immutable)."""

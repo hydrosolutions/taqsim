@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 import pytest
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
@@ -12,6 +14,9 @@ from taqsim.node.events import (
 from taqsim.node.protocols import Loses, Receives, Stores
 from taqsim.node.storage import Storage
 
+if TYPE_CHECKING:
+    pass
+
 
 class FakeReleaseRule:
     def __init__(self, release_amount: float = 0.0):
@@ -19,9 +24,7 @@ class FakeReleaseRule:
 
     def release(
         self,
-        storage: float,
-        dead_storage: float,
-        capacity: float,
+        node: "Storage",
         inflow: float,
         t: int,
         dt: float,
@@ -36,18 +39,16 @@ class SpyReleaseRule:
 
     def release(
         self,
-        storage: float,
-        dead_storage: float,
-        capacity: float,
+        node: "Storage",
         inflow: float,
         t: int,
         dt: float,
     ) -> float:
         self.calls.append(
             {
-                "storage": storage,
-                "dead_storage": dead_storage,
-                "capacity": capacity,
+                "storage": node.storage,
+                "dead_storage": node.dead_storage,
+                "capacity": node.capacity,
                 "inflow": inflow,
                 "t": t,
                 "dt": dt,
@@ -60,7 +61,7 @@ class FakeLossRule:
     def __init__(self, losses: dict[LossReason, float] | None = None):
         self._losses = losses if losses is not None else {}
 
-    def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]:
         return self._losses
 
 

@@ -62,7 +62,7 @@ class Storage(BaseNode):
         return (stored, spilled)
 
     def lose(self, t: int, dt: float) -> float:
-        losses = self.loss_rule.calculate(self._current_storage, self.capacity, t, dt)
+        losses = self.loss_rule.calculate(self, t, dt)
         total_loss = sum(losses.values())
 
         if total_loss > self._current_storage:
@@ -78,9 +78,7 @@ class Storage(BaseNode):
         return total_loss
 
     def release(self, inflow: float, t: int, dt: float) -> float:
-        raw_release = self.release_rule.release(
-            self._current_storage, self.dead_storage, self.capacity, inflow, t, dt
-        )
+        raw_release = self.release_rule.release(self, inflow, t, dt)
         available = max(0.0, self._current_storage - self.dead_storage)
         actual_release = max(0.0, min(raw_release, available))
 

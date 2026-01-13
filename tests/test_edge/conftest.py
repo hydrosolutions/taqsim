@@ -1,6 +1,11 @@
+from typing import TYPE_CHECKING
+
 import pytest
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
+
+if TYPE_CHECKING:
+    from taqsim.edge import Edge
 
 
 class FakeEdgeLossRule:
@@ -9,7 +14,7 @@ class FakeEdgeLossRule:
     def __init__(self, losses: dict[LossReason, float] | None = None):
         self._losses = losses if losses is not None else {}
 
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
         return self._losses
 
 
@@ -19,7 +24,7 @@ class ProportionalEdgeLossRule:
     def __init__(self, loss_fraction: float = 0.1):
         self.loss_fraction = loss_fraction
 
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
         loss = flow * self.loss_fraction
         return {SEEPAGE: loss}
 

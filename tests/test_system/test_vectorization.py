@@ -1,45 +1,63 @@
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
 from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSystem
 from taqsim.common import Strategy
 
+if TYPE_CHECKING:
+    pass
+
 
 # Create proper strategy classes for testing
 @dataclass(frozen=True)
 class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 200.0)}
     rate: float = 50.0
 
-    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
-        return min(self.rate * dt, storage)
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return min(self.rate * dt, node.storage)
 
 
 @dataclass(frozen=True)
 class ProportionalSplit(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("ratios",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"ratios": (0.0, 1.0)}
     ratios: tuple[float, ...] = (0.5, 0.5)
 
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
         total = sum(self.ratios)
-        return {t: amount * r / total for t, r in zip(targets, self.ratios)}
+        return {t: amount * r / total for t, r in zip(node.targets, self.ratios)}
+
+
+@dataclass(frozen=True)
+class UnboundedStrategy(Strategy):
+    """Strategy without __bounds__ for testing error handling."""
+
+    __params__: ClassVar[tuple[str, ...]] = ("value",)
+    value: float = 1.0
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return self.value
 
 
 @dataclass(frozen=True)
 class SimpleLoss:
     """Physical model - NOT a Strategy."""
+
     rate: float = 0.01
 
-    def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict:
+    def calculate(self, node: "Storage", t: int, dt: float) -> dict:
         return {}
 
 
 @dataclass(frozen=True)
 class SimpleEdgeLoss:
     """Physical model - NOT a Strategy."""
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict:
+
+    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict:
         return {}
 
 
@@ -48,17 +66,21 @@ def build_test_system() -> WaterSystem:
     system = WaterSystem(dt=1.0)
 
     system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
-    system.add_node(Storage(
-        id="dam",
-        capacity=1000.0,
-        initial_storage=500.0,
-        release_rule=FixedRelease(rate=50.0),
-        loss_rule=SimpleLoss(),
-    ))
-    system.add_node(Splitter(
-        id="junction",
-        split_strategy=ProportionalSplit(ratios=(0.6, 0.4)),
-    ))
+    system.add_node(
+        Storage(
+            id="dam",
+            capacity=1000.0,
+            initial_storage=500.0,
+            release_rule=FixedRelease(rate=50.0),
+            loss_rule=SimpleLoss(),
+        )
+    )
+    system.add_node(
+        Splitter(
+            id="junction",
+            split_strategy=ProportionalSplit(ratios=(0.6, 0.4)),
+        )
+    )
     system.add_node(Sink(id="city"))
     system.add_node(Sink(id="farm"))
 
@@ -215,3 +237,79 @@ class TestOptimizationLoopPattern:
 
             # Original should be unchanged
             assert system.to_vector() == base_vector
+
+
+class TestParamBounds:
+    """Tests for WaterSystem.param_bounds()."""
+
+    def test_empty_system_returns_empty_dict(self):
+        """Empty system has no bounds."""
+        system = WaterSystem()
+        assert system.param_bounds() == {}
+
+    def test_collects_bounds_from_strategies(self):
+        """param_bounds() returns bounds from all strategies."""
+        system = build_test_system()
+        bounds = system.param_bounds()
+
+        assert "dam.release_rule.rate" in bounds
+        assert bounds["dam.release_rule.rate"] == (0.0, 200.0)
+
+        assert "junction.split_strategy.ratios[0]" in bounds
+        assert "junction.split_strategy.ratios[1]" in bounds
+        assert bounds["junction.split_strategy.ratios[0]"] == (0.0, 1.0)
+        assert bounds["junction.split_strategy.ratios[1]"] == (0.0, 1.0)
+
+    def test_raises_for_missing_bounds(self):
+        """Raises ValueError when strategy params lack bounds."""
+        system = WaterSystem(dt=1.0)
+        system.add_node(Source(id="src", inflow=TimeSeries(values=[100.0] * 10)))
+        system.add_node(
+            Storage(
+                id="tank",
+                capacity=1000.0,
+                initial_storage=500.0,
+                release_rule=UnboundedStrategy(value=10.0),
+                loss_rule=SimpleLoss(),
+            )
+        )
+        system.add_edge(Edge(id="e1", source="src", target="tank", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        with pytest.raises(ValueError, match="Missing bounds"):
+            system.param_bounds()
+
+    def test_tuple_params_get_indexed_keys(self):
+        """Tuple parameters get separate indexed keys."""
+        system = build_test_system()
+        bounds = system.param_bounds()
+
+        ratio_keys = [k for k in bounds if "ratios" in k]
+        assert len(ratio_keys) == 2
+        assert "junction.split_strategy.ratios[0]" in ratio_keys
+        assert "junction.split_strategy.ratios[1]" in ratio_keys
+
+
+class TestBoundsVector:
+    """Tests for WaterSystem.bounds_vector()."""
+
+    def test_length_matches_to_vector(self):
+        """bounds_vector() length equals to_vector() length."""
+        system = build_test_system()
+
+        bounds_vec = system.bounds_vector()
+        param_vec = system.to_vector()
+
+        assert len(bounds_vec) == len(param_vec)
+
+    def test_order_matches_param_schema(self):
+        """Bounds align with param_schema() order."""
+        system = build_test_system()
+
+        schema = system.param_schema()
+        bounds_vec = system.bounds_vector()
+
+        for spec, bound in zip(schema, bounds_vec):
+            if "release_rule.rate" in spec.path:
+                assert bound == (0.0, 200.0)
+            elif "ratios" in spec.path:
+                assert bound == (0.0, 1.0)

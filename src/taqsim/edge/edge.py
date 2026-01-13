@@ -69,7 +69,7 @@ class Edge:
             received = self.capacity
 
         # 2-3. Calculate and record losses
-        losses = self.loss_rule.calculate(received, self.capacity, t, dt)
+        losses = self.loss_rule.calculate(self, received, t, dt)
         total_loss = sum(losses.values())
 
         # Scale losses if they exceed available flow

@@ -52,14 +52,15 @@ Concrete strategies must:
 from dataclasses import dataclass
 from typing import ClassVar
 from taqsim.common import Strategy
+from taqsim.node import Storage
 
 @dataclass(frozen=True)
 class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: float = 50.0
 
-    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
-        available = storage - dead_storage
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        available = node.storage - node.dead_storage
         return min(self.rate * dt, available)
 ```
 
@@ -122,6 +123,45 @@ Flatten parameters to a list of floats:
 ```python
 vector = system.to_vector()
 # [50.0, 0.6, 0.4]
+```
+
+### param_bounds()
+
+Collect bounds for all tunable parameters:
+
+```python
+system = build_system()
+bounds = system.param_bounds()
+
+for path, (low, high) in bounds.items():
+    print(f"{path}: [{low}, {high}]")
+```
+
+Output:
+```
+dam.release_rule.rate: [0.0, 100.0]
+junction.split_strategy.ratios[0]: [0.0, 1.0]
+junction.split_strategy.ratios[1]: [0.0, 1.0]
+```
+
+### bounds_vector()
+
+Get bounds in optimizer-friendly format:
+
+```python
+bounds = system.bounds_vector()
+lower = [b[0] for b in bounds]
+upper = [b[1] for b in bounds]
+
+# Use with scipy.optimize
+from scipy.optimize import minimize
+
+result = minimize(
+    objective,
+    x0=system.to_vector(),
+    bounds=bounds,
+    method='L-BFGS-B'
+)
 ```
 
 ### with_vector(vector)

@@ -180,6 +180,44 @@ class WaterSystem:
         """Flatten all tunable parameters to a vector for GA optimization."""
         return [spec.value for spec in self.param_schema()]
 
+    def param_bounds(self) -> dict[str, tuple[float, float]]:
+        """Collect bounds for all tunable parameters.
+
+        Raises:
+            ValueError: If any strategy parameter lacks bounds.
+        """
+        bounds: dict[str, tuple[float, float]] = {}
+        missing: list[str] = []
+
+        for node_id, node in sorted(self._nodes.items()):
+            for strategy_name, strategy in node.strategies().items():
+                strategy_bounds = strategy.bounds(node)
+                for param_name, value in strategy.params().items():
+                    base_path = f"{node_id}.{strategy_name}.{param_name}"
+                    if param_name not in strategy_bounds:
+                        missing.append(base_path)
+                        continue
+                    param_bound = strategy_bounds[param_name]
+                    if isinstance(value, tuple):
+                        for i in range(len(value)):
+                            bounds[f"{base_path}[{i}]"] = param_bound
+                    else:
+                        bounds[base_path] = param_bound
+
+        if missing:
+            raise ValueError(f"Missing bounds for parameters: {missing}")
+        return bounds
+
+    def bounds_vector(self) -> list[tuple[float, float]]:
+        """Return bounds matching to_vector() order."""
+        bounds_lookup: dict[str, tuple[float, float]] = {}
+        for node_id, node in sorted(self._nodes.items()):
+            for strategy_name, strategy in node.strategies().items():
+                for param_name, bound in strategy.bounds(node).items():
+                    bounds_lookup[f"{node_id}.{strategy_name}.{param_name}"] = bound
+
+        return [bounds_lookup.get(spec.path, (float("-inf"), float("inf"))) for spec in self.param_schema()]
+
     def with_vector(self, vector: list[float]) -> "WaterSystem":
         """Create a new WaterSystem with parameters from vector.
 

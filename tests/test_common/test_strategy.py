@@ -87,3 +87,73 @@ class TestParamSpec:
         spec = ParamSpec(path="test", value=1.0)
         with pytest.raises(Exception):  # FrozenInstanceError
             spec.value = 2.0
+
+
+class TestStrategyBounds:
+    """Tests for Strategy bounds functionality."""
+
+    def test_default_bounds_is_empty_dict(self):
+        """Strategy with no __bounds__ returns empty dict."""
+
+        @dataclass(frozen=True)
+        class MinimalStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("value",)
+            value: float = 1.0
+
+        strategy = MinimalStrategy()
+        assert strategy.bounds(None) == {}
+
+    def test_fixed_bounds_from_class_variable(self):
+        """Strategy returns __bounds__ from class variable."""
+
+        @dataclass(frozen=True)
+        class BoundedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate", "threshold")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "rate": (0.0, 100.0),
+                "threshold": (0.0, 1.0),
+            }
+            rate: float = 50.0
+            threshold: float = 0.5
+
+        strategy = BoundedStrategy()
+        bounds = strategy.bounds(None)
+
+        assert bounds == {"rate": (0.0, 100.0), "threshold": (0.0, 1.0)}
+
+    def test_bounds_method_receives_node(self):
+        """bounds() method receives the node parameter."""
+
+        @dataclass(frozen=True)
+        class NodeAwareStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: float = 50.0
+
+            def bounds(self, node) -> dict[str, tuple[float, float]]:
+                if node is not None and hasattr(node, "capacity"):
+                    return {"rate": (0.0, node.capacity)}
+                return {"rate": (0.0, 1000.0)}
+
+        class FakeNode:
+            capacity = 500.0
+
+        strategy = NodeAwareStrategy()
+
+        assert strategy.bounds(None) == {"rate": (0.0, 1000.0)}
+        assert strategy.bounds(FakeNode()) == {"rate": (0.0, 500.0)}
+
+    def test_bounds_returns_copy_not_reference(self):
+        """bounds() returns a new dict, not the class variable."""
+
+        @dataclass(frozen=True)
+        class BoundedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            rate: float = 50.0
+
+        strategy = BoundedStrategy()
+        bounds1 = strategy.bounds(None)
+        bounds2 = strategy.bounds(None)
+
+        assert bounds1 == bounds2
+        assert bounds1 is not bounds2  # Different dict objects

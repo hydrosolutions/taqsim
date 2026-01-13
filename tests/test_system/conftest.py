@@ -7,7 +7,8 @@ from taqsim.node.timeseries import TimeSeries
 
 
 class FakeSplitStrategy:
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+        targets = node.targets
         if not targets:
             return {}
         share = amount / len(targets)
@@ -18,12 +19,12 @@ class FakeReleaseRule:
     def __init__(self, fraction: float = 0.5):
         self.fraction = fraction
 
-    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
-        return storage * self.fraction
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return node.storage * self.fraction
 
 
 class FakeLossRule:
-    def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]:
         return {}
 
 
@@ -31,7 +32,7 @@ class FakeEdgeLossRule:
     def __init__(self, losses: dict[LossReason, float] | None = None):
         self._losses = losses if losses is not None else {}
 
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
         return self._losses
 
 

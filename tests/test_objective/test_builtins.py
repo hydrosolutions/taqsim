@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 import pytest
 
 from taqsim.edge import Edge
@@ -7,13 +9,14 @@ from taqsim.node.timeseries import TimeSeries
 from taqsim.objective.builtins import deficit, spill
 from taqsim.system import WaterSystem
 
+if TYPE_CHECKING:
+    pass
+
 
 class FakeReleaseRule:
     def release(
         self,
-        storage: float,
-        dead_storage: float,
-        capacity: float,
+        node: "Storage",
         inflow: float,
         t: int,
         dt: float,
@@ -22,12 +25,12 @@ class FakeReleaseRule:
 
 
 class FakeLossRule:
-    def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[str, float]:
+    def calculate(self, node: "Storage", t: int, dt: float) -> dict[str, float]:
         return {}
 
 
 class FakeEdgeLossRule:
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[str, float]:
+    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[str, float]:
         return {}
 
 

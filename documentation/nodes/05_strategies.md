@@ -14,14 +14,15 @@ Operational strategies inherit from the `Strategy` mixin class, which provides p
 from dataclasses import dataclass
 from typing import ClassVar
 from taqsim.common import Strategy
+from taqsim.node import Storage
 
 @dataclass(frozen=True)
 class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: float = 50.0
 
-    def release(self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float) -> float:
-        available = storage - dead_storage
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        available = node.storage - node.dead_storage
         return min(self.rate * dt, available)
 ```
 
@@ -53,13 +54,11 @@ Controls how storage nodes release water.
 class ReleaseRule(Protocol):
     def release(
         self,
-        storage: float,      # current storage volume
-        dead_storage: float, # volume that cannot be released (below lowest outlet)
-        capacity: float,     # maximum capacity
-        inflow: float,       # inflow this timestep
-        t: int,              # timestep
-        dt: float            # timestep duration
-    ) -> float: ...          # amount to release
+        node: Storage,  # the storage node (provides storage, dead_storage, capacity)
+        inflow: float,  # inflow this timestep
+        t: int,         # timestep
+        dt: float       # timestep duration
+    ) -> float: ...     # amount to release
 ```
 
 ### SplitStrategy
@@ -71,10 +70,10 @@ Determines how water is distributed among multiple targets.
 class SplitStrategy(Protocol):
     def split(
         self,
-        amount: float,       # total amount to distribute
-        targets: list[str],  # target node IDs
-        t: int               # timestep
-    ) -> dict[str, float]: ...  # {target_id: amount}
+        node: Splitter,           # the splitter node (provides targets)
+        amount: float,            # total amount to distribute
+        t: int                    # timestep
+    ) -> dict[str, float]: ...   # {target_id: amount}
 ```
 
 ### LossRule
@@ -86,10 +85,9 @@ Calculates physical losses from storage.
 class LossRule(Protocol):
     def calculate(
         self,
-        storage: float,   # current storage volume
-        capacity: float,  # maximum capacity
-        t: int,           # timestep
-        dt: float         # timestep duration
+        node: Storage,  # the storage node (provides storage, capacity)
+        t: int,         # timestep
+        dt: float       # timestep duration
     ) -> dict[LossReason, float]: ...  # {reason: amount}
 ```
 
@@ -106,16 +104,57 @@ Import from `taqsim.common`:
 from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW
 ```
 
+## Parameter Bounds
+
+Strategies can declare bounds for their tunable parameters to support optimization algorithms.
+
+### Fixed Bounds
+
+Use the `__bounds__` class variable for parameters with fixed bounds:
+
+```python
+@dataclass(frozen=True)
+class FixedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "rate": (0.0, 100.0),  # min=0, max=100
+    }
+    rate: float = 50.0
+
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        return min(self.rate * dt, node.storage - node.dead_storage)
+```
+
+### Dynamic Bounds
+
+Override the `bounds(node)` method for node-dependent constraints:
+
+```python
+@dataclass(frozen=True)
+class CapacityBoundedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: float = 50.0
+
+    def bounds(self, node: Storage) -> dict[str, tuple[float, float]]:
+        # Rate cannot exceed node capacity
+        return {"rate": (0.0, node.capacity)}
+
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        return min(self.rate * dt, node.storage - node.dead_storage)
+```
+
 ## Custom Implementations
 
 ### Equal Split Strategy
 
 ```python
 from dataclasses import dataclass
+from taqsim.node import Splitter
 
 @dataclass
 class EqualSplit:
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
+    def split(self, node: Splitter, amount: float, t: int) -> dict[str, float]:
+        targets = node.targets
         if not targets:
             return {}
         share = amount / len(targets)
@@ -129,10 +168,11 @@ class EqualSplit:
 class ProportionalSplit:
     weights: dict[str, float]
 
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
-        total_weight = sum(self.weights.get(t, 0) for t in targets)
+    def split(self, node: Splitter, amount: float, t: int) -> dict[str, float]:
+        targets = node.targets
+        total_weight = sum(self.weights.get(tgt, 0) for tgt in targets)
         if total_weight == 0:
-            return {t: 0 for t in targets}
+            return {tgt: 0 for tgt in targets}
         return {
             target: amount * (self.weights.get(target, 0) / total_weight)
             for target in targets
@@ -146,10 +186,8 @@ class ProportionalSplit:
 class FixedRelease:
     rate: float  # constant release rate
 
-    def release(
-        self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float
-    ) -> float:
-        available = storage - dead_storage
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        available = node.storage - node.dead_storage
         return min(self.rate * dt, available)
 ```
 
@@ -160,10 +198,8 @@ class FixedRelease:
 class PercentageRelease:
     fraction: float  # 0.0 to 1.0
 
-    def release(
-        self, storage: float, dead_storage: float, capacity: float, inflow: float, t: int, dt: float
-    ) -> float:
-        available = storage - dead_storage
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        available = node.storage - node.dead_storage
         return available * self.fraction
 ```
 
@@ -171,12 +207,11 @@ class PercentageRelease:
 
 ```python
 from taqsim.common import LossReason
+from taqsim.node import Storage
 
 @dataclass
 class ZeroLoss:
-    def calculate(
-        self, storage: float, capacity: float, t: int, dt: float
-    ) -> dict[LossReason, float]:
+    def calculate(self, node: Storage, t: int, dt: float) -> dict[LossReason, float]:
         return {}
 ```
 
@@ -189,10 +224,8 @@ from taqsim.common import EVAPORATION
 class EvaporationLoss:
     rate: float  # evaporation rate per timestep
 
-    def calculate(
-        self, storage: float, capacity: float, t: int, dt: float
-    ) -> dict[LossReason, float]:
-        loss = min(self.rate * dt, storage)
+    def calculate(self, node: Storage, t: int, dt: float) -> dict[LossReason, float]:
+        loss = min(self.rate * dt, node.storage)
         return {EVAPORATION: loss}
 ```
 
@@ -206,9 +239,7 @@ class CombinedLoss:
     evap_rate: float
     seepage_rate: float
 
-    def calculate(
-        self, storage: float, capacity: float, t: int, dt: float
-    ) -> dict[LossReason, float]:
+    def calculate(self, node: Storage, t: int, dt: float) -> dict[LossReason, float]:
         return {
             EVAPORATION: self.evap_rate * dt,
             SEEPAGE: self.seepage_rate * dt

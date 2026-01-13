@@ -22,7 +22,7 @@ class Splitter(BaseNode):
     def distribute(self, amount: float, t: int) -> dict[str, float]:
         if not self.targets or amount <= 0:
             return {}
-        allocation = self.split_strategy.split(amount, self.targets, t)  # type: ignore[union-attr]
+        allocation = self.split_strategy.split(self, amount, t)  # type: ignore[union-attr]
         for target_id, alloc_amount in allocation.items():
             self.record(WaterDistributed(amount=alloc_amount, target_id=target_id, t=t))
         return allocation

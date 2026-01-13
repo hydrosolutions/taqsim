@@ -197,9 +197,7 @@ class TestEdgeUpdate:
 
         loss_events = edge.events_of_type(WaterLost)
         total_loss = sum(e.amount for e in loss_events)
-        capacity_exceeded_loss = sum(
-            e.amount for e in loss_events if e.reason == CAPACITY_EXCEEDED
-        )
+        capacity_exceeded_loss = sum(e.amount for e in loss_events if e.reason == CAPACITY_EXCEEDED)
 
         # Mass balance: delivered + all losses = received
         assert delivered + total_loss == received

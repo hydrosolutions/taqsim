@@ -1,12 +1,18 @@
+from typing import TYPE_CHECKING
+
 import pytest
 
 from taqsim.node.events import WaterDistributed, WaterReceived
 from taqsim.node.protocols import Receives
 from taqsim.node.splitter import Splitter
 
+if TYPE_CHECKING:
+    pass
+
 
 class FakeEqualSplitStrategy:
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+        targets = node.targets
         if not targets:
             return {}
         share = amount / len(targets)
@@ -17,8 +23,8 @@ class FakeFixedSplitStrategy:
     def __init__(self, ratios: dict[str, float]):
         self._ratios = ratios
 
-    def split(self, amount: float, targets: list[str], t: int) -> dict[str, float]:
-        return {target: amount * self._ratios.get(target, 0) for target in targets}
+    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+        return {target: amount * self._ratios.get(target, 0) for target in node.targets}
 
 
 class TestSplitterInit:

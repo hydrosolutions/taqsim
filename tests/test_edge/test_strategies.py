@@ -1,11 +1,16 @@
+from typing import TYPE_CHECKING
+
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.edge.losses import EdgeLossRule
+
+if TYPE_CHECKING:
+    from taqsim.edge.edge import Edge
 
 
 class TestEdgeLossRuleProtocol:
     def test_class_with_calculate_satisfies_protocol(self):
         class ValidLoss:
-            def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+            def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
                 return {EVAPORATION: flow * 0.01}
 
         assert isinstance(ValidLoss(), EdgeLossRule)
@@ -19,24 +24,42 @@ class TestEdgeLossRuleProtocol:
     def test_fake_edge_loss_rule_satisfies_protocol(self, fake_edge_loss_rule):
         assert isinstance(fake_edge_loss_rule, EdgeLossRule)
 
-    def test_calculate_returns_dict_with_loss_reasons(self):
+    def test_calculate_returns_dict_with_loss_reasons(self, fake_edge_loss_rule):
+        from taqsim.edge.edge import Edge
+
         class ValidLoss:
-            def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+            def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
                 return {
                     EVAPORATION: flow * 0.01 * dt,
                     SEEPAGE: flow * 0.005 * dt,
                 }
 
+        edge = Edge(
+            id="test",
+            source="src",
+            target="tgt",
+            capacity=2000.0,
+            loss_rule=fake_edge_loss_rule,
+        )
         rule = ValidLoss()
-        result = rule.calculate(1000.0, 2000.0, 0, 1.0)
+        result = rule.calculate(edge, 1000.0, 0, 1.0)
         assert result[EVAPORATION] == 10.0
         assert result[SEEPAGE] == 5.0
 
     def test_proportional_loss_rule_satisfies_protocol(self, proportional_loss_rule):
         assert isinstance(proportional_loss_rule, EdgeLossRule)
 
-    def test_proportional_loss_rule_calculates_correctly(self, proportional_loss_rule):
-        result = proportional_loss_rule.calculate(100.0, 200.0, 0, 1.0)
+    def test_proportional_loss_rule_calculates_correctly(self, fake_edge_loss_rule, proportional_loss_rule):
+        from taqsim.edge.edge import Edge
+
+        edge = Edge(
+            id="test",
+            source="src",
+            target="tgt",
+            capacity=200.0,
+            loss_rule=fake_edge_loss_rule,
+        )
+        result = proportional_loss_rule.calculate(edge, 100.0, 0, 1.0)
         assert SEEPAGE in result
         assert result[SEEPAGE] == 10.0
 
@@ -44,7 +67,7 @@ class TestEdgeLossRuleProtocol:
 class TestProtocolNonSatisfaction:
     def test_class_with_wrong_method_name_does_not_satisfy(self):
         class WrongMethod:
-            def compute_loss(self, flow: float, capacity: float, t: int, dt: float) -> dict[str, float]:
+            def compute_loss(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[str, float]:
                 return {}
 
         assert not isinstance(WrongMethod(), EdgeLossRule)
