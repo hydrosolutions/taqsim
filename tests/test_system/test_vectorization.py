@@ -5,6 +5,7 @@ import pytest
 
 from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSystem
 from taqsim.common import Strategy
+from taqsim.constraints import Ordered, SumToOne
 
 if TYPE_CHECKING:
     pass
@@ -41,6 +42,39 @@ class UnboundedStrategy(Strategy):
 
     def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
         return self.value
+
+
+@dataclass(frozen=True)
+class ConstrainedSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2", "r3")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0),
+        "r2": (0.0, 1.0),
+        "r3": (0.0, 1.0),
+    }
+    __constraints__: ClassVar[tuple[SumToOne, ...]] = (SumToOne(params=("r1", "r2", "r3")),)
+    r1: float = 0.5
+    r2: float = 0.3
+    r3: float = 0.2
+
+    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+        ratios = (self.r1, self.r2, self.r3)
+        return {t: amount * r for t, r in zip(node.targets, ratios)}
+
+
+@dataclass(frozen=True)
+class OrderedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "low": (0.0, 100.0),
+        "high": (0.0, 100.0),
+    }
+    __constraints__: ClassVar[tuple[Ordered, ...]] = (Ordered(low="low", high="high"),)
+    low: float = 10.0
+    high: float = 50.0
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return min(self.high * dt, node.storage)
 
 
 @dataclass(frozen=True)
@@ -313,3 +347,80 @@ class TestBoundsVector:
                 assert bound == (0.0, 200.0)
             elif "ratios" in spec.path:
                 assert bound == (0.0, 1.0)
+
+
+class TestConstraints:
+    """Tests for WaterSystem.constraints()."""
+
+    def test_constraints_returns_empty_for_no_constraints(self):
+        """System with no constrained strategies returns empty list."""
+        system = build_test_system()
+        constraints = system.constraints()
+
+        assert constraints == []
+
+    def test_constraints_discovers_from_strategies(self):
+        """constraints() discovers constraints from node strategies."""
+        system = WaterSystem(dt=1.0)
+
+        system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
+        system.add_node(
+            Storage(
+                id="dam",
+                capacity=1000.0,
+                initial_storage=500.0,
+                release_rule=OrderedRelease(low=10.0, high=50.0),
+                loss_rule=SimpleLoss(),
+            )
+        )
+        system.add_node(
+            Splitter(
+                id="junction",
+                split_rule=ConstrainedSplit(r1=0.5, r2=0.3, r3=0.2),
+            )
+        )
+        system.add_node(Sink(id="city"))
+        system.add_node(Sink(id="farm"))
+        system.add_node(Sink(id="env"))
+
+        system.add_edge(Edge(id="e1", source="river", target="dam", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e2", source="dam", target="junction", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e3", source="junction", target="city", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e4", source="junction", target="farm", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e5", source="junction", target="env", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        constraints = system.constraints()
+
+        assert len(constraints) == 2
+
+        constraint_types = [type(c).__name__ for _, c in constraints]
+        assert "Ordered" in constraint_types
+        assert "SumToOne" in constraint_types
+
+    def test_constraints_returns_prefix_for_path_mapping(self):
+        """Constraints are returned with correct prefix for path remapping."""
+        system = WaterSystem(dt=1.0)
+
+        system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
+        system.add_node(
+            Storage(
+                id="tank",
+                capacity=1000.0,
+                initial_storage=500.0,
+                release_rule=OrderedRelease(low=10.0, high=50.0),
+                loss_rule=SimpleLoss(),
+            )
+        )
+        system.add_node(Sink(id="sink"))
+
+        system.add_edge(Edge(id="e1", source="river", target="tank", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e2", source="tank", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        constraints = system.constraints()
+
+        assert len(constraints) == 1
+        prefix, constraint = constraints[0]
+
+        assert prefix == "tank.release_rule"
+        assert isinstance(constraint, Ordered)
+        assert constraint.params == ("low", "high")

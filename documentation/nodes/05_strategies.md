@@ -143,6 +143,32 @@ class CapacityBoundedRelease(Strategy):
         return min(self.rate * dt, node.storage - node.dead_storage)
 ```
 
+## Constraints
+
+Strategies can declare constraints on their parameters using `__constraints__`:
+
+```python
+@dataclass(frozen=True)
+class MySplitRule(Strategy):
+    __params__ = ("ratio_a", "ratio_b")
+    __bounds__ = {"ratio_a": (0, 1), "ratio_b": (0, 1)}
+    __constraints__ = (SumToOne(("ratio_a", "ratio_b")),)
+
+    ratio_a: float = 0.6
+    ratio_b: float = 0.4
+```
+
+Constraints are validated at class definition - referencing unknown parameters raises `TypeError`.
+
+For dynamic constraints based on node properties, override `constraints()`:
+
+```python
+def constraints(self, node: BaseNode) -> tuple[Constraint, ...]:
+    return (SumToOne(("ratio_a", "ratio_b")),)
+```
+
+See [Constraints](../common/02_constraints.md) for details.
+
 ## Custom Implementations
 
 ### Equal Split Rule

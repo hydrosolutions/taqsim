@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import networkx as nx
 
@@ -9,6 +10,9 @@ from taqsim.node import BaseNode, Demand, PassThrough, Receives, Sink, Source, S
 from taqsim.node.events import WaterDistributed, WaterOutput
 
 from .validation import ValidationError
+
+if TYPE_CHECKING:
+    from taqsim.constraints import Constraint
 
 
 @dataclass
@@ -217,6 +221,23 @@ class WaterSystem:
                     bounds_lookup[f"{node_id}.{strategy_name}.{param_name}"] = bound
 
         return [bounds_lookup.get(spec.path, (float("-inf"), float("inf"))) for spec in self.param_schema()]
+
+    def constraints(self) -> list[tuple[str, "Constraint"]]:
+        """Collect constraints from all strategies with path prefixes.
+
+        Returns:
+            List of (prefix, constraint) tuples where prefix is like
+            "node_id.strategy_field_name" for path remapping.
+        """
+        result: list[tuple[str, Constraint]] = []
+
+        for node_id, node in sorted(self._nodes.items()):
+            for strategy_name, strategy in node.strategies().items():
+                for constraint in strategy.constraints(node):
+                    prefix = f"{node_id}.{strategy_name}"
+                    result.append((prefix, constraint))
+
+        return result
 
     def with_vector(self, vector: list[float]) -> "WaterSystem":
         """Create a new WaterSystem with parameters from vector.

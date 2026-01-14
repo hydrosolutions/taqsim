@@ -157,3 +157,66 @@ class TestStrategyBounds:
 
         assert bounds1 == bounds2
         assert bounds1 is not bounds2  # Different dict objects
+
+
+class TestStrategyConstraints:
+    """Tests for Strategy constraints functionality."""
+
+    def test_default_constraints_is_empty_tuple(self):
+        """Strategy with no __constraints__ returns empty tuple."""
+
+        @dataclass(frozen=True)
+        class MinimalStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("value",)
+            value: float = 1.0
+
+        strategy = MinimalStrategy()
+        assert strategy.constraints(None) == ()
+
+    def test_init_subclass_raises_for_unknown_param(self):
+        """Strategy raises TypeError when constraint references unknown param."""
+
+        class FakeConstraint:
+            params = ("unknown_param",)
+
+        with pytest.raises(TypeError, match="constraint references unknown params"):
+
+            @dataclass(frozen=True)
+            class BadStrategy(Strategy):
+                __params__: ClassVar[tuple[str, ...]] = ("rate",)
+                __constraints__: ClassVar[tuple] = (FakeConstraint(),)
+                rate: float = 1.0
+
+    def test_init_subclass_accepts_valid_constraints(self):
+        """Strategy accepts constraints that reference valid params."""
+
+        class FakeConstraint:
+            params = ("rate", "threshold")
+
+        @dataclass(frozen=True)
+        class ValidStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate", "threshold")
+            __constraints__: ClassVar[tuple] = (FakeConstraint(),)
+            rate: float = 1.0
+            threshold: float = 0.5
+
+        strategy = ValidStrategy()
+        assert len(strategy.__constraints__) == 1
+
+    def test_constraints_method_returns_class_constraints(self):
+        """constraints() method returns the __constraints__ class variable."""
+
+        class FakeConstraint:
+            params = ("rate",)
+
+        @dataclass(frozen=True)
+        class ConstrainedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __constraints__: ClassVar[tuple] = (FakeConstraint(),)
+            rate: float = 1.0
+
+        strategy = ConstrainedStrategy()
+        constraints = strategy.constraints(None)
+
+        assert len(constraints) == 1
+        assert isinstance(constraints[0], FakeConstraint)

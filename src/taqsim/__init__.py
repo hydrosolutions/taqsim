@@ -24,6 +24,7 @@ from .common import (
     Strategy,
     summarize_losses,
 )
+from .constraints import Constraint, Ordered, SumToOne
 from .edge import Edge, EdgeEvent, EdgeLossRule, WaterDelivered, WaterLost, WaterReceived
 from .node import (
     BaseNode,
@@ -58,6 +59,10 @@ __all__ = [
     "summarize_losses",
     "Strategy",
     "ParamSpec",
+    # Constraints
+    "Constraint",
+    "Ordered",
+    "SumToOne",
     # Nodes
     "BaseNode",
     "Source",
