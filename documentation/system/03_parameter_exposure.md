@@ -267,3 +267,36 @@ best_system = system.with_vector(population[best_idx])
 2. **Isolated**: Each candidate runs independently
 3. **Resettable**: Use `reset()` if reusing a system instance
 4. **Consistent**: Schema order is deterministic (sorted by path, then index)
+
+## Constraint-Aware Optimization
+
+### constraint_specs()
+
+Discover constraint specifications for repair functions:
+
+```python
+specs = system.constraint_specs()
+for spec in specs:
+    print(f"{spec.prefix}: {spec.constraint}")
+```
+
+### make_repair
+
+For genetic algorithms using ctrl-freak operators, use `make_repair` to create a bounds-and-constraint-aware repair function:
+
+```python
+from taqsim.optimization import make_repair
+
+repair = make_repair(system)
+
+# Wrap GA operators
+crossover = lambda p1, p2: repair(sbx_crossover(...)(p1, p2))
+mutate = lambda x: repair(polynomial_mutation(...)(x))
+```
+
+The repair function:
+1. Clips values to parameter bounds
+2. Applies constraint repairs (e.g., SumToOne, Ordered)
+3. Returns a valid numpy array
+
+See [Constraints](../common/02_constraints.md) for full documentation on constraint types and custom implementations.
