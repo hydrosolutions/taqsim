@@ -7,8 +7,8 @@ The `taqsim.edge` module uses event sourcing. All events are frozen dataclasses 
 ## Common Fields
 
 All events share:
-- `t: int` - timestep when event occurred
 - `amount: float` - water volume in m3
+- `t: int` - timestep when event occurred
 
 ## Event Types
 
@@ -25,11 +25,11 @@ WaterReceived(amount=100.0, t=0)
 Transport losses (seepage, evaporation, capacity exceeded).
 
 ```python
-from taqsim.common import LossReason
+from taqsim.common import SEEPAGE, EVAPORATION, CAPACITY_EXCEEDED
 
-WaterLost(amount=5.0, reason=LossReason.SEEPAGE, t=0)
-WaterLost(amount=2.0, reason=LossReason.EVAPORATION, t=0)
-WaterLost(amount=50.0, reason=LossReason.CAPACITY_EXCEEDED, t=0)
+WaterLost(amount=5.0, reason=SEEPAGE, t=0)
+WaterLost(amount=2.0, reason=EVAPORATION, t=0)
+WaterLost(amount=50.0, reason=CAPACITY_EXCEEDED, t=0)
 ```
 
 ### WaterDelivered
@@ -57,20 +57,22 @@ losses = sum(e.amount for e in edge.events_of_type(WaterLost))
 Losses by reason:
 
 ```python
-from taqsim.common import LossReason
+from taqsim.common import SEEPAGE
 
 seepage = sum(
     e.amount for e in edge.events_of_type(WaterLost)
-    if e.reason == LossReason.SEEPAGE
+    if e.reason == SEEPAGE
 )
 ```
 
 Capacity exceeded losses:
 
 ```python
+from taqsim.common import CAPACITY_EXCEEDED
+
 capacity_losses = sum(
     e.amount for e in edge.events_of_type(WaterLost)
-    if e.reason == LossReason.CAPACITY_EXCEEDED
+    if e.reason == CAPACITY_EXCEEDED
 )
 ```
 
@@ -85,6 +87,8 @@ Within a timestep, events are recorded in `update()` execution order:
 ## Querying Events
 
 ```python
+from taqsim.common import CAPACITY_EXCEEDED, SEEPAGE
+
 # All delivery events
 deliveries = edge.events_of_type(WaterDelivered)
 
@@ -94,7 +98,7 @@ losses = sum(e.amount for e in edge.events_of_type(WaterLost))
 # Check for capacity exceeded
 capacity_exceeded = [
     e for e in edge.events_of_type(WaterLost)
-    if e.reason == LossReason.CAPACITY_EXCEEDED
+    if e.reason == CAPACITY_EXCEEDED
 ]
 if capacity_exceeded:
     total_excess = sum(e.amount for e in capacity_exceeded)
@@ -103,7 +107,7 @@ if capacity_exceeded:
 # Filter losses by reason
 seepage_losses = [
     e for e in edge.events_of_type(WaterLost)
-    if e.reason == LossReason.SEEPAGE
+    if e.reason == SEEPAGE
 ]
 ```
 

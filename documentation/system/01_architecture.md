@@ -46,12 +46,12 @@ import networkx as nx
 
 @dataclass
 class WaterSystem:
-    dt: float = 2629800.0  # ~1 month in seconds
+    dt: float = 1  # default timestep duration in seconds
 
-    _nodes: dict[str, BaseNode]
-    _edges: dict[str, Edge]
-    _graph: nx.DiGraph
-    _validated: bool
+    _nodes: dict[str, BaseNode] = field(default_factory=dict, init=False)
+    _edges: dict[str, Edge] = field(default_factory=dict, init=False)
+    _graph: nx.DiGraph = field(default_factory=nx.DiGraph, init=False)
+    _validated: bool = field(default=False, init=False)
 ```
 
 ## Key Methods
@@ -97,11 +97,12 @@ Runs the simulation:
 ## Usage Example
 
 ```python
-from taqsim.node import Source, Storage, PassThrough, Splitter, Demand, Sink, TimeSeries
+from taqsim.node import Source, Storage, PassThrough, Splitter, Demand, Sink, TimeSeries, WaterReceived
 from taqsim.edge import Edge
 from taqsim.system import WaterSystem
 
 # Create nodes (no targets specified)
+# (Assume rule, losses, equal_split are pre-defined strategy implementations)
 source = Source(id="river", inflow=TimeSeries([100.0] * 12))
 dam = Storage(id="dam", capacity=1000, release_rule=rule, loss_rule=losses)
 turbine = PassThrough(id="turbine")
@@ -121,6 +122,7 @@ system.add_node(farm)
 system.add_node(city)
 
 # Add edges (topology defined here)
+# (Assume no_loss and seepage are pre-defined EdgeLossRule implementations)
 system.add_edge(Edge(id="e1", source="river", target="dam", capacity=500, loss_rule=no_loss))
 system.add_edge(Edge(id="e2", source="dam", target="turbine", capacity=500, loss_rule=no_loss))
 system.add_edge(Edge(id="e3", source="turbine", target="junction", capacity=500, loss_rule=no_loss))
@@ -168,6 +170,13 @@ For each timestep t:
    - `delivered = edge.update(t, dt)` (applies losses)
    - `target_node.receive(delivered, edge_id, t)`
 
+## Properties
+
+| Property | Returns |
+|----------|---------|
+| `nodes` | `dict[str, BaseNode]` - All registered nodes |
+| `edges` | `dict[str, Edge]` - All registered edges |
+
 ## Parameter Exposure
 
 WaterSystem provides methods for parameter discovery and manipulation, enabling optimization workflows.
@@ -178,6 +187,9 @@ WaterSystem provides methods for parameter discovery and manipulation, enabling 
 |--------|---------|
 | `param_schema()` | Returns list of all tunable parameters as `ParamSpec` objects |
 | `to_vector()` | Flattens parameters to `list[float]` for optimization |
+| `param_bounds()` | Returns `dict[str, tuple[float, float]]` of parameter bounds (raises if any bounds missing) |
+| `bounds_vector()` | Returns bounds matching `to_vector()` order as `list[tuple[float, float]]` |
+| `constraint_specs()` | Returns `list[ConstraintSpec]` with resolved paths and bounds for constraint repair |
 | `with_vector(vector)` | Creates new system with parameters from vector (immutable) |
 | `reset()` | Clears all events and resets node state for fresh simulation |
 
@@ -193,6 +205,13 @@ for spec in schema:
 vector = system.to_vector()
 new_system = system.with_vector(modified_vector)
 new_system.simulate(12)
+
+# Get bounds for optimization
+bounds = system.param_bounds()  # dict[str, tuple[float, float]]
+bounds_vec = system.bounds_vector()  # list matching to_vector() order
+
+# Get constraints for repair
+constraints = system.constraint_specs()  # list[ConstraintSpec]
 ```
 
 See [Parameter Exposure](03_parameter_exposure.md) for complete documentation.
@@ -202,8 +221,9 @@ See [Parameter Exposure](03_parameter_exposure.md) for complete documentation.
 `WaterSystem.visualize()` renders the network on a geographic plot:
 
 ```python
-system.visualize()                    # Interactive display
-system.visualize(save_to="map.png")   # Save to file
+system.visualize()                                      # Interactive display
+system.visualize(save_to="map.png")                     # Save to file
+system.visualize(figsize=(16, 10), save_to="map.png")   # Custom figure size
 ```
 
 Features:

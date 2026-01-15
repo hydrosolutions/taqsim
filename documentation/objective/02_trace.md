@@ -22,7 +22,7 @@ spill_trace = node.trace(WaterSpilled)
 deficit_trace = node.trace(DeficitRecorded, field="deficit")
 
 # From an edge
-flow_trace = edge.trace(WaterTransferred)
+flow_trace = edge.trace(WaterDelivered)
 ```
 
 This is the recommended approach for most use cases.

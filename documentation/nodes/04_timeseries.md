@@ -74,8 +74,6 @@ inflow = TimeSeries(values=[10.0, 15.0, 20.0, 12.0])
 source = Source(
     id="river_intake",
     inflow=inflow,
-    targets=["reservoir_1"],
-    split_rule=equal_split
 )
 ```
 
@@ -89,8 +87,14 @@ requirement = TimeSeries(values=[5.0, 8.0, 12.0, 6.0])
 demand = Demand(
     id="irrigation",
     requirement=requirement,
-    targets=["return_flow"],
-    split_rule=equal_split
+)
+
+# With optional efficiency and consumption parameters
+demand_with_losses = Demand(
+    id="irrigation_lossy",
+    requirement=requirement,
+    efficiency=0.8,           # 80% delivery efficiency (20% lost in transit)
+    consumption_fraction=0.7, # 70% consumed, 30% returned
 )
 ```
 

@@ -29,6 +29,7 @@ Water entry point. Generates inflow from a TimeSeries.
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
 | `inflow` | `TimeSeries` | Yes | Inflow rates per timestep |
+| `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 
 ### Events Recorded
 
@@ -66,6 +67,7 @@ Transparent node for turbines, measurement points, or junctions. Passes 100% of 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
+| `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 
 ### Events Recorded
 
@@ -103,6 +105,7 @@ Distribution node. Receives water and splits among multiple targets using a spli
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
 | `split_rule` | `SplitRule` | Yes | Distribution rule |
+| `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 
 > **Note**: Targets are derived from edges by `WaterSystem` and populated via `_set_targets()` during validation.
 
@@ -147,6 +150,7 @@ Consumption node. Receives water, consumes requirement, passes remainder downstr
 | `requirement` | `TimeSeries` | Yes | Demand rates per timestep |
 | `consumption_fraction` | `float` | No | Fraction of met demand consumed (0.0-1.0, default: 1.0) |
 | `efficiency` | `float` | No | Delivery efficiency (0.0-1.0 exclusive-inclusive, default: 1.0) |
+| `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 
 ### Consumption Fraction
 
@@ -235,6 +239,7 @@ Reservoir node. Receives, stores, loses, releases, and outputs water.
 | `dead_storage` | `float` | No | Volume of water that cannot be released (default: 0.0) [m³] |
 | `release_rule` | `ReleaseRule` | Yes | Release calculation |
 | `loss_rule` | `LossRule` | Yes | Loss calculation |
+| `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 
 ### Validation
 
@@ -319,6 +324,7 @@ Terminal node. Receives water and exits the system. Represents system boundaries
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
+| `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 
 ### Events Recorded
 

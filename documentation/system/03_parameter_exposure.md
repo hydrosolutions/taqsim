@@ -27,10 +27,28 @@ Located in `src/taqsim/common.py`:
 ```python
 class Strategy:
     __params__: ClassVar[tuple[str, ...]] = ()
+    __bounds__: ClassVar[dict[str, ParamBounds]] = {}
+    __constraints__: ClassVar[tuple[Constraint, ...]] = ()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        valid = set(cls.__params__)
+        for c in cls.__constraints__:
+            invalid = set(c.params) - valid
+            if invalid:
+                raise TypeError(f"{cls.__name__}: constraint references unknown params: {invalid}")
 
     def params(self) -> dict[str, ParamValue]:
         """Return current parameter values."""
         return {name: getattr(self, name) for name in self.__params__}
+
+    def bounds(self, node: BaseNode) -> dict[str, ParamBounds]:
+        """Return parameter bounds, optionally derived from node properties."""
+        return dict(self.__bounds__)
+
+    def constraints(self, node: BaseNode) -> tuple[Constraint, ...]:
+        """Return constraints for this strategy."""
+        return self.__constraints__
 
     def with_params(self, **kwargs: ParamValue) -> Self:
         """Create new instance with updated parameters (immutable)."""
@@ -40,6 +58,24 @@ class Strategy:
         return replace(self, **kwargs)
 ```
 
+### Class Variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `__params__` | `tuple[str, ...]` | Names of optimizable fields |
+| `__bounds__` | `dict[str, ParamBounds]` | Static bounds for parameters (param name -> (low, high)) |
+| `__constraints__` | `tuple[Constraint, ...]` | Constraints between parameters (e.g., SumToOne, Ordered) |
+
+### Methods
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `__init_subclass__` | `None` | Validates that all constraint params reference valid `__params__` entries |
+| `params()` | `dict[str, ParamValue]` | Returns current parameter values as a dictionary |
+| `bounds(node)` | `dict[str, ParamBounds]` | Returns parameter bounds, can be overridden for node-dependent bounds |
+| `constraints(node)` | `tuple[Constraint, ...]` | Returns constraints, can be overridden for node-dependent constraints |
+| `with_params(**kwargs)` | `Self` | Creates new instance with updated parameters (immutable) |
+
 ### Implementing a Strategy
 
 Concrete strategies must:
@@ -47,16 +83,19 @@ Concrete strategies must:
 1. Inherit from `Strategy`
 2. Be frozen dataclasses
 3. Declare `__params__` listing optimizable field names
+4. Optionally declare `__bounds__` for parameter bounds
+5. Optionally declare `__constraints__` for parameter constraints
 
 ```python
 from dataclasses import dataclass
 from typing import ClassVar
-from taqsim.common import Strategy
+from taqsim.common import Strategy, ParamBounds
 from taqsim.node import Storage
 
 @dataclass(frozen=True)
 class FixedRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, ParamBounds]] = {"rate": (0.0, 100.0)}
     rate: float = 50.0
 
     def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
@@ -72,9 +111,62 @@ Fields not listed in `__params__` are excluded from optimization:
 @dataclass(frozen=True)
 class ThresholdRelease(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate", "threshold")
+    __bounds__: ClassVar[dict[str, ParamBounds]] = {
+        "rate": (0.0, 100.0),
+        "threshold": (0.0, 1.0),
+    }
     rate: float = 50.0
     threshold: float = 0.8
     name: str = "threshold_release"  # NOT in __params__ - excluded
+```
+
+### Constraints
+
+Constraints express relationships between parameters that must hold after GA operations (crossover, mutation). They are validated at subclass creation time:
+
+```python
+from taqsim.constraints import SumToOne
+
+@dataclass(frozen=True)
+class ProportionalSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("ratio_a", "ratio_b")
+    __bounds__: ClassVar[dict[str, ParamBounds]] = {
+        "ratio_a": (0.0, 1.0),
+        "ratio_b": (0.0, 1.0),
+    }
+    __constraints__: ClassVar[tuple[Constraint, ...]] = (
+        SumToOne(params=("ratio_a", "ratio_b")),
+    )
+    ratio_a: float = 0.6
+    ratio_b: float = 0.4
+```
+
+If a constraint references a parameter not in `__params__`, a `TypeError` is raised at class definition time:
+
+```python
+# This raises TypeError: MyStrategy: constraint references unknown params: {'invalid_param'}
+@dataclass(frozen=True)
+class MyStrategy(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __constraints__: ClassVar[tuple[Constraint, ...]] = (
+        SumToOne(params=("rate", "invalid_param")),
+    )
+    rate: float = 0.5
+```
+
+### Node-Dependent Bounds
+
+Override the `bounds()` method for bounds that depend on node properties:
+
+```python
+@dataclass(frozen=True)
+class CapacityBasedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: float = 50.0
+
+    def bounds(self, node: BaseNode) -> dict[str, ParamBounds]:
+        # Bound rate to node's capacity
+        return {"rate": (0.0, node.capacity)}
 ```
 
 ## ParamSpec Dataclass
@@ -84,16 +176,14 @@ Each tunable parameter is described by a `ParamSpec`:
 ```python
 @dataclass(frozen=True, slots=True)
 class ParamSpec:
-    path: str              # e.g., "dam.release_rule.rate"
-    value: float           # flattened scalar value
-    index: int | None = None  # position in tuple, None for scalar
+    path: str    # e.g., "dam.release_rule.rate"
+    value: float # scalar value
 ```
 
 | Field | Description | Example |
 |-------|-------------|---------|
 | `path` | Dot-separated path to parameter | `"dam.release_rule.rate"` |
 | `value` | Current scalar value | `50.0` |
-| `index` | Position in tuple (None for scalar) | `0` for first element |
 
 ## WaterSystem Vectorization API
 
@@ -112,8 +202,8 @@ for spec in schema:
 Output:
 ```
 dam.release_rule.rate = 50.0
-junction.split_rule.ratios = 0.6  (index=0)
-junction.split_rule.ratios = 0.4  (index=1)
+junction.split_rule.ratio_a = 0.6
+junction.split_rule.ratio_b = 0.4
 ```
 
 ### to_vector()
@@ -140,8 +230,8 @@ for path, (low, high) in bounds.items():
 Output:
 ```
 dam.release_rule.rate: [0.0, 100.0]
-junction.split_rule.ratios[0]: [0.0, 1.0]
-junction.split_rule.ratios[1]: [0.0, 1.0]
+junction.split_rule.ratio_a: [0.0, 1.0]
+junction.split_rule.ratio_b: [0.0, 1.0]
 ```
 
 ### bounds_vector()
@@ -193,27 +283,35 @@ system.reset()
 # Topology and strategies preserved
 ```
 
-## Tuple Parameter Handling
+## Multiple Parameter Handling
 
-Tuple parameters (like split ratios) are flattened to individual `ParamSpec` entries:
+When a strategy has multiple related parameters (like split ratios), each is exposed as a separate scalar `ParamSpec`:
 
 ```python
 @dataclass(frozen=True)
 class ProportionalSplit(Strategy):
-    __params__: ClassVar[tuple[str, ...]] = ("ratios",)
-    ratios: tuple[float, ...] = (0.6, 0.4)
+    __params__: ClassVar[tuple[str, ...]] = ("ratio_a", "ratio_b")
+    __bounds__: ClassVar[dict[str, ParamBounds]] = {
+        "ratio_a": (0.0, 1.0),
+        "ratio_b": (0.0, 1.0),
+    }
+    __constraints__: ClassVar[tuple[Constraint, ...]] = (
+        SumToOne(params=("ratio_a", "ratio_b")),
+    )
+    ratio_a: float = 0.6
+    ratio_b: float = 0.4
 ```
 
 Schema output:
 
-| path | value | index |
-|------|-------|-------|
-| `junction.split_rule.ratios` | `0.6` | `0` |
-| `junction.split_rule.ratios` | `0.4` | `1` |
+| path | value |
+|------|-------|
+| `junction.split_rule.ratio_a` | `0.6` |
+| `junction.split_rule.ratio_b` | `0.4` |
 
 Vector: `[0.6, 0.4]`
 
-When reconstructing via `with_vector()`, values are reassembled into tuples based on index.
+Constraints ensure related parameters maintain valid relationships after GA operations.
 
 ## GA Optimization Loop Pattern
 
@@ -266,7 +364,7 @@ best_system = system.with_vector(population[best_idx])
 1. **Immutable**: `with_vector()` never modifies the original system
 2. **Isolated**: Each candidate runs independently
 3. **Resettable**: Use `reset()` if reusing a system instance
-4. **Consistent**: Schema order is deterministic (sorted by path, then index)
+4. **Consistent**: Schema order is deterministic (sorted by path)
 
 ## Constraint-Aware Optimization
 

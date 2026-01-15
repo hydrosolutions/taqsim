@@ -14,7 +14,7 @@ Unlike a traditional enum, `LossReason` is a string subclass allowing:
 ## Built-in Constants
 
 ```python
-from taqsim.common import EVAPORATION, SEEPAGE, OVERFLOW
+from taqsim.common import EVAPORATION, SEEPAGE, OVERFLOW, INEFFICIENCY, CAPACITY_EXCEEDED
 
 # Use directly in loss rules
 return {EVAPORATION: 10.0, SEEPAGE: 5.0}
@@ -25,6 +25,8 @@ return {EVAPORATION: 10.0, SEEPAGE: 5.0}
 | EVAPORATION | "evaporation" | Surface water evaporation |
 | SEEPAGE | "seepage" | Ground infiltration |
 | OVERFLOW | "overflow" | Spillage/overflow losses |
+| INEFFICIENCY | "inefficiency" | Operational inefficiency losses |
+| CAPACITY_EXCEEDED | "capacity_exceeded" | Losses due to exceeding capacity limits |
 
 ## Creating Custom Loss Reasons
 

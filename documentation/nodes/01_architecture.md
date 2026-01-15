@@ -29,28 +29,30 @@ node.record(WaterReleased(amount=outflow, t=0))
 current_storage = sum(stored) - sum(released) - sum(lost)
 ```
 
-### Capability Composition
+### Capability Protocols
 
-Nodes are defined by their capabilities:
+Nodes implement capability protocols defined in `protocols.py`:
 
-| Capability | Method | Description |
-|------------|--------|-------------|
-| Generates | `generate(t, dt)` | Produce water |
-| Receives | `receive(amount, source_id, t)` | Accept water from upstream |
-| Stores | `store(amount, t, dt)` | Buffer water temporally |
-| Loses | `lose(t, dt)` | Physical losses |
-| Consumes | `consume(amount, t, dt)` | Remove water from system |
-| Gives | `distribute(amount, t)` | Send water downstream |
+| Protocol | Method | Description |
+|----------|--------|-------------|
+| Generates | `generate(t, dt) -> float` | Produce water |
+| Receives | `receive(amount, source_id, t) -> float` | Accept water from upstream |
+| Stores | `store(amount, t, dt) -> tuple[float, float]` | Buffer water (returns stored, spilled) |
+| Loses | `lose(t, dt) -> float` | Physical losses |
+| Consumes | `consume(amount, t, dt) -> tuple[float, float]` | Consume water (returns withdrawn, remaining) |
 
-Node types are combinations:
+Node types and their capabilities:
 
 ```
-Source    = Generates + Gives
-Splitter  = Receives + Gives
-Reservoir = Receives + Stores + Loses + Gives
-Demand    = Receives + Consumes + Gives
-Sink      = Receives
+Source      = Generates
+Splitter    = Receives + distribute()
+Storage     = Receives + Stores + Loses + release()
+Demand      = Receives + Consumes
+Sink        = Receives
+PassThrough = Receives
 ```
+
+Note: `distribute()` and `release()` are node-specific methods, not protocols.
 
 ## Node Lifecycle
 
@@ -66,14 +68,27 @@ All nodes extend `BaseNode` which provides:
 @dataclass
 class BaseNode:
     id: str
-    events: list[NodeEvent]  # append-only event log
+    location: tuple[float, float] | None  # (lat, lon) in WGS84
+    events: list[NodeEvent]               # append-only event log (not in __init__)
+    _targets: list[str]                   # downstream node IDs (not in __init__)
 
-    def record(event) → None      # append event
-    def events_at(t) → list       # filter by timestep
-    def events_of_type(T) → list  # filter by event class
-    def clear_events() → None     # reset (for testing)
-    def reset() → None            # clears events and resets state for fresh simulation
-    def update(t, dt) → None      # MUST be implemented by subclasses
+    # Properties
+    @property
+    def targets() -> list[str]            # downstream node IDs
+
+    # Event methods
+    def record(event: NodeEvent) -> None  # append event
+    def events_at(t: int) -> list         # filter by timestep
+    def events_of_type[T](type[T]) -> list[T]  # filter by event class
+    def trace[T](type[T], field: str) -> Trace # extract Trace from events
+    def clear_events() -> None            # reset events (for testing)
+
+    # Lifecycle
+    def reset() -> None                   # clears events and resets state for fresh simulation
+    def update(t: int, dt: float) -> None # MUST be implemented by subclasses
+
+    # Strategy introspection
+    def strategies() -> dict[str, Strategy]  # returns all Strategy-typed fields
 ```
 
 ## Universal update() Pattern
@@ -92,28 +107,25 @@ Each step records appropriate events.
 ## Data Flow
 
 ```
-Source ──[edge]──> Reservoir ──[edge]──> Demand ──[edge]──> Sink
-   │                   │                    │                 │
-   ▼                   ▼                    ▼                 ▼
-Generated          Received             Received          Received
-Distributed        Stored               Consumed          (terminal)
-                   Lost
-                   Released
-                   Distributed
+Source ──[edge]──> Storage ──[edge]──> Demand ──[edge]──> Sink
+   │                  │                   │                 │
+   ▼                  ▼                   ▼                 ▼
+Generated          Received           Received          Received
+Output             Stored             Consumed          (terminal)
+                   Spilled            Lost (inefficiency)
+                   Lost               Deficit (if short)
+                   Released           Output
+                   Output
 ```
+
+Additional node types:
+- `Splitter`: Receives water and distributes to multiple downstream targets
+- `PassThrough`: Receives water, records passage (e.g., for hydropower), outputs unchanged
 
 ## Node Location
 
-Nodes can optionally have a geographic location specified as WGS84 coordinates (EPSG:4326):
+The `location` field on `BaseNode` is optional and specifies WGS84 coordinates (EPSG:4326):
 
-```python
-@dataclass
-class BaseNode:
-    id: str
-    location: tuple[float, float] | None = None  # (lat, lon)
-```
-
-The location tuple contains:
 - First element: latitude (-90 to +90 degrees)
 - Second element: longitude (-180 to +180 degrees)
 

@@ -17,17 +17,19 @@ Controls how transport losses are calculated.
 class EdgeLossRule(Protocol):
     def calculate(
         self,
+        edge: Edge,       # the edge instance (access capacity via edge.capacity)
         flow: float,      # current flow volume
-        capacity: float,  # edge capacity
         t: int,           # timestep
         dt: float         # timestep duration
     ) -> dict[LossReason, float]: ...  # {reason: amount}
 ```
 
-`LossReason` is an enum with values:
-- `LossReason.EVAPORATION`
-- `LossReason.SEEPAGE`
-- `LossReason.CAPACITY_EXCEEDED`
+`LossReason` is a typed string class with predefined constants:
+- `EVAPORATION`
+- `SEEPAGE`
+- `OVERFLOW`
+- `INEFFICIENCY`
+- `CAPACITY_EXCEEDED`
 
 ## Custom Implementations
 
@@ -38,11 +40,12 @@ No transport losses.
 ```python
 from dataclasses import dataclass
 from taqsim.common import LossReason
+from taqsim.edge import Edge
 
 @dataclass
 class ZeroLoss:
     def calculate(
-        self, flow: float, capacity: float, t: int, dt: float
+        self, edge: Edge, flow: float, t: int, dt: float
     ) -> dict[LossReason, float]:
         return {}
 ```
@@ -52,13 +55,15 @@ class ZeroLoss:
 Constant percentage loss.
 
 ```python
+from taqsim.common import SEEPAGE
+
 @dataclass
 class PercentageLoss:
     fraction: float  # 0.0 to 1.0
-    reason: LossReason = LossReason.SEEPAGE
+    reason: LossReason = SEEPAGE
 
     def calculate(
-        self, flow: float, capacity: float, t: int, dt: float
+        self, edge: Edge, flow: float, t: int, dt: float
     ) -> dict[LossReason, float]:
         return {self.reason: flow * self.fraction}
 ```
@@ -71,10 +76,10 @@ Fixed loss rate per timestep.
 @dataclass
 class FixedRateLoss:
     rate: float  # loss per unit time
-    reason: LossReason = LossReason.SEEPAGE
+    reason: LossReason = SEEPAGE
 
     def calculate(
-        self, flow: float, capacity: float, t: int, dt: float
+        self, edge: Edge, flow: float, t: int, dt: float
     ) -> dict[LossReason, float]:
         loss = min(self.rate * dt, flow)  # don't lose more than available
         return {self.reason: loss}
@@ -85,17 +90,19 @@ class FixedRateLoss:
 Multiple loss mechanisms.
 
 ```python
+from taqsim.common import SEEPAGE, EVAPORATION
+
 @dataclass
 class CombinedLoss:
     seepage_fraction: float = 0.02
     evap_fraction: float = 0.01
 
     def calculate(
-        self, flow: float, capacity: float, t: int, dt: float
+        self, edge: Edge, flow: float, t: int, dt: float
     ) -> dict[LossReason, float]:
         return {
-            LossReason.SEEPAGE: flow * self.seepage_fraction,
-            LossReason.EVAPORATION: flow * self.evap_fraction,
+            SEEPAGE: flow * self.seepage_fraction,
+            EVAPORATION: flow * self.evap_fraction,
         }
 ```
 

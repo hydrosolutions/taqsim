@@ -132,6 +132,9 @@ obj = minimize.storage_target("reservoir", target=1000000)
 Trace enables functional transformations:
 
 ```python
+from taqsim.objective import Objective
+from taqsim.node.events import WaterReleased
+
 def peak_flow_penalty(node_id: str, threshold: float, *, priority: int = 1) -> Objective:
     def evaluate(system):
         node = system.nodes[node_id]
@@ -155,12 +158,12 @@ def peak_flow_penalty(node_id: str, threshold: float, *, priority: int = 1) -> O
 Edges also support the `.trace()` method for building objectives based on flow events:
 
 ```python
-from taqsim.edge.events import WaterTransferred
+from taqsim.edge.events import WaterDelivered
 
 def channel_utilization(edge_id: str, capacity: float, *, priority: int = 1) -> Objective:
     def evaluate(system):
         edge = system.edges[edge_id]
-        transfers = edge.trace(WaterTransferred)
+        transfers = edge.trace(WaterDelivered)
 
         # Calculate utilization as fraction of capacity
         utilization = transfers.map(lambda q: q / capacity)
@@ -179,6 +182,9 @@ def channel_utilization(edge_id: str, capacity: float, *, priority: int = 1) -> 
 Combine multiple event types:
 
 ```python
+from taqsim.objective import Objective
+from taqsim.node.events import WaterReceived, DeficitRecorded
+
 def net_benefit(demand_id: str, *, priority: int = 1) -> Objective:
     def evaluate(system):
         node = system.nodes[demand_id]

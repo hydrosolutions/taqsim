@@ -80,6 +80,28 @@ edge.clear_events()
 assert len(edge.events) == 0
 ```
 
+### trace(event_type, field="amount") -> Trace
+
+Create a `Trace` object from events of a specific type.
+
+```python
+from taqsim.edge import WaterDelivered
+
+trace = edge.trace(WaterDelivered)
+# Returns Trace.from_events(edge.events_of_type(WaterDelivered), field="amount")
+```
+
+### reset() -> None
+
+Reset edge to initial state for a fresh simulation run. Clears accumulated events and step accumulator.
+
+```python
+edge.reset()
+# Equivalent to:
+# edge.clear_events()
+# edge._received_this_step = 0.0
+```
+
 ## Update Cycle
 
 The `update()` method performs these steps:
@@ -104,7 +126,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ZeroLoss:
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, edge: Edge, flow: float, t: int, dt: float) -> dict[LossReason, float]:
         return {}
 
 edge = Edge(
@@ -130,7 +152,7 @@ assert delivered == 80.0
 class SeepageLoss:
     fraction: float
 
-    def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, edge: Edge, flow: float, t: int, dt: float) -> dict[LossReason, float]:
         return {LossReason.SEEPAGE: flow * self.fraction}
 
 edge = Edge(

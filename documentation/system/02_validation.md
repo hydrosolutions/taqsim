@@ -80,7 +80,10 @@ def _set_targets(self) -> None:
     for node_id, node in self._nodes.items():
         if isinstance(node, Sink):
             continue
-        outgoing_edges = [e for e in self._edges.values() if e.source == node_id]
+
+        # Find outgoing edges for this node
+        outgoing_edges = [edge for edge in self._edges.values() if edge.source == node_id]
+
         target_edge_ids = [e.id for e in outgoing_edges]
         node._set_targets(target_edge_ids)
 ```

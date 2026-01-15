@@ -33,10 +33,14 @@ class FixedRelease(Strategy):
 | `Strategy` base | Enables parameter discovery via `node.strategies()` |
 | `@dataclass(frozen=True)` | Immutable instances for safe optimization |
 | `__params__` | Declares which fields are tunable parameters |
+| `__bounds__` | Declares fixed bounds for tunable parameters (optional) |
+| `__constraints__` | Declares constraints between parameters (optional) |
 
 ### Methods Provided
 
-- `params() -> dict[str, float | tuple]` — Returns current parameter values
+- `params() -> dict[str, float]` — Returns current parameter values
+- `bounds(node) -> dict[str, tuple[float, float]]` — Returns parameter bounds (may depend on node)
+- `constraints(node) -> tuple[Constraint, ...]` — Returns parameter constraints
 - `with_params(**kwargs) -> Self` — Creates new instance with updated values
 
 ### Note on Physical Models
@@ -96,12 +100,16 @@ class LossRule(Protocol):
 - `EVAPORATION`
 - `SEEPAGE`
 - `OVERFLOW`
+- `INEFFICIENCY`
+- `CAPACITY_EXCEEDED`
 
 Users can create custom loss reasons: `LossReason("infiltration")`
 
-Import from `taqsim.common`:
+Import from `taqsim.common` or `taqsim.node`:
 ```python
-from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW
+from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW, INEFFICIENCY, CAPACITY_EXCEEDED
+# or (CAPACITY_EXCEEDED not exported from taqsim.node)
+from taqsim.node import LossReason, EVAPORATION, SEEPAGE, OVERFLOW, INEFFICIENCY
 ```
 
 ## Parameter Bounds
@@ -148,11 +156,15 @@ class CapacityBoundedRelease(Strategy):
 Strategies can declare constraints on their parameters using `__constraints__`:
 
 ```python
+from typing import ClassVar
+from taqsim.common import Strategy
+from taqsim.constraints import SumToOne
+
 @dataclass(frozen=True)
 class MySplitRule(Strategy):
-    __params__ = ("ratio_a", "ratio_b")
-    __bounds__ = {"ratio_a": (0, 1), "ratio_b": (0, 1)}
-    __constraints__ = (SumToOne(("ratio_a", "ratio_b")),)
+    __params__: ClassVar[tuple[str, ...]] = ("ratio_a", "ratio_b")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"ratio_a": (0, 1), "ratio_b": (0, 1)}
+    __constraints__: ClassVar[tuple[SumToOne, ...]] = (SumToOne(("ratio_a", "ratio_b")),)
 
     ratio_a: float = 0.6
     ratio_b: float = 0.4

@@ -14,20 +14,36 @@ Every node inherits `strategies()` from `BaseNode`. This method auto-discovers a
 
 ```python
 def strategies(self) -> dict[str, Strategy]:
-    """Return all strategy fields on this node."""
+    """Return all Strategy-typed fields (operational policies only)."""
 ```
 
 ### Behavior
 
-- Scans node fields for instances inheriting from `Strategy`
+- Scans dataclass fields for instances inheriting from `Strategy`
 - Returns a mapping of field name to strategy instance
 - **Physical models (`LossRule`) are excluded** — they don't inherit from `Strategy`
 
 ### Example
 
 ```python
+from dataclasses import dataclass
+from typing import ClassVar
+from taqsim.common import Strategy
 from taqsim.node import Storage
-from taqsim.node.strategies import FixedRelease, ZeroLoss
+
+@dataclass(frozen=True)
+class FixedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    rate: float = 50.0
+
+    def release(self, node, inflow: float, t: int, dt: float) -> float:
+        return min(self.rate * dt, node.storage - node.dead_storage)
+
+class ZeroLoss:
+    """Physical model (not a Strategy)."""
+    def calculate(self, node, t: int, dt: float) -> dict:
+        return {}
 
 storage = Storage(
     id="reservoir",
@@ -45,14 +61,16 @@ storage.strategies()
 
 ## Auto-Discovery Mechanism
 
-The `strategies()` method uses structural typing to find strategies:
+The `strategies()` method uses dataclass field inspection to find strategies:
 
 ```python
-# Simplified internal logic
+# Actual internal logic
+from dataclasses import fields
+
 {
-    name: field
-    for name, field in self.__dict__.items()
-    if isinstance(field, Strategy)
+    f.name: getattr(self, f.name)
+    for f in fields(self)
+    if isinstance(getattr(self, f.name), Strategy)
 }
 ```
 
@@ -80,11 +98,12 @@ def reset(self) -> None:
 | Node Type | Reset Behavior |
 |-----------|----------------|
 | `BaseNode` | Clears events via `clear_events()` |
-| `Storage` | Clears events + resets `_current_storage` to `initial_storage` |
+| `Source` | Clears events only (inherits from BaseNode) |
+| `Storage` | Clears events + resets `_current_storage` to `initial_storage` + resets `_received_this_step` to 0 |
 | `PassThrough` | Clears events + resets `_received_this_step` to 0 |
 | `Splitter` | Clears events + resets `_received_this_step` to 0 |
 | `Demand` | Clears events + resets `_received_this_step` to 0 |
-| `Sink` | Clears events only |
+| `Sink` | Clears events only (inherits from BaseNode) |
 
 ### Example
 
@@ -117,34 +136,129 @@ for node_id, node in system.nodes.items():
 ### Example Output
 
 ```
-river_intake.split_rule: {"weights": {"canal_a": 0.6, "canal_b": 0.4}}
 reservoir.release_rule: {"rate": 50.0}
-junction.split_rule: {"weights": {"farm_1": 0.5, "farm_2": 0.5}}
+junction.split_rule: {"ratio_a": 0.6, "ratio_b": 0.4}
+```
+
+---
+
+## Strategy Methods for Optimization
+
+Each `Strategy` provides methods for parameter introspection, bounds, and constraints:
+
+### params()
+
+Returns current parameter values:
+
+```python
+strategy = FixedRelease(rate=50.0)
+strategy.params()
+# -> {"rate": 50.0}
+```
+
+### bounds(node)
+
+Returns parameter bounds. Can be overridden for node-dependent bounds:
+
+```python
+# Fixed bounds via class variable
+@dataclass(frozen=True)
+class FixedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    rate: float = 50.0
+
+strategy = FixedRelease()
+strategy.bounds(node)
+# -> {"rate": (0.0, 100.0)}
+
+# Dynamic bounds based on node properties
+@dataclass(frozen=True)
+class CapacityBoundedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: float = 50.0
+
+    def bounds(self, node) -> dict[str, tuple[float, float]]:
+        return {"rate": (0.0, node.capacity)}  # Bound to node's capacity
+```
+
+### constraints(node)
+
+Returns parameter constraints. Constraints are validated at class definition time:
+
+```python
+from taqsim.constraints import SumToOne, Ordered
+
+@dataclass(frozen=True)
+class ProportionalSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("ratio_a", "ratio_b")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "ratio_a": (0.0, 1.0),
+        "ratio_b": (0.0, 1.0),
+    }
+    __constraints__: ClassVar[tuple] = (SumToOne(params=("ratio_a", "ratio_b")),)
+    ratio_a: float = 0.6
+    ratio_b: float = 0.4
+
+strategy = ProportionalSplit()
+strategy.constraints(node)
+# -> (SumToOne(params=('ratio_a', 'ratio_b'), target=1.0),)
+```
+
+### with_params(**kwargs)
+
+Creates a new strategy instance with updated parameters (immutable):
+
+```python
+original = FixedRelease(rate=50.0)
+modified = original.with_params(rate=75.0)
+
+original.rate  # -> 50.0 (unchanged)
+modified.rate  # -> 75.0
 ```
 
 ---
 
 ## Optimization Workflow
 
-Combining introspection with reset enables parameter optimization:
+Combining introspection with reset enables parameter optimization. Since strategies are frozen dataclasses, use `with_params()` or the system's vectorization API to update parameters:
+
+### Using System Vectorization (Recommended)
 
 ```python
-def evaluate(system: WaterSystem, params: dict) -> float:
-    # Apply parameters
-    system.nodes["reservoir"].release_rule.rate = params["release_rate"]
+from taqsim import WaterSystem
 
-    # Reset state
-    system.reset()
+def evaluate(system: WaterSystem, vector: list[float]) -> float:
+    # Create candidate with new parameters (original unchanged)
+    candidate = system.with_vector(vector)
 
     # Run simulation
-    system.simulate(timesteps=365)
+    candidate.simulate(timesteps=365)
 
-    # Compute objective (e.g., total deficit)
-    return compute_deficit(system)
+    # Compute objective
+    return compute_deficit(candidate)
+
+# Get initial vector and bounds
+base_vector = system.to_vector()
+bounds = system.bounds_vector()
 
 # Optimize
 best_params = optimizer.minimize(
-    lambda p: evaluate(system, p),
-    bounds={"release_rate": (10.0, 100.0)}
+    lambda v: evaluate(system, v),
+    x0=base_vector,
+    bounds=bounds
 )
 ```
+
+### Using Strategy.with_params (Manual)
+
+```python
+# Strategies are immutable - use with_params() to create new instances
+old_release = storage.release_rule
+new_release = old_release.with_params(rate=75.0)
+
+# Update the node (requires mutable node)
+storage.release_rule = new_release
+```
+
+For full details on system-level vectorization API (`to_vector()`, `with_vector()`, `param_bounds()`, `constraint_specs()`), see [Parameter Exposure](../system/03_parameter_exposure.md).

@@ -46,16 +46,17 @@ WaterReleased(amount=20.0, t=0)
 
 ### WaterLost
 
-Physical losses (evaporation, seepage, overflow, inefficiency, or custom reasons).
+Physical losses (evaporation, seepage, overflow, inefficiency, capacity exceeded, or custom reasons).
 
 ```python
-from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW, INEFFICIENCY
+from taqsim.common import LossReason, EVAPORATION, SEEPAGE, OVERFLOW, INEFFICIENCY, CAPACITY_EXCEEDED
 
 # Using standard constants
 WaterLost(amount=5.0, reason=EVAPORATION, t=0)
 WaterLost(amount=2.0, reason=SEEPAGE, t=0)
 WaterLost(amount=100.0, reason=OVERFLOW, t=0)
 WaterLost(amount=20.0, reason=INEFFICIENCY, t=0)  # Delivery losses in Demand nodes
+WaterLost(amount=50.0, reason=CAPACITY_EXCEEDED, t=0)  # Edge capacity overflow
 
 # Custom loss reasons
 WaterLost(amount=10.0, reason=LossReason("infiltration"), t=0)

@@ -37,22 +37,25 @@ to_megaliters(volumes)  # Trace: {0: 1.0, 1: 2.0, 2: 3.0}
 
 ## Physics Example: Hydropower
 
+The `@lift` decorator only lifts single-argument functions. For multi-parameter physics formulas, use `Trace.map()` or Trace arithmetic instead:
+
 ```python
-from taqsim.objective import lift
+from taqsim.objective import Trace
 
 GRAVITY = 9.81  # m/s^2
+WATER_DENSITY = 1000  # kg/m^3
 
-@lift
-def hydraulic_power(flow_m3s: float, head_m: float = 50, efficiency: float = 0.85) -> float:
-    """P = rho * g * Q * H * eta (assuming rho=1000 kg/m^3)"""
-    return 1000 * GRAVITY * flow_m3s * head_m * efficiency
+# Using Trace arithmetic for multi-parameter formulas
+def compute_power(flow_trace: Trace, head_m: float = 50, efficiency: float = 0.85) -> Trace:
+    """P = rho * g * Q * H * eta"""
+    return flow_trace * WATER_DENSITY * GRAVITY * head_m * efficiency
 
 # Apply to release trace
-power_trace = hydraulic_power(release_trace)
+power_trace = compute_power(release_trace)
 total_energy = power_trace.sum()
 ```
 
-Note: When using lift with multiple parameters, only the first parameter is lifted. Other parameters remain scalars.
+Note: `@lift` only works with single-argument functions (signature `Callable[[float], float]`). For formulas with multiple parameters, use Trace's built-in arithmetic operations or `map()`.
 
 ## Composing Lifted Functions
 
