@@ -249,3 +249,18 @@ class BadStrategy(Strategy):
     __params__ = ("rate",)
     __constraints__ = (SumToOne(("missing",)),)
 ```
+
+## Instance Validation
+
+Beyond class-definition validation, constraints are also validated when a Strategy instance is created. If any constraint's `satisfied()` method returns `False`, a `ConstraintViolationError` is raised immediately.
+
+### Interaction with Repair Functions
+
+Construction-time validation and `repair()` serve different purposes:
+
+| Context | Mechanism | Purpose |
+|---------|-----------|---------|
+| Strategy construction | `ConstraintViolationError` | Catch invalid user input immediately |
+| GA optimization | `repair()` function | Correct values after genetic operators mutate/crossover |
+
+The repair function remains essential for optimization workflows where genetic operators may produce invalid parameter combinations. Always use `make_repair()` to wrap GA operators.

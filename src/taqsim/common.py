@@ -5,6 +5,8 @@ if TYPE_CHECKING:
     from taqsim.constraints import Constraint
     from taqsim.node.base import BaseNode
 
+from taqsim.constraints import BoundViolationError, ConstraintViolationError
+
 ParamValue = float
 ParamBounds = tuple[float, float]
 
@@ -50,6 +52,23 @@ class Strategy:
             invalid = set(c.params) - valid
             if invalid:
                 raise TypeError(f"{cls.__name__}: constraint references unknown params: {invalid}")
+
+    def __post_init__(self) -> None:
+        """Validate parameter values against bounds and constraints."""
+        for param in self.__params__:
+            if param not in self.__bounds__:
+                continue
+            value = getattr(self, param)
+            lo, hi = self.__bounds__[param]
+            if not (lo <= value <= hi):
+                raise BoundViolationError(param, value, (lo, hi))
+
+        if self.__constraints__:
+            values = self.params()
+            for constraint in self.__constraints__:
+                if not constraint.satisfied(values):
+                    relevant = {p: values[p] for p in constraint.params}
+                    raise ConstraintViolationError(constraint, relevant)
 
     def params(self) -> dict[str, ParamValue]:
         """Return current parameter values."""

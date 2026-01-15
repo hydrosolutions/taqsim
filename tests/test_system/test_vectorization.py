@@ -198,8 +198,9 @@ class TestWithVector:
         system = build_test_system()
         original_vector = system.to_vector()
 
-        # Modify values
-        new_vector = [v * 2 for v in original_vector]
+        # Modify values (using valid values within bounds)
+        # rate bounds: (0.0, 200.0), r1/r2 bounds: (0.0, 1.0)
+        new_vector = [100.0, 0.7, 0.3]
         system.with_vector(new_vector)
 
         # Original should be unchanged

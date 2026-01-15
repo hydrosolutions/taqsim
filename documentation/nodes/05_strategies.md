@@ -328,3 +328,51 @@ assert isinstance(release, ReleaseRule)
 loss = ZeroLoss()
 assert isinstance(loss, LossRule)
 ```
+
+## Construction-Time Validation
+
+Strategies validate their parameters at construction time, failing fast if values are invalid.
+
+### Bound Validation
+
+If a parameter value falls outside its declared bounds, `BoundViolationError` is raised:
+
+```python
+@dataclass(frozen=True)
+class FixedRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    rate: float = 50.0
+
+# Valid construction
+valid = FixedRelease(rate=50.0)
+
+# Invalid - raises BoundViolationError
+FixedRelease(rate=150.0)  # BoundViolationError: Parameter 'rate' value 150.0 outside bounds [0.0, 100.0]
+```
+
+### Constraint Validation
+
+If constraint conditions are not satisfied, `ConstraintViolationError` is raised:
+
+```python
+@dataclass(frozen=True)
+class AllocationSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("city", "farm")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"city": (0.0, 1.0), "farm": (0.0, 1.0)}
+    __constraints__: ClassVar[tuple] = (SumToOne(params=("city", "farm")),)
+    city: float = 0.6
+    farm: float = 0.4
+
+# Valid - ratios sum to 1.0
+valid = AllocationSplit(city=0.6, farm=0.4)
+
+# Invalid - raises ConstraintViolationError
+AllocationSplit(city=0.6, farm=0.6)  # ConstraintViolationError: SumToOne violated
+```
+
+### Validation Order
+
+1. **Bounds first**: All parameter bounds are checked
+2. **Constraints second**: All constraints are validated
+3. **Fail fast**: First violation raises an error

@@ -24,8 +24,13 @@ from .common import (
     Strategy,
     summarize_losses,
 )
-from .constraints import Constraint, Ordered, SumToOne
-from .optimization import make_repair
+from .constraints import (
+    BoundViolationError,
+    Constraint,
+    ConstraintViolationError,
+    Ordered,
+    SumToOne,
+)
 from .edge import Edge, EdgeEvent, EdgeLossRule, WaterDelivered, WaterLost, WaterReceived
 from .node import (
     BaseNode,
@@ -47,6 +52,7 @@ from .objective import (
     maximize,
     minimize,
 )
+from .optimization import make_repair
 from .system import WaterSystem
 
 __all__ = [
@@ -61,7 +67,9 @@ __all__ = [
     "Strategy",
     "ParamSpec",
     # Constraints
+    "BoundViolationError",
     "Constraint",
+    "ConstraintViolationError",
     "Ordered",
     "SumToOne",
     # Optimization

@@ -270,6 +270,20 @@ assert new_system.to_vector() == [100.0, 0.7, 0.3]
 
 Raises `ValueError` if vector length doesn't match schema.
 
+### Validation on Parameter Updates
+
+Both `with_params()` and `with_vector()` create new Strategy instances, which triggers construction-time validation:
+
+```python
+strategy = FixedRelease(rate=50.0)
+strategy.with_params(rate=150.0)  # Raises BoundViolationError
+
+# In GA context, always repair first
+repair = make_repair(system)
+safe_vector = repair(candidate_vector)
+new_system = system.with_vector(safe_vector)
+```
+
 ### reset()
 
 Clear state for fresh simulation:

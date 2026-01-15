@@ -4,6 +4,12 @@ from typing import ClassVar
 import pytest
 
 from taqsim.common import ParamSpec, Strategy
+from taqsim.constraints import (
+    BoundViolationError,
+    ConstraintViolationError,
+    Ordered,
+    SumToOne,
+)
 
 
 class TestStrategy:
@@ -174,6 +180,9 @@ class TestStrategyConstraints:
         class FakeConstraint:
             params = ("unknown_param",)
 
+            def satisfied(self, values: dict[str, float], tol: float = 1e-9) -> bool:
+                return True
+
         with pytest.raises(TypeError, match="constraint references unknown params"):
 
             @dataclass(frozen=True)
@@ -187,6 +196,9 @@ class TestStrategyConstraints:
 
         class FakeConstraint:
             params = ("rate", "threshold")
+
+            def satisfied(self, values: dict[str, float], tol: float = 1e-9) -> bool:
+                return True
 
         @dataclass(frozen=True)
         class ValidStrategy(Strategy):
@@ -204,6 +216,9 @@ class TestStrategyConstraints:
         class FakeConstraint:
             params = ("rate",)
 
+            def satisfied(self, values: dict[str, float], tol: float = 1e-9) -> bool:
+                return True
+
         @dataclass(frozen=True)
         class ConstrainedStrategy(Strategy):
             __params__: ClassVar[tuple[str, ...]] = ("rate",)
@@ -215,3 +230,124 @@ class TestStrategyConstraints:
 
         assert len(constraints) == 1
         assert isinstance(constraints[0], FakeConstraint)
+
+
+# Test strategy classes for __post_init__ validation tests
+
+
+@dataclass(frozen=True)
+class BoundedStrategy(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    rate: float = 50.0
+
+
+@dataclass(frozen=True)
+class ConstrainedStrategy(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2", "r3")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0),
+        "r2": (0.0, 1.0),
+        "r3": (0.0, 1.0),
+    }
+    __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2", "r3")),)
+    r1: float = 0.5
+    r2: float = 0.3
+    r3: float = 0.2
+
+
+@dataclass(frozen=True)
+class OrderedBoundedStrategy(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "low": (0.0, 100.0),
+        "high": (0.0, 100.0),
+    }
+    __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+    low: float = 10.0
+    high: float = 50.0
+
+
+class TestStrategyPostInitBoundValidation:
+    """Tests for Strategy __post_init__ bounds validation."""
+
+    def test_valid_params_within_bounds_succeeds(self):
+        """Strategy with valid params constructs without error."""
+        strategy = BoundedStrategy(rate=50.0)
+        assert strategy.rate == 50.0
+
+    def test_param_below_lower_bound_raises(self):
+        """Param below lower bound raises BoundViolationError."""
+        with pytest.raises(BoundViolationError, match="rate"):
+            BoundedStrategy(rate=-1.0)
+
+    def test_param_above_upper_bound_raises(self):
+        """Param above upper bound raises BoundViolationError."""
+        with pytest.raises(BoundViolationError, match="rate"):
+            BoundedStrategy(rate=150.0)
+
+    def test_param_at_lower_bound_succeeds(self):
+        """Param exactly at lower bound is valid."""
+        strategy = BoundedStrategy(rate=0.0)
+        assert strategy.rate == 0.0
+
+    def test_param_at_upper_bound_succeeds(self):
+        """Param exactly at upper bound is valid."""
+        strategy = BoundedStrategy(rate=100.0)
+        assert strategy.rate == 100.0
+
+    def test_error_contains_param_name_value_and_bounds(self):
+        """BoundViolationError message includes param name, value, and bounds."""
+        with pytest.raises(BoundViolationError) as exc_info:
+            BoundedStrategy(rate=150.0)
+        assert exc_info.value.param == "rate"
+        assert exc_info.value.value == 150.0
+        assert exc_info.value.bounds == (0.0, 100.0)
+
+
+class TestStrategyPostInitConstraintValidation:
+    """Tests for Strategy __post_init__ constraint validation."""
+
+    def test_satisfied_constraint_succeeds(self):
+        """Strategy with satisfied constraints constructs without error."""
+        strategy = ConstrainedStrategy(r1=0.5, r2=0.3, r3=0.2)
+        assert strategy.r1 == 0.5
+
+    def test_violated_sum_to_one_raises(self):
+        """Violated SumToOne constraint raises ConstraintViolationError."""
+        with pytest.raises(ConstraintViolationError, match="SumToOne"):
+            ConstrainedStrategy(r1=0.5, r2=0.5, r3=0.5)  # sum = 1.5
+
+    def test_violated_ordered_raises(self):
+        """Violated Ordered constraint raises ConstraintViolationError."""
+        with pytest.raises(ConstraintViolationError, match="Ordered"):
+            OrderedBoundedStrategy(low=60.0, high=40.0)  # low > high
+
+    def test_error_contains_constraint_and_values(self):
+        """ConstraintViolationError includes constraint type and values."""
+        with pytest.raises(ConstraintViolationError) as exc_info:
+            ConstrainedStrategy(r1=0.5, r2=0.5, r3=0.5)
+        assert isinstance(exc_info.value.constraint, SumToOne)
+        assert "r1" in exc_info.value.values
+
+    def test_constraint_tolerance_respected(self):
+        """Constraint satisfied() uses appropriate tolerance."""
+        # Values that sum to 1.0 within floating point tolerance
+        strategy = ConstrainedStrategy(r1=0.33333333333, r2=0.33333333333, r3=0.33333333334)
+        assert strategy is not None
+
+
+class TestStrategyPostInitValidationOrder:
+    """Tests for validation order in Strategy __post_init__."""
+
+    def test_bounds_validated_before_constraints(self):
+        """Bound violation raised even if constraints also violated."""
+        # rate=150.0 is out of bounds AND would violate constraints
+        with pytest.raises(BoundViolationError):
+            ConstrainedStrategy(r1=1.5, r2=0.3, r3=0.2)  # r1 out of bounds
+
+    def test_with_params_validates_new_instance(self):
+        """Strategy.with_params() validates the new instance."""
+        strategy = BoundedStrategy(rate=50.0)
+        with pytest.raises(BoundViolationError):
+            strategy.with_params(rate=150.0)

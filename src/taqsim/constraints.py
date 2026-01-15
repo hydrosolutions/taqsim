@@ -36,6 +36,27 @@ class ConstraintInfeasibleError(ValueError):
     pass
 
 
+class BoundViolationError(ValueError):
+    """Raised when a parameter value violates its declared bounds."""
+
+    def __init__(self, param: str, value: float, bounds: tuple[float, float]):
+        self.param = param
+        self.value = value
+        self.bounds = bounds
+        lo, hi = bounds
+        super().__init__(f"Parameter '{param}' value {value} outside bounds [{lo}, {hi}]")
+
+
+class ConstraintViolationError(ValueError):
+    """Raised when parameter values violate a constraint."""
+
+    def __init__(self, constraint: "Constraint", values: dict[str, float]):
+        self.constraint = constraint
+        self.values = values
+        param_str = ", ".join(f"{k}={v}" for k, v in values.items())
+        super().__init__(f"{type(constraint).__name__} violated: {param_str}")
+
+
 @dataclass(frozen=True, slots=True)
 class SumToOne:
     params: tuple[str, ...]
