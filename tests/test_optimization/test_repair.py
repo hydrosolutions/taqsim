@@ -185,10 +185,6 @@ class TestMakeRepair:
         np.testing.assert_array_almost_equal(repaired_once, repaired_twice)
 
 
-# Time-varying strategy with SumToOne constraint
-# Note: We override constraints() instead of using __constraints__ because
-# the Strategy.__post_init__ validation doesn't yet handle time-varying params
-# with constraints (it tries to sum tuples instead of checking per-timestep).
 @dataclass(frozen=True)
 class TimeVaryingSplit(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
@@ -196,15 +192,13 @@ class TimeVaryingSplit(Strategy):
         "r1": (0.0, 1.0),
         "r2": (0.0, 1.0),
     }
+    __constraints__: ClassVar[tuple[SumToOne, ...]] = (SumToOne(params=("r1", "r2")),)
     __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
     r1: tuple[float, ...] = (0.6, 0.5, 0.4)
     r2: tuple[float, ...] = (0.4, 0.5, 0.6)
 
     def split(self, node, amount: float, t: int) -> dict[str, float]:
         return {"a": amount * self.r1[t], "b": amount * self.r2[t]}
-
-    def constraints(self, node) -> tuple:
-        return (SumToOne(params=("r1", "r2")),)
 
 
 class TestMakeRepairTimeVarying:

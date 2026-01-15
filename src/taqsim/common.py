@@ -75,15 +75,39 @@ class Strategy:
                     raise BoundViolationError(param, value, (lo, hi))
 
         if self.__constraints__:
-            values = self.params()
-            for constraint in self.__constraints__:
-                if not constraint.satisfied(values):
-                    relevant = {p: values[p] for p in constraint.params}
-                    raise ConstraintViolationError(constraint, relevant)
+            # Determine timesteps from time-varying params
+            timesteps = 1
+            for tv_param in self.__time_varying__:
+                value = getattr(self, tv_param)
+                if isinstance(value, tuple):
+                    timesteps = len(value)
+                    break
+
+            for t in range(timesteps):
+                values_t = self._values_at_timestep(t)
+                for constraint in self.__constraints__:
+                    relevant = {p: values_t[p] for p in constraint.params}
+                    if not constraint.satisfied(relevant):
+                        if timesteps > 1:
+                            raise ConstraintViolationError(
+                                constraint,
+                                {f"{k}[{t}]": v for k, v in relevant.items()},
+                            )
+                        raise ConstraintViolationError(constraint, relevant)
 
     def params(self) -> dict[str, ParamValue]:
         """Return current parameter values."""
         return {name: getattr(self, name) for name in self.__params__}
+
+    def _values_at_timestep(self, t: int) -> dict[str, float]:
+        """Extract scalar values for all params at a given timestep."""
+        result: dict[str, float] = {}
+        for name, value in self.params().items():
+            if isinstance(value, tuple):
+                result[name] = value[t]
+            else:
+                result[name] = value
+        return result
 
     def bounds(self, node: "BaseNode") -> dict[str, ParamBounds]:
         """Return parameter bounds, optionally derived from node properties."""

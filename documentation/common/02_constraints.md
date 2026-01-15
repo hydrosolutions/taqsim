@@ -106,6 +106,73 @@ class ConstraintSpec:
 
 You typically don't create `ConstraintSpec` directly. The system generates them via `system.constraint_specs()`.
 
+## Time-Varying Constraints
+
+When a constraint involves time-varying parameters, validation is performed **per-timestep**. Each timestep's values must independently satisfy the constraint.
+
+### Per-Timestep Validation
+
+For time-varying parameters, constraints are checked at each timestep `t`:
+
+```python
+from taqsim.constraints import Ordered, SumToOne
+
+@dataclass(frozen=True)
+class SeasonalThresholds(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "low": (0.0, 100.0), "high": (0.0, 100.0)
+    }
+    __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+
+    low: tuple[float, ...] = (10.0, 20.0, 15.0)
+    high: tuple[float, ...] = (50.0, 60.0, 55.0)
+```
+
+The `Ordered` constraint checks `low[t] <= high[t]` for each timestep:
+- t=0: `10.0 <= 50.0` (satisfied)
+- t=1: `20.0 <= 60.0` (satisfied)
+- t=2: `15.0 <= 55.0` (satisfied)
+
+### SumToOne with Time-Varying Parameters
+
+```python
+@dataclass(frozen=True)
+class SeasonalAllocation(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("city", "farm", "env")
+    __time_varying__: ClassVar[tuple[str, ...]] = ("city", "farm", "env")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "city": (0.1, 0.6), "farm": (0.1, 0.5), "env": (0.1, 0.4)
+    }
+    __constraints__: ClassVar[tuple] = (SumToOne(params=("city", "farm", "env")),)
+
+    city: tuple[float, ...] = (0.5, 0.4, 0.3)
+    farm: tuple[float, ...] = (0.3, 0.4, 0.4)
+    env: tuple[float, ...] = (0.2, 0.2, 0.3)
+```
+
+For each timestep, the sum is validated:
+- t=0: `0.5 + 0.3 + 0.2 = 1.0` (satisfied)
+- t=1: `0.4 + 0.4 + 0.2 = 1.0` (satisfied)
+- t=2: `0.3 + 0.4 + 0.3 = 1.0` (satisfied)
+
+### ConstraintSpec for Time-Varying Parameters
+
+When the system builds `ConstraintSpec` objects, it includes metadata about which parameters are time-varying:
+
+```python
+@dataclass(frozen=True, slots=True)
+class ConstraintSpec:
+    constraint: Constraint
+    prefix: str
+    param_paths: dict[str, str]
+    param_bounds: dict[str, tuple[float, float]]
+    time_varying_params: frozenset[str]  # params that vary over time
+```
+
+The `time_varying_params` field allows repair functions to handle time-varying parameters correctly during optimization.
+
 ## Integration with Optimization
 
 ### make_repair

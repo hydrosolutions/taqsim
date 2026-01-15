@@ -420,9 +420,11 @@ SeasonalRelease(rate=(50.0, 60.0, 150.0))  # Raises BoundViolationError for rate
 
 ### Constraints
 
-Constraints involving time-varying parameters are applied per-timestep:
+Constraints on time-varying parameters are validated per-timestep. Use `__constraints__` directly - the `__post_init__` validation handles time-varying parameters automatically:
 
 ```python
+from taqsim.constraints import Ordered, SumToOne
+
 @dataclass(frozen=True)
 class SeasonalSplit(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
@@ -437,3 +439,24 @@ class SeasonalSplit(Strategy):
 ```
 
 For each timestep `t`, `r1[t] + r2[t]` must equal 1.0.
+
+The `Ordered` constraint also works with time-varying parameters:
+
+```python
+@dataclass(frozen=True)
+class SeasonalBands(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "low": (0.0, 100.0), "high": (0.0, 100.0)
+    }
+    __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+
+    low: tuple[float, ...] = (10.0, 20.0, 15.0)
+    high: tuple[float, ...] = (50.0, 60.0, 55.0)
+
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        return min(self.high[t] * dt, max(self.low[t] * dt, node.storage * 0.1))
+```
+
+At construction, `low[t] <= high[t]` is validated for every timestep.

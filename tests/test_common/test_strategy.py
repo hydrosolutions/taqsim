@@ -501,3 +501,132 @@ class TestTimeVaryingWithParams:
         s2 = s.with_params(rate=(40.0, 50.0, 60.0))
         assert s2.rate == (40.0, 50.0, 60.0)
         assert s.rate == (10.0, 20.0, 30.0)  # Original unchanged
+
+
+class TestTimeVaryingPostInitConstraintValidation:
+    """Tests for __post_init__ constraint validation with time-varying parameters."""
+
+    def test_ordered_validated_per_timestep(self):
+        """Ordered constraint is validated at each timestep."""
+
+        @dataclass(frozen=True)
+        class TVOrderedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+            low: tuple[float, ...] = (10.0, 20.0, 30.0)
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        # All timesteps valid: low < high at t=0,1,2
+        strategy = TVOrderedStrategy(low=(10.0, 20.0, 30.0), high=(50.0, 60.0, 70.0))
+        assert strategy.low == (10.0, 20.0, 30.0)
+        assert strategy.high == (50.0, 60.0, 70.0)
+
+    def test_ordered_violation_at_specific_timestep_raises(self):
+        """Ordered constraint violation at specific timestep raises error."""
+
+        @dataclass(frozen=True)
+        class TVOrderedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+            low: tuple[float, ...] = (10.0, 20.0, 30.0)
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        # Violation at t=1: low[1]=60 > high[1]=40
+        with pytest.raises(ConstraintViolationError, match=r"low\[1\].*high\[1\]"):
+            TVOrderedStrategy(low=(10.0, 60.0, 30.0), high=(50.0, 40.0, 70.0))
+
+    def test_sum_to_one_validated_per_timestep(self):
+        """SumToOne constraint is validated at each timestep."""
+
+        @dataclass(frozen=True)
+        class TVSumStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "r1": (0.0, 1.0),
+                "r2": (0.0, 1.0),
+            }
+            __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2")),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            r1: tuple[float, ...] = (0.6, 0.5, 0.4)
+            r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+
+        # All timesteps valid: sum = 1.0 at t=0,1,2
+        strategy = TVSumStrategy(r1=(0.6, 0.5, 0.4), r2=(0.4, 0.5, 0.6))
+        assert strategy.r1 == (0.6, 0.5, 0.4)
+        assert strategy.r2 == (0.4, 0.5, 0.6)
+
+    def test_sum_to_one_violation_at_specific_timestep_raises(self):
+        """SumToOne constraint violation at specific timestep raises error."""
+
+        @dataclass(frozen=True)
+        class TVSumStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "r1": (0.0, 1.0),
+                "r2": (0.0, 1.0),
+            }
+            __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2")),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            r1: tuple[float, ...] = (0.6, 0.5, 0.4)
+            r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+
+        # Violation at t=2: r1[2]=0.8 + r2[2]=0.4 = 1.2
+        with pytest.raises(ConstraintViolationError, match=r"r1\[2\].*r2\[2\]"):
+            TVSumStrategy(r1=(0.6, 0.5, 0.8), r2=(0.4, 0.5, 0.4))
+
+    def test_mixed_scalar_and_tv_constraint(self):
+        """Constraint with mixed scalar and time-varying params validates correctly."""
+
+        @dataclass(frozen=True)
+        class MixedOrderedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("high",)
+            low: float = 20.0
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        # Scalar low=20, time-varying high=(50, 60, 70) - all valid
+        strategy = MixedOrderedStrategy(low=20.0, high=(50.0, 60.0, 70.0))
+        assert strategy.low == 20.0
+        assert strategy.high == (50.0, 60.0, 70.0)
+
+        # Scalar low=65, time-varying high=(50, 60, 70) - violation at t=0, t=1
+        with pytest.raises(ConstraintViolationError):
+            MixedOrderedStrategy(low=65.0, high=(50.0, 60.0, 70.0))
+
+    def test_error_includes_timestep_index(self):
+        """Error message includes the timestep index where violation occurred."""
+
+        @dataclass(frozen=True)
+        class TVOrderedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+            low: tuple[float, ...] = (10.0, 20.0, 30.0)
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        # Violation at t=2: low[2]=80 > high[2]=70
+        with pytest.raises(ConstraintViolationError) as exc_info:
+            TVOrderedStrategy(low=(10.0, 20.0, 80.0), high=(50.0, 60.0, 70.0))
+
+        error_msg = str(exc_info.value)
+        # Error message should indicate timestep 2 via indexed param names
+        assert "low[2]" in error_msg and "high[2]" in error_msg
