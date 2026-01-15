@@ -8,16 +8,21 @@ Access them via the `minimize` registry.
 
 ## minimize.spill
 
-Minimize water spilled from a node (typically a reservoir).
+Minimize water spilled from a node.
 
 ```python
 from taqsim.objective import minimize
 
 obj = minimize.spill("reservoir_1")
+obj = minimize.spill("city_intake")  # PassThrough with capacity
 obj = minimize.spill("reservoir_1", priority=2)
 ```
 
 **What it measures:** Sum of `WaterSpilled` event amounts at the specified node.
+
+**Applicable nodes:**
+- `Storage` — overflow when inflow exceeds reservoir capacity
+- `PassThrough` — flow exceeding the `capacity` parameter (if set)
 
 **Use case:** Reduce wasteful overflow from storage nodes. Spills indicate the reservoir exceeded capacity—this can be avoided by releasing water earlier to make room for inflows.
 

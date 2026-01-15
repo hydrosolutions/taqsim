@@ -67,12 +67,28 @@ Transparent node for turbines, measurement points, or junctions. Passes 100% of 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `id` | `str` | Yes | Unique identifier |
+| `capacity` | `float \| None` | No | Maximum flow capacity per timestep. None = unlimited (default) |
 | `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
+
+### Capacity Limiting
+
+When `capacity` is set, the PassThrough node limits flow to the specified value:
+
+- Flow up to capacity passes through normally
+- Excess flow above capacity is recorded as `WaterSpilled`
+- Only flow within capacity continues downstream
+
+**Use cases:**
+- **Hydropower turbines**: Max flow through turbine (excess bypasses, generates no power)
+- **City infrastructure intake**: Max flow distribution network handles (excess = overflow risk)
+- **Canal sections**: Measurement points with known capacity limits
+- **Aqueducts/pipelines**: Transport infrastructure with throughput limits
 
 ### Events Recorded
 
 - `WaterReceived(amount, source_id, t)` — when water arrives
-- `WaterPassedThrough(amount, t)` — for analysis (e.g., turbine power)
+- `WaterPassedThrough(amount, t)` — flow within capacity
+- `WaterSpilled(amount, t)` — flow exceeding capacity (when capacity is set)
 - `WaterOutput(amount, t)` — water available for downstream
 
 ### Update Cycle
@@ -87,6 +103,18 @@ Transparent node for turbines, measurement points, or junctions. Passes 100% of 
 from taqsim.node import PassThrough
 
 turbine = PassThrough(id="hydropower_turbine")
+```
+
+### Example with Capacity
+
+```python
+from taqsim.node import PassThrough
+
+# Hydropower turbine with max 500 m³/timestep capacity
+turbine = PassThrough(id="hydropower_turbine", capacity=500.0)
+
+# City intake with limited distribution capacity
+city_intake = PassThrough(id="city_intake", capacity=1000.0)
 ```
 
 ---

@@ -89,6 +89,18 @@ Records water passing through a PassThrough node (for analysis, e.g., turbine po
 WaterPassedThrough(amount=100.0, t=0)
 ```
 
+### WaterSpilled
+
+Water that exceeds capacity and cannot be stored or processed.
+
+**Emitted by:**
+- `Storage` — when inflow exceeds available storage capacity (overflow)
+- `PassThrough` — when flow exceeds `capacity` parameter (if set)
+
+```python
+WaterSpilled(amount=50.0, t=0)
+```
+
 ### WaterDistributed
 
 Water sent to a specific downstream target. Used by Splitter nodes to distribute to multiple targets.
