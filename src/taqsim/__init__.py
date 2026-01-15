@@ -25,6 +25,7 @@ from .common import (
     summarize_losses,
 )
 from .constraints import Constraint, Ordered, SumToOne
+from .optimization import make_repair
 from .edge import Edge, EdgeEvent, EdgeLossRule, WaterDelivered, WaterLost, WaterReceived
 from .node import (
     BaseNode,
@@ -63,6 +64,8 @@ __all__ = [
     "Constraint",
     "Ordered",
     "SumToOne",
+    # Optimization
+    "make_repair",
     # Nodes
     "BaseNode",
     "Source",

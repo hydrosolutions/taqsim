@@ -12,7 +12,7 @@ from taqsim.node.events import WaterDistributed, WaterOutput
 from .validation import ValidationError
 
 if TYPE_CHECKING:
-    from taqsim.constraints import Constraint
+    from taqsim.constraints import ConstraintSpec
 
 
 @dataclass
@@ -176,9 +176,9 @@ class WaterSystem:
             for strategy_name, strategy in node.strategies().items():
                 for param_name, value in strategy.params().items():
                     path = f"{node_id}.{strategy_name}.{param_name}"
-                    specs.extend(self._flatten_param(path, value))
+                    specs.append(self._flatten_param(path, value))
 
-        return sorted(specs, key=lambda s: (s.path, s.index or 0))
+        return sorted(specs, key=lambda s: s.path)
 
     def to_vector(self) -> list[float]:
         """Flatten all tunable parameters to a vector for GA optimization."""
@@ -196,17 +196,12 @@ class WaterSystem:
         for node_id, node in sorted(self._nodes.items()):
             for strategy_name, strategy in node.strategies().items():
                 strategy_bounds = strategy.bounds(node)
-                for param_name, value in strategy.params().items():
-                    base_path = f"{node_id}.{strategy_name}.{param_name}"
+                for param_name in strategy.params():
+                    path = f"{node_id}.{strategy_name}.{param_name}"
                     if param_name not in strategy_bounds:
-                        missing.append(base_path)
+                        missing.append(path)
                         continue
-                    param_bound = strategy_bounds[param_name]
-                    if isinstance(value, tuple):
-                        for i in range(len(value)):
-                            bounds[f"{base_path}[{i}]"] = param_bound
-                    else:
-                        bounds[base_path] = param_bound
+                    bounds[path] = strategy_bounds[param_name]
 
         if missing:
             raise ValueError(f"Missing bounds for parameters: {missing}")
@@ -222,20 +217,33 @@ class WaterSystem:
 
         return [bounds_lookup.get(spec.path, (float("-inf"), float("inf"))) for spec in self.param_schema()]
 
-    def constraints(self) -> list[tuple[str, "Constraint"]]:
-        """Collect constraints from all strategies with path prefixes.
+    def constraint_specs(self) -> list["ConstraintSpec"]:
+        """Collect constraints with resolved paths and bounds.
 
-        Returns:
-            List of (prefix, constraint) tuples where prefix is like
-            "node_id.strategy_field_name" for path remapping.
+        Returns fully resolved ConstraintSpec objects for use with make_repair.
         """
-        result: list[tuple[str, Constraint]] = []
+        from taqsim.constraints import ConstraintSpec
+
+        result: list[ConstraintSpec] = []
+        all_bounds = self.param_bounds()
 
         for node_id, node in sorted(self._nodes.items()):
             for strategy_name, strategy in node.strategies().items():
+                prefix = f"{node_id}.{strategy_name}"
                 for constraint in strategy.constraints(node):
-                    prefix = f"{node_id}.{strategy_name}"
-                    result.append((prefix, constraint))
+                    # Build param_paths: local name -> full path
+                    param_paths = {p: f"{prefix}.{p}" for p in constraint.params}
+
+                    # Build param_bounds: local name -> bounds
+                    param_bounds = {p: all_bounds[full_path] for p, full_path in param_paths.items()}
+
+                    spec = ConstraintSpec(
+                        constraint=constraint,
+                        prefix=prefix,
+                        param_paths=param_paths,
+                        param_bounds=param_bounds,
+                    )
+                    result.append(spec)
 
         return result
 
@@ -249,9 +257,9 @@ class WaterSystem:
             raise ValueError(f"Vector length {len(vector)} does not match schema length {len(schema)}")
 
         # Group values by node.strategy path
-        updates: dict[str, dict[str, float | tuple[float, ...]]] = {}
+        updates: dict[str, dict[str, float]] = {}
 
-        for spec, value in zip(schema, vector):
+        for spec, value in zip(schema, vector, strict=True):
             parts = spec.path.split(".")
             node_id = parts[0]
             strategy_name = parts[1]
@@ -261,21 +269,7 @@ class WaterSystem:
             if key not in updates:
                 updates[key] = {}
 
-            if spec.index is not None:
-                # Tuple value - accumulate
-                if param_name not in updates[key]:
-                    updates[key][param_name] = []
-                updates[key][param_name].append((spec.index, value))
-            else:
-                # Scalar value
-                updates[key][param_name] = value
-
-        # Convert accumulated tuple values
-        for key, params in updates.items():
-            for param_name, val in list(params.items()):
-                if isinstance(val, list):
-                    sorted_values = sorted(val, key=lambda x: x[0])
-                    params[param_name] = tuple(v for _, v in sorted_values)
+            updates[key][param_name] = value
 
         # Build new system with updated strategies
         return self._clone_with_updates(updates)
@@ -291,11 +285,9 @@ class WaterSystem:
         for edge in self._edges.values():
             edge.reset()
 
-    def _flatten_param(self, path: str, value: float | tuple[float, ...]) -> list[ParamSpec]:
-        """Flatten a parameter value to ParamSpec(s)."""
-        if isinstance(value, tuple):
-            return [ParamSpec(path=path, value=v, index=i) for i, v in enumerate(value)]
-        return [ParamSpec(path=path, value=value, index=None)]
+    def _flatten_param(self, path: str, value: float) -> ParamSpec:
+        """Create ParamSpec for a scalar parameter."""
+        return ParamSpec(path=path, value=value)
 
     def edge_length(self, edge_id: str) -> float | None:
         """Compute geodesic length of an edge in meters.
@@ -401,7 +393,7 @@ class WaterSystem:
         else:
             plt.show()
 
-    def _clone_with_updates(self, updates: dict[str, dict[str, float | tuple[float, ...]]]) -> "WaterSystem":
+    def _clone_with_updates(self, updates: dict[str, dict[str, float]]) -> "WaterSystem":
         """Create a new system with updated strategy parameters."""
         import copy
 

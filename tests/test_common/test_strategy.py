@@ -75,17 +75,12 @@ class TestParamSpec:
         spec = ParamSpec(path="dam.release_rule.rate", value=50.0)
         assert spec.path == "dam.release_rule.rate"
         assert spec.value == 50.0
-        assert spec.index is None
-
-    def test_tuple_param_spec(self):
-        spec = ParamSpec(path="splitter.split_rule.ratios", value=0.6, index=0)
-        assert spec.path == "splitter.split_rule.ratios"
-        assert spec.value == 0.6
-        assert spec.index == 0
 
     def test_param_spec_is_frozen(self):
+        from dataclasses import FrozenInstanceError
+
         spec = ParamSpec(path="test", value=1.0)
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             spec.value = 2.0
 
 

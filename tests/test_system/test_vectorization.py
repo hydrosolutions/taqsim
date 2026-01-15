@@ -5,7 +5,7 @@ import pytest
 
 from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSystem
 from taqsim.common import Strategy
-from taqsim.constraints import Ordered, SumToOne
+from taqsim.constraints import ConstraintSpec, Ordered, SumToOne
 
 if TYPE_CHECKING:
     pass
@@ -24,13 +24,18 @@ class FixedRelease(Strategy):
 
 @dataclass(frozen=True)
 class ProportionalSplit(Strategy):
-    __params__: ClassVar[tuple[str, ...]] = ("ratios",)
-    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"ratios": (0.0, 1.0)}
-    ratios: tuple[float, ...] = (0.5, 0.5)
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0),
+        "r2": (0.0, 1.0),
+    }
+    r1: float = 0.5
+    r2: float = 0.5
 
     def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
-        total = sum(self.ratios)
-        return {t: amount * r / total for t, r in zip(node.targets, self.ratios)}
+        total = self.r1 + self.r2
+        ratios = (self.r1 / total, self.r2 / total)
+        return {t: amount * r for t, r in zip(node.targets, ratios, strict=True)}
 
 
 @dataclass(frozen=True)
@@ -59,7 +64,7 @@ class ConstrainedSplit(Strategy):
 
     def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
         ratios = (self.r1, self.r2, self.r3)
-        return {t: amount * r for t, r in zip(node.targets, ratios)}
+        return {t: amount * r for t, r in zip(node.targets, ratios, strict=True)}
 
 
 @dataclass(frozen=True)
@@ -112,7 +117,7 @@ def build_test_system() -> WaterSystem:
     system.add_node(
         Splitter(
             id="junction",
-            split_rule=ProportionalSplit(ratios=(0.6, 0.4)),
+            split_rule=ProportionalSplit(r1=0.6, r2=0.4),
         )
     )
     system.add_node(Sink(id="city"))
@@ -138,8 +143,9 @@ class TestParamSchema:
 
         # Should include release_rule params
         assert "dam.release_rule.rate" in paths
-        # Should include split_rule params (tuple flattened)
-        assert any("junction.split_rule.ratios" in p for p in paths)
+        # Should include split_rule params
+        assert "junction.split_rule.r1" in paths
+        assert "junction.split_rule.r2" in paths
         # Should NOT include loss_rule (not a Strategy)
         assert not any("loss_rule" in p for p in paths)
 
@@ -147,14 +153,14 @@ class TestParamSchema:
         system = WaterSystem()
         assert system.param_schema() == []
 
-    def test_tuple_params_are_flattened(self):
+    def test_scalar_params_are_collected(self):
         system = build_test_system()
         schema = system.param_schema()
 
-        ratio_specs = [s for s in schema if "ratios" in s.path]
-        assert len(ratio_specs) == 2
-        assert ratio_specs[0].index == 0
-        assert ratio_specs[1].index == 1
+        r1_specs = [s for s in schema if "r1" in s.path]
+        r2_specs = [s for s in schema if "r2" in s.path]
+        assert len(r1_specs) == 1
+        assert len(r2_specs) == 1
 
 
 class TestToVector:
@@ -174,7 +180,7 @@ class TestToVector:
         schema = system.param_schema()
         vector = system.to_vector()
 
-        for spec, val in zip(schema, vector):
+        for spec, val in zip(schema, vector, strict=True):
             assert spec.value == val
 
 
@@ -202,9 +208,8 @@ class TestWithVector:
     def test_new_system_has_updated_params(self):
         system = build_test_system()
 
-        # Double all values
-        original_vector = system.to_vector()
-        new_vector = [100.0, 0.7, 0.3]  # new rate and ratios
+        # New values: rate, r1, r2
+        new_vector = [100.0, 0.7, 0.3]
 
         new_system = system.with_vector(new_vector)
 
@@ -289,10 +294,10 @@ class TestParamBounds:
         assert "dam.release_rule.rate" in bounds
         assert bounds["dam.release_rule.rate"] == (0.0, 200.0)
 
-        assert "junction.split_rule.ratios[0]" in bounds
-        assert "junction.split_rule.ratios[1]" in bounds
-        assert bounds["junction.split_rule.ratios[0]"] == (0.0, 1.0)
-        assert bounds["junction.split_rule.ratios[1]"] == (0.0, 1.0)
+        assert "junction.split_rule.r1" in bounds
+        assert "junction.split_rule.r2" in bounds
+        assert bounds["junction.split_rule.r1"] == (0.0, 1.0)
+        assert bounds["junction.split_rule.r2"] == (0.0, 1.0)
 
     def test_raises_for_missing_bounds(self):
         """Raises ValueError when strategy params lack bounds."""
@@ -312,15 +317,15 @@ class TestParamBounds:
         with pytest.raises(ValueError, match="Missing bounds"):
             system.param_bounds()
 
-    def test_tuple_params_get_indexed_keys(self):
-        """Tuple parameters get separate indexed keys."""
+    def test_scalar_params_have_simple_keys(self):
+        """Scalar parameters have simple dot-separated keys."""
         system = build_test_system()
         bounds = system.param_bounds()
 
-        ratio_keys = [k for k in bounds if "ratios" in k]
-        assert len(ratio_keys) == 2
-        assert "junction.split_rule.ratios[0]" in ratio_keys
-        assert "junction.split_rule.ratios[1]" in ratio_keys
+        split_keys = [k for k in bounds if "split_rule" in k]
+        assert len(split_keys) == 2
+        assert "junction.split_rule.r1" in split_keys
+        assert "junction.split_rule.r2" in split_keys
 
 
 class TestBoundsVector:
@@ -342,25 +347,25 @@ class TestBoundsVector:
         schema = system.param_schema()
         bounds_vec = system.bounds_vector()
 
-        for spec, bound in zip(schema, bounds_vec):
+        for spec, bound in zip(schema, bounds_vec, strict=True):
             if "release_rule.rate" in spec.path:
                 assert bound == (0.0, 200.0)
-            elif "ratios" in spec.path:
+            elif "r1" in spec.path or "r2" in spec.path:
                 assert bound == (0.0, 1.0)
 
 
-class TestConstraints:
-    """Tests for WaterSystem.constraints()."""
+class TestConstraintSpecs:
+    """Tests for WaterSystem.constraint_specs()."""
 
-    def test_constraints_returns_empty_for_no_constraints(self):
+    def test_constraint_specs_returns_empty_for_no_constraints(self):
         """System with no constrained strategies returns empty list."""
         system = build_test_system()
-        constraints = system.constraints()
+        specs = system.constraint_specs()
 
-        assert constraints == []
+        assert specs == []
 
-    def test_constraints_discovers_from_strategies(self):
-        """constraints() discovers constraints from node strategies."""
+    def test_constraint_specs_discovers_from_strategies(self):
+        """constraint_specs() discovers constraints from node strategies."""
         system = WaterSystem(dt=1.0)
 
         system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
@@ -389,16 +394,16 @@ class TestConstraints:
         system.add_edge(Edge(id="e4", source="junction", target="farm", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
         system.add_edge(Edge(id="e5", source="junction", target="env", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
 
-        constraints = system.constraints()
+        specs = system.constraint_specs()
 
-        assert len(constraints) == 2
+        assert len(specs) == 2
 
-        constraint_types = [type(c).__name__ for _, c in constraints]
+        constraint_types = [type(spec.constraint).__name__ for spec in specs]
         assert "Ordered" in constraint_types
         assert "SumToOne" in constraint_types
 
-    def test_constraints_returns_prefix_for_path_mapping(self):
-        """Constraints are returned with correct prefix for path remapping."""
+    def test_constraint_specs_returns_fully_resolved_spec(self):
+        """ConstraintSpec contains prefix, param_paths, and param_bounds."""
         system = WaterSystem(dt=1.0)
 
         system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
@@ -416,11 +421,24 @@ class TestConstraints:
         system.add_edge(Edge(id="e1", source="river", target="tank", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
         system.add_edge(Edge(id="e2", source="tank", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
 
-        constraints = system.constraints()
+        specs = system.constraint_specs()
 
-        assert len(constraints) == 1
-        prefix, constraint = constraints[0]
+        assert len(specs) == 1
+        spec = specs[0]
 
-        assert prefix == "tank.release_rule"
-        assert isinstance(constraint, Ordered)
-        assert constraint.params == ("low", "high")
+        assert isinstance(spec, ConstraintSpec)
+        assert spec.prefix == "tank.release_rule"
+        assert isinstance(spec.constraint, Ordered)
+        assert spec.constraint.params == ("low", "high")
+
+        # Check param_paths
+        assert spec.param_paths == {
+            "low": "tank.release_rule.low",
+            "high": "tank.release_rule.high",
+        }
+
+        # Check param_bounds
+        assert spec.param_bounds == {
+            "low": (0.0, 100.0),
+            "high": (0.0, 100.0),
+        }

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from taqsim.constraints import Constraint
     from taqsim.node.base import BaseNode
 
-ParamValue = float | tuple[float, ...]
+ParamValue = float
 ParamBounds = tuple[float, float]
 
 
@@ -76,5 +76,4 @@ class ParamSpec:
     """Describes a single tunable parameter in the system."""
 
     path: str  # e.g., "dam.release_rule.rate"
-    value: float  # flattened scalar value
-    index: int | None = None  # position in tuple, None for scalar
+    value: float  # scalar value
