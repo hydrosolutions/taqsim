@@ -52,7 +52,7 @@ from .objective import (
     maximize,
     minimize,
 )
-from .optimization import make_repair
+from .optimization import OptimizeResult, Solution, make_repair, optimize
 from .system import WaterSystem
 
 __all__ = [
@@ -74,6 +74,9 @@ __all__ = [
     "SumToOne",
     # Optimization
     "make_repair",
+    "optimize",
+    "OptimizeResult",
+    "Solution",
     # Nodes
     "BaseNode",
     "Source",
