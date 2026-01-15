@@ -6,23 +6,23 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    import marimo as mo
     from dataclasses import dataclass
 
-    from taqsim.common import EVAPORATION, SEEPAGE, LossReason
+    import marimo as mo
+
+    from taqsim.common import CAPACITY_EXCEEDED, EVAPORATION, SEEPAGE, LossReason
+    from taqsim.edge import Edge, WaterDelivered, WaterLost
     from taqsim.node import (
-        Source,
-        Storage,
-        Splitter,
+        DeficitRecorded,
         Demand,
         Sink,
+        Source,
+        Splitter,
+        Storage,
         TimeSeries,
-        WaterReceived,
         WaterDistributed,
-        DeficitRecorded,
     )
-    from taqsim.edge import Edge, EdgeLossRule, WaterDelivered, WaterLost
-    from taqsim.common import CAPACITY_EXCEEDED
+
     return (
         CAPACITY_EXCEEDED,
         DeficitRecorded,
@@ -76,8 +76,7 @@ def _(EVAPORATION, LossReason, SEEPAGE, TimeSeries, dataclass):
             if not targets:
                 return {}
             share = amount / len(targets)
-            return {target: share for target in targets}
-
+            return dict.fromkeys(targets, share)
 
     @dataclass
     class SingleTarget:
@@ -87,7 +86,6 @@ def _(EVAPORATION, LossReason, SEEPAGE, TimeSeries, dataclass):
             if not targets:
                 return {}
             return {targets[0]: amount}
-
 
     @dataclass
     class FarmFirstSplit:
@@ -104,7 +102,6 @@ def _(EVAPORATION, LossReason, SEEPAGE, TimeSeries, dataclass):
             city_allocation = amount - farm_allocation
 
             return {farm_id: farm_allocation, city_id: city_allocation}
-
 
     @dataclass
     class FixedRelease:
@@ -123,7 +120,6 @@ def _(EVAPORATION, LossReason, SEEPAGE, TimeSeries, dataclass):
         ) -> float:
             return storage * self.fraction
 
-
     @dataclass
     class SimpleLoss:
         """Simple evaporation and seepage losses."""
@@ -131,24 +127,18 @@ def _(EVAPORATION, LossReason, SEEPAGE, TimeSeries, dataclass):
         evap_rate: float = 0.01
         seep_rate: float = 0.005
 
-        def calculate(
-            self, storage: float, capacity: float, t: int, dt: float
-        ) -> dict[LossReason, float]:
+        def calculate(self, storage: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
             return {
                 EVAPORATION: storage * self.evap_rate * dt,
                 SEEPAGE: storage * self.seep_rate * dt,
             }
 
-
     @dataclass
     class ZeroEdgeLoss:
         """No losses during transport."""
 
-        def calculate(
-            self, flow: float, capacity: float, t: int, dt: float
-        ) -> dict[LossReason, float]:
+        def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
             return {}
-
 
     @dataclass
     class TransportLoss:
@@ -156,10 +146,9 @@ def _(EVAPORATION, LossReason, SEEPAGE, TimeSeries, dataclass):
 
         fraction: float = 0.05
 
-        def calculate(
-            self, flow: float, capacity: float, t: int, dt: float
-        ) -> dict[LossReason, float]:
+        def calculate(self, flow: float, capacity: float, t: int, dt: float) -> dict[LossReason, float]:
             return {SEEPAGE: flow * self.fraction}
+
     return (
         EqualSplit,
         FarmFirstSplit,
@@ -184,15 +173,9 @@ def _(mo):
 @app.cell
 def _(mo):
     # UI Controls
-    dam_release_slider = mo.ui.slider(
-        start=0.1, stop=0.8, step=0.05, value=0.3, label="Dam Release Fraction"
-    )
-    farm_demand_slider = mo.ui.slider(
-        start=10, stop=80, step=5, value=30, label="Farm Demand (units/s)"
-    )
-    initial_storage_slider = mo.ui.slider(
-        start=100, stop=900, step=50, value=500, label="Initial Dam Storage"
-    )
+    dam_release_slider = mo.ui.slider(start=0.1, stop=0.8, step=0.05, value=0.3, label="Dam Release Fraction")
+    farm_demand_slider = mo.ui.slider(start=10, stop=80, step=5, value=30, label="Farm Demand (units/s)")
+    initial_storage_slider = mo.ui.slider(start=100, stop=900, step=50, value=500, label="Initial Dam Storage")
 
     mo.hstack(
         [dam_release_slider, farm_demand_slider, initial_storage_slider],
@@ -441,17 +424,22 @@ def _(CAPACITY_EXCEEDED, DeficitRecorded, WaterDistributed, WaterLost, edges, no
         turbine_flow = [e.amount for e in nodes["turbine"].events_of_type(WaterDistributed) if e.t == t]
         results["turbine_flow"].append(sum(turbine_flow))
 
-        farm_alloc = [e.amount for e in nodes["junction"].events_of_type(WaterDistributed)
-                      if e.target_id == "farm" and e.t == t]
+        farm_alloc = [
+            e.amount for e in nodes["junction"].events_of_type(WaterDistributed) if e.target_id == "farm" and e.t == t
+        ]
         results["farm_allocation"].append(sum(farm_alloc))
 
-        city_alloc = [e.amount for e in nodes["junction"].events_of_type(WaterDistributed)
-                      if e.target_id == "city" and e.t == t]
+        city_alloc = [
+            e.amount for e in nodes["junction"].events_of_type(WaterDistributed) if e.target_id == "city" and e.t == t
+        ]
         results["city_allocation"].append(sum(city_alloc))
 
         # Farm satisfaction
-        farm_consumed = [e.amount for e in nodes["farm"].events if hasattr(e, "amount") and e.t == t
-                        and type(e).__name__ == "WaterConsumed"]
+        farm_consumed = [
+            e.amount
+            for e in nodes["farm"].events
+            if hasattr(e, "amount") and e.t == t and type(e).__name__ == "WaterConsumed"
+        ]
         farm_deficits = nodes["farm"].events_of_type(DeficitRecorded)
         farm_def_t = [e.deficit for e in farm_deficits if e.t == t]
         results["farm_satisfied"].append(sum(farm_consumed))
@@ -481,7 +469,7 @@ def _(mo, results):
     | Total Flood Excess | **{total_flood:.1f}** units |
     | Months with Flooding | **{flood_months}** / 12 |
     | Total Farm Deficit | **{total_farm_deficit:.1f}** units |
-    | Final Dam Storage | **{results['dam_storage'][-1]:.1f}** units |
+    | Final Dam Storage | **{results["dam_storage"][-1]:.1f}** units |
     """
 
     if flood_months > 0:
@@ -550,19 +538,11 @@ def _(alt, df, mo):
     # Flood analysis
     flood_base = alt.Chart(df).encode(x=alt.X("month:O", title="Month"))
 
-    city_flow = flood_base.mark_bar(color="lightblue").encode(
-        y=alt.Y("city_allocation:Q", title="City Flow (units/s)")
-    )
+    city_flow = flood_base.mark_bar(color="lightblue").encode(y=alt.Y("city_allocation:Q", title="City Flow (units/s)"))
 
-    flood_excess = flood_base.mark_bar(color="red").encode(
-        y=alt.Y("city_flood_excess:Q", title="Flood Excess")
-    )
+    flood_excess = flood_base.mark_bar(color="red").encode(y=alt.Y("city_flood_excess:Q", title="Flood Excess"))
 
-    threshold = (
-        alt.Chart(df)
-        .mark_rule(color="darkred", strokeDash=[5, 5])
-        .encode(y=alt.datum(100))
-    )
+    threshold = alt.Chart(df).mark_rule(color="darkred", strokeDash=[5, 5]).encode(y=alt.datum(100))
 
     flood_chart = (
         alt.layer(city_flow, flood_excess, threshold)
@@ -576,7 +556,7 @@ def _(alt, df, mo):
 
 @app.cell
 def _(mo):
-    mo.md("""
+    mo.md(r"""
     ## Water Balance Equation
 
     At the Splitter (junction), the water balance is:
