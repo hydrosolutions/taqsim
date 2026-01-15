@@ -183,3 +183,134 @@ class TestMakeRepair:
         repaired_twice = repair(repaired_once)
 
         np.testing.assert_array_almost_equal(repaired_once, repaired_twice)
+
+
+# Time-varying strategy with SumToOne constraint
+# Note: We override constraints() instead of using __constraints__ because
+# the Strategy.__post_init__ validation doesn't yet handle time-varying params
+# with constraints (it tries to sum tuples instead of checking per-timestep).
+@dataclass(frozen=True)
+class TimeVaryingSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0),
+        "r2": (0.0, 1.0),
+    }
+    __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    r1: tuple[float, ...] = (0.6, 0.5, 0.4)
+    r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+
+    def split(self, node, amount: float, t: int) -> dict[str, float]:
+        return {"a": amount * self.r1[t], "b": amount * self.r2[t]}
+
+    def constraints(self, node) -> tuple:
+        return (SumToOne(params=("r1", "r2")),)
+
+
+class TestMakeRepairTimeVarying:
+    """Tests for make_repair with time-varying parameters."""
+
+    def test_clips_each_timestep_independently(self):
+        """Each indexed value clipped to bounds independently."""
+
+        # Create simple system with time-varying param (no constraints)
+        @dataclass(frozen=True)
+        class TVRelease(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (50.0, 50.0, 50.0)
+
+            def release(self, node, inflow: float, t: int, dt: float) -> float:
+                return self.rate[t]
+
+        storage = Storage(id="dam", capacity=1000.0, release_rule=TVRelease(), loss_rule=SimpleLoss())
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        repair = make_repair(system)
+
+        # Values outside bounds
+        x = np.array([-10.0, 50.0, 150.0])
+        repaired = repair(x)
+
+        assert repaired[0] == 0.0  # Clipped to lower
+        assert repaired[1] == 50.0  # Unchanged
+        assert repaired[2] == 100.0  # Clipped to upper
+
+    def test_constraint_applied_per_timestep(self):
+        """SumToOne applied to r1[t], r2[t] for each t."""
+        splitter = Splitter(id="split", split_rule=TimeVaryingSplit())
+        splitter._set_targets(["a", "b"])
+        sink_a = Sink(id="sink_a")
+        sink_b = Sink(id="sink_b")
+        source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
+
+        system = WaterSystem()
+        system.add_node(source)
+        system.add_node(splitter)
+        system.add_node(sink_a)
+        system.add_node(sink_b)
+        system.add_edge(Edge(id="e1", source="src", target="split", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="a", source="split", target="sink_a", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="b", source="split", target="sink_b", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        repair = make_repair(system)
+
+        # Vector: [r1[0], r1[1], r1[2], r2[0], r2[1], r2[2]]
+        # Values that don't sum to 1 at each timestep
+        x = np.array([0.3, 0.4, 0.5, 0.3, 0.4, 0.5])  # Each pair sums to 0.6
+        repaired = repair(x)
+
+        # After repair, each timestep should sum to 1.0
+        assert abs(repaired[0] + repaired[3] - 1.0) < 1e-9  # t=0
+        assert abs(repaired[1] + repaired[4] - 1.0) < 1e-9  # t=1
+        assert abs(repaired[2] + repaired[5] - 1.0) < 1e-9  # t=2
+
+    def test_constant_only_constraints_unchanged(self):
+        """Constraints with only constants behave as before."""
+        # Use existing OrderedRelease from the file (constant params)
+        storage = Storage(id="dam", capacity=1000.0, release_rule=OrderedRelease(), loss_rule=SimpleLoss())
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        repair = make_repair(system)
+
+        # Schema order: high (index 0), low (index 1)
+        # Violates Ordered constraint: low > high (80 > 20)
+        x = np.array([20.0, 80.0])  # high=20, low=80 violates low <= high
+        repaired = repair(x)
+
+        # After repair: low <= high (repaired[1] <= repaired[0])
+        assert repaired[1] <= repaired[0]
+
+    def test_idempotent_with_time_varying(self):
+        """repair(repair(x)) == repair(x) for time-varying params."""
+        splitter = Splitter(id="split", split_rule=TimeVaryingSplit())
+        splitter._set_targets(["a", "b"])
+        sink_a = Sink(id="sink_a")
+        sink_b = Sink(id="sink_b")
+        source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
+
+        system = WaterSystem()
+        system.add_node(source)
+        system.add_node(splitter)
+        system.add_node(sink_a)
+        system.add_node(sink_b)
+        system.add_edge(Edge(id="e1", source="src", target="split", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="a", source="split", target="sink_a", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="b", source="split", target="sink_b", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        repair = make_repair(system)
+
+        x = np.array([0.3, 0.4, 0.5, 0.3, 0.4, 0.5])
+        once = repair(x)
+        twice = repair(once)
+
+        np.testing.assert_array_almost_equal(once, twice)

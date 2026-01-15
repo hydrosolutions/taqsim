@@ -7,6 +7,8 @@ from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSyste
 from taqsim.common import Strategy
 from taqsim.constraints import ConstraintSpec, Ordered, SumToOne
 
+from .conftest import FakeEdgeLossRule, FakeLossRule
+
 if TYPE_CHECKING:
     pass
 
@@ -443,3 +445,237 @@ class TestConstraintSpecs:
             "low": (0.0, 100.0),
             "high": (0.0, 100.0),
         }
+
+
+# Test strategy with time-varying param
+@dataclass(frozen=True)
+class TimeVaryingRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return min(self.rate[t] * dt, node.storage)
+
+
+# Mixed strategy: constant + time-varying
+@dataclass(frozen=True)
+class MixedParamRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "base": (0.0, 50.0),
+        "multiplier": (0.5, 2.0),
+    }
+    __time_varying__: ClassVar[tuple[str, ...]] = ("multiplier",)
+    base: float = 10.0
+    multiplier: tuple[float, ...] = (1.0, 1.5, 2.0)
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return min(self.base * self.multiplier[t] * dt, node.storage)
+
+
+class TestParamSchemaTimeVarying:
+    """Tests for param_schema() with time-varying parameters."""
+
+    def test_expands_time_varying_to_indexed_paths(self):
+        """Time-varying param 'rate' with 3 values becomes rate[0], rate[1], rate[2]."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        schema = system.param_schema()
+        paths = [s.path for s in schema]
+
+        assert "dam.release_rule.rate[0]" in paths
+        assert "dam.release_rule.rate[1]" in paths
+        assert "dam.release_rule.rate[2]" in paths
+        assert "dam.release_rule.rate" not in paths  # No base path
+
+    def test_values_match_tuple_elements(self):
+        """ParamSpec.value for rate[i] equals strategy.rate[i]."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        schema = system.param_schema()
+        schema_dict = {s.path: s.value for s in schema}
+
+        assert schema_dict["dam.release_rule.rate[0]"] == 10.0
+        assert schema_dict["dam.release_rule.rate[1]"] == 20.0
+        assert schema_dict["dam.release_rule.rate[2]"] == 30.0
+
+
+class TestToVectorTimeVarying:
+    """Tests for to_vector() with time-varying parameters."""
+
+    def test_flattens_tuple_to_consecutive_elements(self):
+        """Tuple (10, 20, 30) flattens to consecutive vector elements."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        vector = system.to_vector()
+        assert vector == [10.0, 20.0, 30.0]
+
+    def test_vector_length_accounts_for_expanded_tuples(self):
+        """Vector length = sum of tuple lengths."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=MixedParamRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        vector = system.to_vector()
+        # base (1) + multiplier (3) = 4
+        assert len(vector) == 4
+
+
+class TestWithVectorTimeVarying:
+    """Tests for with_vector() reconstructing tuples."""
+
+    def test_reconstructs_tuple_from_indexed_values(self):
+        """Indexed vector elements reconstructed as tuple."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        new_system = system.with_vector([40.0, 50.0, 60.0])
+        new_strategy = new_system.nodes["dam"].release_rule
+        assert new_strategy.rate == (40.0, 50.0, 60.0)
+
+    def test_roundtrip_preserves_values(self):
+        """system.with_vector(system.to_vector()) preserves all values."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        vector = system.to_vector()
+        new_system = system.with_vector(vector)
+        assert new_system.to_vector() == vector
+
+
+class TestBoundsVectorTimeVarying:
+    """Tests for bounds_vector() with time-varying parameters."""
+
+    def test_bounds_expanded_for_each_timestep(self):
+        """Bounds repeated for each index."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        bounds = system.bounds_vector()
+        assert bounds == [(0.0, 100.0), (0.0, 100.0), (0.0, 100.0)]
+
+    def test_bounds_length_matches_vector(self):
+        """bounds_vector() length equals to_vector() length."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=MixedParamRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+
+        assert len(system.bounds_vector()) == len(system.to_vector())
+
+
+class TestValidateTimeVaryingLengths:
+    """Tests for _validate_time_varying_lengths."""
+
+    def test_sufficient_length_passes(self):
+        """Time-varying param with length >= timesteps passes."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.validate()
+
+        # Should not raise - 3 values, 3 timesteps
+        system.simulate(3)
+
+    def test_insufficient_length_raises(self):
+        """Time-varying param with length < timesteps raises."""
+        from taqsim.system.validation import InsufficientLengthError
+
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=TimeVaryingRelease(),
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.validate()
+
+        # Should raise - 3 values, 5 timesteps
+        with pytest.raises(InsufficientLengthError, match="length 3"):
+            system.simulate(5)

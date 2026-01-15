@@ -412,3 +412,56 @@ The repair function:
 3. Returns a valid numpy array
 
 See [Constraints](../common/02_constraints.md) for full documentation on constraint types and custom implementations.
+
+## Time-Varying Parameters
+
+Time-varying parameters are expanded in the vector representation.
+
+### Path Expansion
+
+For a time-varying parameter with N timesteps, `param_schema()` returns N `ParamSpec` objects with indexed paths:
+
+```python
+# Strategy: rate = (50.0, 60.0, 70.0)
+schema = system.param_schema()
+# [
+#   ParamSpec(path="dam.release_rule.rate[0]", value=50.0),
+#   ParamSpec(path="dam.release_rule.rate[1]", value=60.0),
+#   ParamSpec(path="dam.release_rule.rate[2]", value=70.0),
+# ]
+```
+
+### Vector Flattening
+
+`to_vector()` flattens tuples into consecutive elements:
+
+```python
+vector = system.to_vector()  # [50.0, 60.0, 70.0]
+```
+
+### Tuple Reconstruction
+
+`with_vector()` reconstructs tuples from indexed values:
+
+```python
+new_system = system.with_vector([55.0, 65.0, 75.0])
+# dam.release_rule.rate = (55.0, 65.0, 75.0)
+```
+
+### Bounds Expansion
+
+Bounds are replicated for each timestep index:
+
+```python
+bounds = system.bounds_vector()
+# [(0.0, 100.0), (0.0, 100.0), (0.0, 100.0)]
+```
+
+### Length Validation
+
+Before simulation, the system validates that time-varying parameters have sufficient length:
+
+```python
+# If rate has 3 values but simulate(5) is called:
+# Raises InsufficientLengthError
+```

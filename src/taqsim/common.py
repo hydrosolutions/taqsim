@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from taqsim.constraints import BoundViolationError, ConstraintViolationError
 
-ParamValue = float
+ParamValue = float | tuple[float, ...]
 ParamBounds = tuple[float, float]
 
 
@@ -44,6 +44,7 @@ class Strategy:
     __params__: ClassVar[tuple[str, ...]] = ()
     __bounds__: ClassVar[dict[str, ParamBounds]] = {}
     __constraints__: ClassVar[tuple["Constraint", ...]] = ()
+    __time_varying__: ClassVar[tuple[str, ...]] = ()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -52,6 +53,9 @@ class Strategy:
             invalid = set(c.params) - valid
             if invalid:
                 raise TypeError(f"{cls.__name__}: constraint references unknown params: {invalid}")
+        invalid_tv = set(cls.__time_varying__) - valid
+        if invalid_tv:
+            raise TypeError(f"{cls.__name__}: __time_varying__ references unknown params: {invalid_tv}")
 
     def __post_init__(self) -> None:
         """Validate parameter values against bounds and constraints."""
@@ -60,8 +64,15 @@ class Strategy:
                 continue
             value = getattr(self, param)
             lo, hi = self.__bounds__[param]
-            if not (lo <= value <= hi):
-                raise BoundViolationError(param, value, (lo, hi))
+            if param in self.__time_varying__:
+                if not isinstance(value, tuple):
+                    raise TypeError(f"Time-varying param '{param}' must be tuple, got {type(value).__name__}")
+                for i, v in enumerate(value):
+                    if not (lo <= v <= hi):
+                        raise BoundViolationError(f"{param}[{i}]", v, (lo, hi))
+            else:
+                if not (lo <= value <= hi):
+                    raise BoundViolationError(param, value, (lo, hi))
 
         if self.__constraints__:
             values = self.params()
@@ -81,6 +92,10 @@ class Strategy:
     def constraints(self, node: "BaseNode") -> tuple["Constraint", ...]:
         """Return constraints for this strategy."""
         return self.__constraints__
+
+    def time_varying(self) -> tuple[str, ...]:
+        """Return names of time-varying parameters."""
+        return self.__time_varying__
 
     def with_params(self, **kwargs: ParamValue) -> Self:
         """Create new instance with updated parameters (immutable)."""

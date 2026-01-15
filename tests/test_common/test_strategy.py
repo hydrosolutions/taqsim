@@ -351,3 +351,153 @@ class TestStrategyPostInitValidationOrder:
         strategy = BoundedStrategy(rate=50.0)
         with pytest.raises(BoundViolationError):
             strategy.with_params(rate=150.0)
+
+
+class TestTimeVaryingDeclaration:
+    """Tests for __time_varying__ class variable declaration and validation."""
+
+    def test_time_varying_default_is_empty_tuple(self):
+        """Strategy without __time_varying__ returns empty tuple."""
+
+        @dataclass(frozen=True)
+        class NoTimeVarying(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            rate: float = 50.0
+
+        s = NoTimeVarying()
+        assert s.time_varying() == ()
+
+    def test_init_subclass_accepts_valid_time_varying(self):
+        """Strategy with valid __time_varying__ constructs without error."""
+
+        @dataclass(frozen=True)
+        class ValidTimeVarying(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        s = ValidTimeVarying()
+        assert s.time_varying() == ("rate",)
+
+    def test_init_subclass_raises_for_unknown_time_varying_param(self):
+        """Raises TypeError if __time_varying__ references param not in __params__."""
+        with pytest.raises(TypeError, match="unknown params"):
+
+            @dataclass(frozen=True)
+            class InvalidTimeVarying(Strategy):
+                __params__: ClassVar[tuple[str, ...]] = ("rate",)
+                __time_varying__: ClassVar[tuple[str, ...]] = ("unknown",)
+                rate: float = 50.0
+
+
+class TestTimeVaryingBoundsValidation:
+    """Tests for __post_init__ bounds validation with tuple values."""
+
+    def test_valid_tuple_within_bounds(self):
+        """Valid tuple where all elements satisfy bounds passes validation."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 50.0, 90.0)
+
+        s = TVStrategy()
+        assert s.rate == (10.0, 50.0, 90.0)
+
+    def test_tuple_element_violates_lower_bound(self):
+        """Raises BoundViolationError if tuple element below lower bound."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, -5.0, 90.0)
+
+        with pytest.raises(BoundViolationError, match=r"rate\[1\]"):
+            TVStrategy()
+
+    def test_tuple_element_violates_upper_bound(self):
+        """Raises BoundViolationError if tuple element exceeds upper bound."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 50.0, 150.0)
+
+        with pytest.raises(BoundViolationError, match=r"rate\[2\]"):
+            TVStrategy()
+
+    def test_time_varying_param_must_be_tuple(self):
+        """Raises TypeError if time-varying param is not a tuple."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: float = 50.0  # Wrong type!
+
+        with pytest.raises(TypeError, match="must be tuple"):
+            TVStrategy()
+
+
+class TestTimeVaryingParams:
+    """Tests for params() with time-varying values."""
+
+    def test_params_returns_tuple_for_time_varying(self):
+        """Time-varying param value is returned as tuple."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = TVStrategy()
+        assert s.params() == {"rate": (10.0, 20.0, 30.0)}
+
+    def test_params_mixed_constant_and_time_varying(self):
+        """Strategy with both constant and time-varying params."""
+
+        @dataclass(frozen=True)
+        class MixedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "base": (0.0, 100.0),
+                "multiplier": (0.5, 2.0),
+            }
+            __time_varying__: ClassVar[tuple[str, ...]] = ("multiplier",)
+            base: float = 10.0
+            multiplier: tuple[float, ...] = (1.0, 1.5, 2.0)
+
+        s = MixedStrategy()
+        params = s.params()
+        assert params["base"] == 10.0
+        assert params["multiplier"] == (1.0, 1.5, 2.0)
+
+
+class TestTimeVaryingWithParams:
+    """Tests for with_params() with time-varying parameters."""
+
+    def test_with_params_accepts_tuple(self):
+        """with_params() accepts tuple for time-varying param."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = TVStrategy()
+        s2 = s.with_params(rate=(40.0, 50.0, 60.0))
+        assert s2.rate == (40.0, 50.0, 60.0)
+        assert s.rate == (10.0, 20.0, 30.0)  # Original unchanged

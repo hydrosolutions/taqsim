@@ -14,19 +14,8 @@ def make_repair(system: "WaterSystem") -> Callable[["NDArray[np.float64]"], "NDA
 
     The returned function:
     1. Clips values to bounds
-    2. Applies constraint repairs in order
+    2. Applies constraint repairs (per-timestep for time-varying params)
     3. Returns repaired numpy array
-
-    Example usage with ctrl-freak:
-        repair = make_repair(system)
-        crossover = lambda p1, p2: repair(sbx_crossover(...)(p1, p2))
-        mutate = lambda x: repair(polynomial_mutation(...)(x))
-
-    Args:
-        system: WaterSystem with param_schema, param_bounds, and constraint_specs
-
-    Returns:
-        Repair function that takes and returns numpy arrays
     """
     schema = system.param_schema()
     bounds_dict = system.param_bounds()
@@ -39,30 +28,65 @@ def make_repair(system: "WaterSystem") -> Callable[["NDArray[np.float64]"], "NDA
     lower = np.array([bounds_dict[k][0] for k in keys])
     upper = np.array([bounds_dict[k][1] for k in keys])
 
+    # Build index lookup: path -> vector index
+    path_to_idx = {path: i for i, path in enumerate(keys)}
+
+    # For time-varying constraints, determine the number of timesteps
+    # by looking at paths like "node.strategy.param[0]", "node.strategy.param[1]", etc.
+    def get_timestep_count(spec):
+        """Get number of timesteps for a time-varying constraint."""
+        if not spec.time_varying_params:
+            return 0
+        # Find a time-varying param and count its indices
+        for local_name in spec.time_varying_params:
+            base_path = spec.param_paths[local_name]
+            count = 0
+            while f"{base_path}[{count}]" in path_to_idx:
+                count += 1
+            if count > 0:
+                return count
+        return 0
+
     def repair(x: "NDArray[np.float64]") -> "NDArray[np.float64]":
         # 1. Clip to bounds (fast, vectorized)
         result = np.clip(x, lower, upper)
 
-        # 2. If no constraints, return clipped
         if not constraint_specs:
             return result
 
-        # 3. Convert to dict for constraint operations
-        values = {k: float(result[i]) for i, k in enumerate(keys)}
-
-        # 4. Apply each constraint in order
+        # 2. Apply each constraint
         for spec in constraint_specs:
-            # Extract relevant values with local names
-            local_values = {p: values[full_path] for p, full_path in spec.param_paths.items()}
+            if spec.time_varying_params:
+                # Time-varying constraint: apply per-timestep
+                n_timesteps = get_timestep_count(spec)
+                for t in range(n_timesteps):
+                    # Extract scalar values for this timestep
+                    local_values = {}
+                    for p, full_path in spec.param_paths.items():
+                        if p in spec.time_varying_params:
+                            # Time-varying: get indexed value
+                            idx = path_to_idx[f"{full_path}[{t}]"]
+                            local_values[p] = float(result[idx])
+                        else:
+                            # Constant: get scalar value
+                            idx = path_to_idx[full_path]
+                            local_values[p] = float(result[idx])
 
-            # Apply repair with bounds
-            repaired = spec.constraint.repair(local_values, spec.param_bounds)
+                    # Apply repair
+                    repaired = spec.constraint.repair(local_values, spec.param_bounds)
 
-            # Write back to main dict
-            for p, full_path in spec.param_paths.items():
-                values[full_path] = repaired[p]
+                    # Write back ONLY time-varying params
+                    for p, full_path in spec.param_paths.items():
+                        if p in spec.time_varying_params:
+                            idx = path_to_idx[f"{full_path}[{t}]"]
+                            result[idx] = repaired[p]
+            else:
+                # Constant-only constraint: apply once (original behavior)
+                local_values = {p: float(result[path_to_idx[full_path]]) for p, full_path in spec.param_paths.items()}
+                repaired = spec.constraint.repair(local_values, spec.param_bounds)
+                for p, full_path in spec.param_paths.items():
+                    result[path_to_idx[full_path]] = repaired[p]
 
-        # 5. Convert back to array
-        return np.array([values[k] for k in keys])
+        return result
 
     return repair

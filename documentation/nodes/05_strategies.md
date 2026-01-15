@@ -376,3 +376,64 @@ AllocationSplit(city=0.6, farm=0.6)  # ConstraintViolationError: SumToOne violat
 1. **Bounds first**: All parameter bounds are checked
 2. **Constraints second**: All constraints are validated
 3. **Fail fast**: First violation raises an error
+
+## Time-Varying Parameters
+
+Some operational strategies have parameters that vary over time. For example, a release rate might differ in wet vs dry seasons, or allocation ratios might shift monthly.
+
+### Declaration
+
+Use `__time_varying__` to declare which parameters vary over time:
+
+```python
+@dataclass(frozen=True)
+class SeasonalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+
+    rate: tuple[float, ...] = (50.0, 60.0, 70.0)  # 3 timesteps
+
+    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+        return min(self.rate[t] * dt, node.storage)
+```
+
+### Key Elements
+
+| Element | Purpose |
+|---------|---------|
+| `__time_varying__` | Declares which `__params__` vary over time |
+| `tuple[float, ...]` field | Time-varying params stored as tuples |
+| `self.rate[t]` | Access value for current timestep |
+
+### Bounds Validation
+
+Each element in a time-varying tuple is validated against bounds:
+
+```python
+# Valid - all elements within (0.0, 100.0)
+SeasonalRelease(rate=(50.0, 60.0, 70.0))
+
+# Invalid - 150.0 exceeds upper bound at index 2
+SeasonalRelease(rate=(50.0, 60.0, 150.0))  # Raises BoundViolationError for rate[2]
+```
+
+### Constraints
+
+Constraints involving time-varying parameters are applied per-timestep:
+
+```python
+@dataclass(frozen=True)
+class SeasonalSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0), "r2": (0.0, 1.0)
+    }
+    __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2")),)
+
+    r1: tuple[float, ...] = (0.6, 0.5, 0.4)
+    r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+```
+
+For each timestep `t`, `r1[t] + r2[t]` must equal 1.0.

@@ -117,6 +117,7 @@ class WaterSystem:
     def simulate(self, timesteps: int) -> None:
         if not self._validated:
             self.validate()
+        self._validate_time_varying_lengths(timesteps)
 
         for t in range(timesteps):
             for node_id in nx.topological_sort(self._graph):
@@ -176,7 +177,7 @@ class WaterSystem:
             for strategy_name, strategy in node.strategies().items():
                 for param_name, value in strategy.params().items():
                     path = f"{node_id}.{strategy_name}.{param_name}"
-                    specs.append(self._flatten_param(path, value))
+                    specs.extend(self._flatten_param(path, value))
 
         return sorted(specs, key=lambda s: s.path)
 
@@ -196,12 +197,18 @@ class WaterSystem:
         for node_id, node in sorted(self._nodes.items()):
             for strategy_name, strategy in node.strategies().items():
                 strategy_bounds = strategy.bounds(node)
-                for param_name in strategy.params():
-                    path = f"{node_id}.{strategy_name}.{param_name}"
+                for param_name, value in strategy.params().items():
+                    base_path = f"{node_id}.{strategy_name}.{param_name}"
                     if param_name not in strategy_bounds:
-                        missing.append(path)
+                        missing.append(base_path)
                         continue
-                    bounds[path] = strategy_bounds[param_name]
+                    param_bound = strategy_bounds[param_name]
+
+                    if isinstance(value, tuple):
+                        for i in range(len(value)):
+                            bounds[f"{base_path}[{i}]"] = param_bound
+                    else:
+                        bounds[base_path] = param_bound
 
         if missing:
             raise ValueError(f"Missing bounds for parameters: {missing}")
@@ -209,13 +216,8 @@ class WaterSystem:
 
     def bounds_vector(self) -> list[tuple[float, float]]:
         """Return bounds matching to_vector() order."""
-        bounds_lookup: dict[str, tuple[float, float]] = {}
-        for node_id, node in sorted(self._nodes.items()):
-            for strategy_name, strategy in node.strategies().items():
-                for param_name, bound in strategy.bounds(node).items():
-                    bounds_lookup[f"{node_id}.{strategy_name}.{param_name}"] = bound
-
-        return [bounds_lookup.get(spec.path, (float("-inf"), float("inf"))) for spec in self.param_schema()]
+        all_bounds = self.param_bounds()
+        return [all_bounds.get(spec.path, (float("-inf"), float("inf"))) for spec in self.param_schema()]
 
     def constraint_specs(self) -> list["ConstraintSpec"]:
         """Collect constraints with resolved paths and bounds.
@@ -230,18 +232,35 @@ class WaterSystem:
         for node_id, node in sorted(self._nodes.items()):
             for strategy_name, strategy in node.strategies().items():
                 prefix = f"{node_id}.{strategy_name}"
+                param_values = strategy.params()
+
                 for constraint in strategy.constraints(node):
                     # Build param_paths: local name -> full path
                     param_paths = {p: f"{prefix}.{p}" for p in constraint.params}
 
                     # Build param_bounds: local name -> bounds
-                    param_bounds = {p: all_bounds[full_path] for p, full_path in param_paths.items()}
+                    # For time-varying params, bounds are indexed (e.g., path[0]), so look up first index
+                    param_bounds = {}
+                    for p, full_path in param_paths.items():
+                        if full_path in all_bounds:
+                            param_bounds[p] = all_bounds[full_path]
+                        elif f"{full_path}[0]" in all_bounds:
+                            # Time-varying param: use bounds from first index (all share same bounds)
+                            param_bounds[p] = all_bounds[f"{full_path}[0]"]
+                        else:
+                            raise KeyError(f"No bounds found for {full_path}")
+
+                    # Determine which constraint params are time-varying
+                    time_varying_params = frozenset(
+                        p for p in constraint.params if isinstance(param_values.get(p), tuple)
+                    )
 
                     spec = ConstraintSpec(
                         constraint=constraint,
                         prefix=prefix,
                         param_paths=param_paths,
                         param_bounds=param_bounds,
+                        time_varying_params=time_varying_params,
                     )
                     result.append(spec)
 
@@ -257,19 +276,43 @@ class WaterSystem:
             raise ValueError(f"Vector length {len(vector)} does not match schema length {len(schema)}")
 
         # Group values by node.strategy path
-        updates: dict[str, dict[str, float]] = {}
+        updates: dict[str, dict[str, float | tuple[float, ...]]] = {}
+        # Track indexed params separately: key -> {param_name: {idx: value}}
+        indexed_params: dict[str, dict[str, dict[int, float]]] = {}
 
         for spec, value in zip(schema, vector, strict=True):
             parts = spec.path.split(".")
             node_id = parts[0]
             strategy_name = parts[1]
-            param_name = parts[2]
+            param_part = parts[2]
 
             key = f"{node_id}.{strategy_name}"
+
+            # Parse param_part for index: "rate[5]" -> ("rate", 5)
+            if "[" in param_part:
+                bracket_idx = param_part.index("[")
+                param_name = param_part[:bracket_idx]
+                idx = int(param_part[bracket_idx + 1 : -1])
+
+                if key not in indexed_params:
+                    indexed_params[key] = {}
+                if param_name not in indexed_params[key]:
+                    indexed_params[key][param_name] = {}
+                indexed_params[key][param_name][idx] = value
+            else:
+                # Scalar param, store directly
+                if key not in updates:
+                    updates[key] = {}
+                updates[key][param_part] = value
+
+        # Convert indexed_params to tuples and merge into updates
+        for key, params in indexed_params.items():
             if key not in updates:
                 updates[key] = {}
-
-            updates[key][param_name] = value
+            for param_name, idx_values in params.items():
+                # Build tuple from collected values in index order
+                max_idx = max(idx_values.keys())
+                updates[key][param_name] = tuple(idx_values[i] for i in range(max_idx + 1))
 
         # Build new system with updated strategies
         return self._clone_with_updates(updates)
@@ -285,9 +328,22 @@ class WaterSystem:
         for edge in self._edges.values():
             edge.reset()
 
-    def _flatten_param(self, path: str, value: float) -> ParamSpec:
-        """Create ParamSpec for a scalar parameter."""
-        return ParamSpec(path=path, value=value)
+    def _flatten_param(self, path: str, value: float | tuple[float, ...]) -> list[ParamSpec]:
+        """Create ParamSpec(s) for a scalar or time-varying parameter."""
+        if isinstance(value, tuple):
+            return [ParamSpec(path=f"{path}[{i}]", value=v) for i, v in enumerate(value)]
+        return [ParamSpec(path=path, value=value)]
+
+    def _validate_time_varying_lengths(self, timesteps: int) -> None:
+        """Validate all time-varying parameters have sufficient length."""
+        from taqsim.system.validation import InsufficientLengthError
+
+        for node_id, node in sorted(self._nodes.items()):
+            for strategy_name, strategy in node.strategies().items():
+                for param_name, value in strategy.params().items():
+                    if isinstance(value, tuple) and len(value) < timesteps:
+                        path = f"{node_id}.{strategy_name}.{param_name}"
+                        raise InsufficientLengthError(path, len(value), timesteps)
 
     def edge_length(self, edge_id: str) -> float | None:
         """Compute geodesic length of an edge in meters.
