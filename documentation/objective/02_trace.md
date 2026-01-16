@@ -126,6 +126,25 @@ trace / 100  # Divide all values by 100
 trace ** 2   # Square all values
 ```
 
+## Cumulative Operations
+
+### cumsum
+
+Compute running cumulative sum with optional initial value:
+
+```python
+deltas = Trace.from_dict({0: 10, 1: -3, 2: 5})
+cumulative = deltas.cumsum()           # {0: 10, 1: 7, 2: 12}
+cumulative = deltas.cumsum(initial=50) # {0: 60, 1: 57, 2: 62}
+```
+
+Reconstruct storage level from delta events:
+
+```python
+net_change = stored - released - lost - spilled
+storage = net_change.cumsum(initial=dam.initial_storage)
+```
+
 ## Aggregation
 
 Reduce a Trace to a single value:

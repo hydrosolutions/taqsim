@@ -339,6 +339,104 @@ class TestTraceAggregation:
             trace.min()
 
 
+class TestTraceCumsum:
+    def test_cumsum_returns_running_total(self):
+        trace = Trace.from_dict({0: 10.0, 1: 5.0, 2: 15.0})
+
+        result = trace.cumsum()
+
+        assert result.values() == [10.0, 15.0, 30.0]
+
+    def test_cumsum_preserves_timesteps(self):
+        trace = Trace.from_dict({0: 10.0, 1: 5.0, 2: 15.0})
+
+        result = trace.cumsum()
+
+        assert result.timesteps() == [0, 1, 2]
+
+    def test_cumsum_returns_new_trace(self):
+        trace = Trace.from_dict({0: 10.0, 1: 5.0})
+
+        result = trace.cumsum()
+
+        assert trace[0] == 10.0
+        assert trace[1] == 5.0
+        assert result[0] == 10.0
+        assert result[1] == 15.0
+
+    def test_cumsum_single_value(self):
+        trace = Trace.from_dict({5: 42.0})
+
+        result = trace.cumsum()
+
+        assert result[5] == 42.0
+        assert len(result) == 1
+
+    def test_cumsum_with_initial_value(self):
+        trace = Trace.from_dict({0: 10.0, 1: -3.0, 2: 5.0})
+
+        result = trace.cumsum(initial=50.0)
+
+        assert result.values() == [60.0, 57.0, 62.0]
+
+    def test_cumsum_empty_returns_empty(self):
+        trace = Trace.empty()
+
+        result = trace.cumsum()
+
+        assert len(result) == 0
+
+    def test_cumsum_with_negative_values(self):
+        trace = Trace.from_dict({0: 10.0, 1: -15.0, 2: 5.0})
+
+        result = trace.cumsum()
+
+        assert result.values() == [10.0, -5.0, 0.0]
+
+    def test_cumsum_with_zeros(self):
+        trace = Trace.from_dict({0: 0.0, 1: 5.0, 2: 0.0})
+
+        result = trace.cumsum()
+
+        assert result.values() == [0.0, 5.0, 5.0]
+
+    def test_cumsum_non_contiguous_timesteps(self):
+        trace = Trace.from_dict({0: 1.0, 5: 2.0, 10: 3.0})
+
+        result = trace.cumsum()
+
+        assert result.items() == [(0, 1.0), (5, 3.0), (10, 6.0)]
+
+    def test_cumsum_unordered_dict_uses_sorted_order(self):
+        trace = Trace.from_dict({2: 3.0, 0: 1.0, 1: 2.0})
+
+        result = trace.cumsum()
+
+        assert result.items() == [(0, 1.0), (1, 3.0), (2, 6.0)]
+
+    def test_cumsum_chainable_with_map(self):
+        trace = Trace.from_dict({0: 10.0, 1: 5.0, 2: 15.0})
+
+        result = trace.cumsum().map(lambda x: x * 2)
+
+        assert result.values() == [20.0, 30.0, 60.0]
+
+    def test_cumsum_chainable_with_arithmetic(self):
+        trace = Trace.from_dict({0: 10.0, 1: 5.0, 2: 15.0})
+
+        result = trace.cumsum() + 100
+
+        assert result.values() == [110.0, 115.0, 130.0]
+
+    def test_cumsum_last_value_equals_sum_plus_initial(self):
+        trace = Trace.from_dict({0: 10.0, 1: 5.0, 2: 15.0})
+        initial = 50.0
+
+        result = trace.cumsum(initial=initial)
+
+        assert result.values()[-1] == trace.sum() + initial
+
+
 class TestTraceImmutability:
     def test_trace_is_frozen(self):
         trace = Trace.from_dict({0: 10.0})

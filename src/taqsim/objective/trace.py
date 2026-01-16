@@ -130,3 +130,11 @@ class Trace:
         if not self._data:
             raise ValueError("cannot compute min of empty Trace")
         return min(self._data.values())
+
+    def cumsum(self, initial: float = 0.0) -> Trace:
+        acc = initial
+        result: dict[int, float] = {}
+        for t in sorted(self._data.keys()):
+            acc += self._data[t]
+            result[t] = acc
+        return Trace(_data=result)
