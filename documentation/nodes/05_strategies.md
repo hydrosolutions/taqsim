@@ -460,3 +460,50 @@ class SeasonalBands(Strategy):
 ```
 
 At construction, `low[t] <= high[t]` is validated for every timestep.
+
+## Cyclical Time-Varying Parameters
+
+Some parameters repeat in cycles, such as monthly allocation ratios that apply across multiple years. The `__cyclical__` declaration enables short tuples to work for longer simulations.
+
+### Declaration
+
+```python
+@dataclass(frozen=True)
+class SeasonalAllocation(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("city_fraction",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"city_fraction": (0.0, 1.0)}
+    __time_varying__: ClassVar[tuple[str, ...]] = ("city_fraction",)
+    __cyclical__: ClassVar[tuple[str, ...]] = ("city_fraction",)
+
+    city_fraction: tuple[float, ...] = (0.5, 0.6, 0.7, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.3, 0.4)  # 12 monthly values
+```
+
+### Key Elements
+
+| Element | Purpose |
+|---------|---------|
+| `__cyclical__` | Declares which time-varying params repeat cyclically |
+| Must be subset of `__time_varying__` | Cyclical params must also be declared time-varying |
+| Implicit cycle length | Cycle length equals tuple length |
+
+### Behavior
+
+- **Access pattern**: `value[t % len(value)]` for cyclical params
+- **Simulation validation**: Cyclical params skip length validation (no InsufficientLengthError)
+- **Constraint validation**: For cyclical-only strategies, validates constraints at each cycle position
+
+### Example: Monthly Allocation for Multi-Year Simulation
+
+```python
+# 12 monthly values work for 120-month (10-year) simulation
+system.simulate(120)  # No error - city_fraction cycles through its 12 values
+```
+
+### Comparison: Time-Varying vs Cyclical
+
+| Aspect | Time-Varying | Cyclical |
+|--------|--------------|----------|
+| Tuple length | Must match simulation timesteps | Any length (cycles) |
+| Access pattern | `value[t]` | `value[t % len(value)]` |
+| Length validation | Raises InsufficientLengthError if too short | Skipped |
+| Use case | Unique value per timestep | Repeating patterns (seasonal, weekly) |

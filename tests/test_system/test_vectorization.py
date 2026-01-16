@@ -679,3 +679,145 @@ class TestValidateTimeVaryingLengths:
         # Should raise - 3 values, 5 timesteps
         with pytest.raises(InsufficientLengthError, match="length 3"):
             system.simulate(5)
+
+
+# Cyclical time-varying strategy
+@dataclass(frozen=True)
+class CyclicalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+    __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return min(self.rate[t % len(self.rate)] * dt, node.storage)
+
+
+# Non-cyclical time-varying strategy (same as TimeVaryingRelease but explicit)
+@dataclass(frozen=True)
+class NonCyclicalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        return min(self.rate[t] * dt, node.storage)
+
+
+# Mixed strategy: one cyclical, one non-cyclical
+@dataclass(frozen=True)
+class MixedCyclicalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "base": (0.0, 50.0),
+        "multiplier": (0.5, 2.0),
+    }
+    __time_varying__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    __cyclical__: ClassVar[tuple[str, ...]] = ("base",)  # base is cyclical, multiplier is not
+    base: tuple[float, ...] = (10.0, 20.0, 30.0)  # 3 values, cyclical
+    multiplier: tuple[float, ...] = (1.0,) * 10  # 10 values, non-cyclical
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        base_val = self.base[t % len(self.base)]
+        mult_val = self.multiplier[t]
+        return min(base_val * mult_val * dt, node.storage)
+
+
+# All-cyclical strategy with multiple params
+@dataclass(frozen=True)
+class AllCyclicalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "base": (0.0, 50.0),
+        "multiplier": (0.5, 2.0),
+    }
+    __time_varying__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    __cyclical__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    base: tuple[float, ...] = (10.0, 20.0)  # 2 values
+    multiplier: tuple[float, ...] = (1.0, 1.5, 2.0)  # 3 values
+
+    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+        base_val = self.base[t % len(self.base)]
+        mult_val = self.multiplier[t % len(self.multiplier)]
+        return min(base_val * mult_val * dt, node.storage)
+
+
+class TestValidateTimeVaryingLengthsCyclical:
+    """Tests for cyclical parameter validation in _validate_time_varying_lengths."""
+
+    def test_cyclical_param_skips_length_validation(self):
+        """Cyclical param with 3 values works for 10 timestep simulation."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=CyclicalRelease(),  # 3 values, cyclical
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.validate()
+
+        # Should not raise - cyclical params are not length-validated
+        system.simulate(10)
+
+    def test_non_cyclical_param_still_requires_sufficient_length(self):
+        """Non-cyclical param with 3 values raises InsufficientLengthError for 10 timestep simulation."""
+        from taqsim.system.validation import InsufficientLengthError
+
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=NonCyclicalRelease(),  # 3 values, non-cyclical
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.validate()
+
+        # Should raise - 3 values, 10 timesteps needed
+        with pytest.raises(InsufficientLengthError, match="length 3"):
+            system.simulate(10)
+
+    def test_mixed_strategy_only_non_cyclical_validated(self):
+        """Strategy with both cyclical (3 values) and non-cyclical (10 values) params works for 10 timesteps."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=MixedCyclicalRelease(),  # base=3 cyclical, multiplier=10 non-cyclical
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.validate()
+
+        # Should not raise - base is cyclical (skips validation), multiplier has 10 values
+        system.simulate(10)
+
+    def test_all_cyclical_strategy_never_raises_length_error(self):
+        """Strategy where all time-varying params are cyclical never raises length error."""
+        storage = Storage(
+            id="dam",
+            capacity=1000.0,
+            release_rule=AllCyclicalRelease(),  # base=2, multiplier=3, both cyclical
+            loss_rule=FakeLossRule(),
+        )
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.validate()
+
+        # Should not raise regardless of simulation length - all params are cyclical
+        system.simulate(100)

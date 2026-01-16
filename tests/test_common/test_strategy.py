@@ -630,3 +630,206 @@ class TestTimeVaryingPostInitConstraintValidation:
         error_msg = str(exc_info.value)
         # Error message should indicate timestep 2 via indexed param names
         assert "low[2]" in error_msg and "high[2]" in error_msg
+
+
+class TestCyclicalDeclaration:
+    """Tests for __cyclical__ class variable declaration and validation."""
+
+    def test_cyclical_default_is_empty_tuple(self):
+        """Strategy without __cyclical__ returns empty tuple."""
+
+        @dataclass(frozen=True)
+        class NoCyclical(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            rate: float = 50.0
+
+        s = NoCyclical()
+        assert s.cyclical() == ()
+
+    def test_init_subclass_accepts_valid_cyclical(self):
+        """Strategy with valid __cyclical__ (subset of __time_varying__) constructs without error."""
+
+        @dataclass(frozen=True)
+        class ValidCyclical(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        s = ValidCyclical()
+        assert s.cyclical() == ("rate",)
+
+    def test_init_subclass_raises_for_cyclical_not_in_time_varying(self):
+        """Raises TypeError if __cyclical__ references param not in __time_varying__."""
+        with pytest.raises(TypeError, match="__cyclical__ params must be in __time_varying__"):
+
+            @dataclass(frozen=True)
+            class InvalidCyclical(Strategy):
+                __params__: ClassVar[tuple[str, ...]] = ("rate", "threshold")
+                __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+                __cyclical__: ClassVar[tuple[str, ...]] = ("threshold",)  # not in __time_varying__
+                rate: tuple[float, ...] = (50.0, 60.0)
+                threshold: float = 0.5
+
+    def test_cyclical_method_returns_declared_params(self):
+        """cyclical() method returns the declared __cyclical__ tuple."""
+
+        @dataclass(frozen=True)
+        class MultiCyclical(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+            low: tuple[float, ...] = (10.0, 20.0, 30.0)
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        s = MultiCyclical()
+        assert s.cyclical() == ("low", "high")
+
+
+class TestCyclicalValuesAtTimestep:
+    """Tests for _values_at_timestep() with cyclical parameters."""
+
+    def test_cyclical_param_uses_modulo_indexing(self):
+        """For cyclical param with 3 values, _values_at_timestep(5) returns value[5 % 3] = value[2]."""
+
+        @dataclass(frozen=True)
+        class CyclicalStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = CyclicalStrategy()
+        values = s._values_at_timestep(5)
+        # 5 % 3 = 2, so should return rate[2] = 30.0
+        assert values["rate"] == 30.0
+
+    def test_non_cyclical_param_uses_direct_indexing(self):
+        """For non-cyclical param, _values_at_timestep(t) returns value[t] directly."""
+
+        @dataclass(frozen=True)
+        class NonCyclicalStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0, 40.0, 50.0, 60.0)
+
+        s = NonCyclicalStrategy()
+        values = s._values_at_timestep(5)
+        # Direct indexing: rate[5] = 60.0
+        assert values["rate"] == 60.0
+
+    def test_mixed_cyclical_and_non_cyclical(self):
+        """Strategy with both cyclical and non-cyclical params uses correct indexing for each."""
+
+        @dataclass(frozen=True)
+        class MixedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("cyclical_rate", "linear_rate")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "cyclical_rate": (0.0, 100.0),
+                "linear_rate": (0.0, 100.0),
+            }
+            __time_varying__: ClassVar[tuple[str, ...]] = ("cyclical_rate", "linear_rate")
+            __cyclical__: ClassVar[tuple[str, ...]] = ("cyclical_rate",)
+            cyclical_rate: tuple[float, ...] = (10.0, 20.0, 30.0)  # 3 values, cycles
+            linear_rate: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0)  # 6 values, direct
+
+        s = MixedStrategy()
+        values = s._values_at_timestep(4)
+        # cyclical_rate: 4 % 3 = 1 -> 20.0
+        assert values["cyclical_rate"] == 20.0
+        # linear_rate: direct index 4 -> 5.0
+        assert values["linear_rate"] == 5.0
+
+    def test_cyclical_wraparound_at_exact_multiple(self):
+        """_values_at_timestep(6) for 3-value cyclical returns value[0]."""
+
+        @dataclass(frozen=True)
+        class CyclicalStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = CyclicalStrategy()
+        values = s._values_at_timestep(6)
+        # 6 % 3 = 0, so should return rate[0] = 10.0
+        assert values["rate"] == 10.0
+
+
+class TestCyclicalConstraintValidation:
+    """Tests for __post_init__ constraint validation with cyclical parameters."""
+
+    def test_cyclical_constraint_validated_per_cycle_length(self):
+        """For cyclical-only strategy, constraint validated for each position in cycle."""
+
+        @dataclass(frozen=True)
+        class CyclicalSumStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "r1": (0.0, 1.0),
+                "r2": (0.0, 1.0),
+            }
+            __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2")),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            __cyclical__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            r1: tuple[float, ...] = (0.6, 0.5, 0.4)
+            r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+
+        # All 3 cycle positions valid: sum = 1.0 at positions 0, 1, 2
+        strategy = CyclicalSumStrategy()
+        assert strategy.r1 == (0.6, 0.5, 0.4)
+        assert strategy.r2 == (0.4, 0.5, 0.6)
+
+    def test_constraint_satisfied_at_all_positions_passes(self):
+        """Valid cyclical strategy constructs without error."""
+
+        @dataclass(frozen=True)
+        class CyclicalOrderedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+            low: tuple[float, ...] = (10.0, 20.0, 30.0)
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        # All positions valid: low < high at each cycle position
+        strategy = CyclicalOrderedStrategy()
+        assert strategy.low == (10.0, 20.0, 30.0)
+        assert strategy.high == (50.0, 60.0, 70.0)
+
+    def test_constraint_violated_at_specific_position_raises(self):
+        """ConstraintViolationError raised with position info when constraint violated at specific cycle position."""
+
+        @dataclass(frozen=True)
+        class CyclicalOrderedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "low": (0.0, 100.0),
+                "high": (0.0, 100.0),
+            }
+            __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+            __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+            low: tuple[float, ...] = (10.0, 20.0, 30.0)
+            high: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+        # Violation at position 1: low[1]=70 > high[1]=40
+        with pytest.raises(ConstraintViolationError) as exc_info:
+            CyclicalOrderedStrategy(low=(10.0, 70.0, 30.0), high=(50.0, 40.0, 70.0))
+
+        error_msg = str(exc_info.value)
+        # Error message should indicate cycle position 1
+        assert "low[1]" in error_msg and "high[1]" in error_msg

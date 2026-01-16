@@ -173,6 +173,62 @@ class ConstraintSpec:
 
 The `time_varying_params` field allows repair functions to handle time-varying parameters correctly during optimization.
 
+### Cyclical Parameter Constraints
+
+When all time-varying parameters in a constraint are cyclical, validation is performed **per-cycle-position** rather than per-timestep.
+
+#### Validation Behavior
+
+For cyclical parameters, constraints are checked at each position in the cycle:
+
+```python
+@dataclass(frozen=True)
+class SeasonalSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __cyclical__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0), "r2": (0.0, 1.0)
+    }
+    __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2")),)
+
+    r1: tuple[float, ...] = (0.6, 0.5, 0.4)  # 3 monthly values
+    r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+```
+
+Validation checks `SumToOne` at each cycle position:
+- Position 0: `0.6 + 0.4 = 1.0` ✓
+- Position 1: `0.5 + 0.5 = 1.0` ✓
+- Position 2: `0.4 + 0.6 = 1.0` ✓
+
+#### Ordered Constraint with Cyclical Parameters
+
+```python
+@dataclass(frozen=True)
+class SeasonalBands(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "low": (0.0, 100.0), "high": (0.0, 100.0)
+    }
+    __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
+
+    low: tuple[float, ...] = (10.0, 20.0, 15.0)
+    high: tuple[float, ...] = (50.0, 60.0, 55.0)
+```
+
+Validation checks `Ordered` at each cycle position:
+- Position 0: `10.0 <= 50.0` ✓
+- Position 1: `20.0 <= 60.0` ✓
+- Position 2: `15.0 <= 55.0` ✓
+
+#### Repair Behavior
+
+The repair system operates on parameter vector indices. For cyclical parameters:
+- Each cycle position is an independent entry in the parameter vector
+- Constraints are repaired per-position (e.g., `r1[0] + r2[0] = 1`, `r1[1] + r2[1] = 1`, etc.)
+
 ## Integration with Optimization
 
 ### make_repair

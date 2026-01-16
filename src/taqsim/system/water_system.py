@@ -340,8 +340,11 @@ class WaterSystem:
 
         for node_id, node in sorted(self._nodes.items()):
             for strategy_name, strategy in node.strategies().items():
+                cyclical_params = frozenset(strategy.cyclical())
                 for param_name, value in strategy.params().items():
                     if isinstance(value, tuple) and len(value) < timesteps:
+                        if param_name in cyclical_params:
+                            continue  # Skip validation for cyclical params
                         path = f"{node_id}.{strategy_name}.{param_name}"
                         raise InsufficientLengthError(path, len(value), timesteps)
 

@@ -308,3 +308,90 @@ class TestMakeRepairTimeVarying:
         twice = repair(once)
 
         np.testing.assert_array_almost_equal(once, twice)
+
+
+@dataclass(frozen=True)
+class CyclicalSplit(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+        "r1": (0.0, 1.0),
+        "r2": (0.0, 1.0),
+    }
+    __constraints__: ClassVar[tuple[SumToOne, ...]] = (SumToOne(params=("r1", "r2")),)
+    __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __cyclical__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    r1: tuple[float, ...] = (0.6, 0.5, 0.4)
+    r2: tuple[float, ...] = (0.4, 0.5, 0.6)
+
+    def split(self, node, amount: float, t: int) -> dict[str, float]:
+        idx = t % len(self.r1)
+        return {"a": amount * self.r1[idx], "b": amount * self.r2[idx]}
+
+
+@dataclass(frozen=True)
+class CyclicalReleaseNoConstraint(Strategy):
+    """Cyclical strategy without constraints for testing pure clipping."""
+
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+    __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+    __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+    rate: tuple[float, ...] = (50.0, 50.0, 50.0)
+
+    def release(self, node, inflow: float, t: int, dt: float) -> float:
+        idx = t % len(self.rate)
+        return self.rate[idx]
+
+
+class TestMakeRepairCyclical:
+    """Tests for make_repair with cyclical parameters."""
+
+    def test_cyclical_param_clips_each_position(self):
+        """Each position in cyclical param tuple is clipped to bounds independently."""
+        storage = Storage(id="dam", capacity=1000.0, release_rule=CyclicalReleaseNoConstraint(), loss_rule=SimpleLoss())
+        sink = Sink(id="sink")
+        system = WaterSystem()
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        repair = make_repair(system)
+
+        # Vector: [rate[0], rate[1], rate[2]]
+        # Some values outside bounds [0.0, 100.0]
+        x = np.array([-10.0, 50.0, 150.0])
+        repaired = repair(x)
+
+        # All values should be clipped to [0.0, 100.0]
+        assert repaired[0] == 0.0  # -10.0 clipped to lower
+        assert repaired[1] == 50.0  # unchanged
+        assert repaired[2] == 100.0  # 150.0 clipped to upper
+
+    def test_constraint_applied_per_cycle_position(self):
+        """For SumToOne constraint on cyclical params, repair ensures sum=1 at each cycle position."""
+        splitter = Splitter(id="split", split_rule=CyclicalSplit())
+        splitter._set_targets(["a", "b"])
+        sink_a = Sink(id="sink_a")
+        sink_b = Sink(id="sink_b")
+        source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
+
+        system = WaterSystem()
+        system.add_node(source)
+        system.add_node(splitter)
+        system.add_node(sink_a)
+        system.add_node(sink_b)
+        system.add_edge(Edge(id="e1", source="src", target="split", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="a", source="split", target="sink_a", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="b", source="split", target="sink_b", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+
+        repair = make_repair(system)
+
+        # Vector: [r1[0], r1[1], r1[2], r2[0], r2[1], r2[2]]
+        # Values that don't sum to 1 at each cycle position
+        x = np.array([0.3, 0.4, 0.5, 0.3, 0.4, 0.5])  # Each pair sums to 0.6
+        repaired = repair(x)
+
+        # After repair, each cycle position should sum to 1.0
+        assert abs(repaired[0] + repaired[3] - 1.0) < 1e-9  # position 0
+        assert abs(repaired[1] + repaired[4] - 1.0) < 1e-9  # position 1
+        assert abs(repaired[2] + repaired[5] - 1.0) < 1e-9  # position 2

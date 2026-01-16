@@ -45,6 +45,7 @@ class Strategy:
     __bounds__: ClassVar[dict[str, ParamBounds]] = {}
     __constraints__: ClassVar[tuple["Constraint", ...]] = ()
     __time_varying__: ClassVar[tuple[str, ...]] = ()
+    __cyclical__: ClassVar[tuple[str, ...]] = ()
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -56,6 +57,9 @@ class Strategy:
         invalid_tv = set(cls.__time_varying__) - valid
         if invalid_tv:
             raise TypeError(f"{cls.__name__}: __time_varying__ references unknown params: {invalid_tv}")
+        invalid_cyc = set(cls.__cyclical__) - set(cls.__time_varying__)
+        if invalid_cyc:
+            raise TypeError(f"{cls.__name__}: __cyclical__ params must be in __time_varying__: {invalid_cyc}")
 
     def __post_init__(self) -> None:
         """Validate parameter values against bounds and constraints."""
@@ -76,12 +80,18 @@ class Strategy:
 
         if self.__constraints__:
             # Determine timesteps from time-varying params
+            # Non-cyclical params determine full simulation length; cyclical params cycle
             timesteps = 1
             for tv_param in self.__time_varying__:
                 value = getattr(self, tv_param)
-                if isinstance(value, tuple):
-                    timesteps = len(value)
-                    break
+                if isinstance(value, tuple) and tv_param not in self.__cyclical__:
+                    timesteps = max(timesteps, len(value))
+            # If all time-varying params are cyclical, use max cycle length
+            if timesteps == 1:
+                for tv_param in self.__cyclical__:
+                    value = getattr(self, tv_param)
+                    if isinstance(value, tuple):
+                        timesteps = max(timesteps, len(value))
 
             for t in range(timesteps):
                 values_t = self._values_at_timestep(t)
@@ -104,7 +114,10 @@ class Strategy:
         result: dict[str, float] = {}
         for name, value in self.params().items():
             if isinstance(value, tuple):
-                result[name] = value[t]
+                if name in self.__cyclical__:
+                    result[name] = value[t % len(value)]
+                else:
+                    result[name] = value[t]
             else:
                 result[name] = value
         return result
@@ -120,6 +133,10 @@ class Strategy:
     def time_varying(self) -> tuple[str, ...]:
         """Return names of time-varying parameters."""
         return self.__time_varying__
+
+    def cyclical(self) -> tuple[str, ...]:
+        """Return names of cyclical time-varying parameters."""
+        return self.__cyclical__
 
     def with_params(self, **kwargs: ParamValue) -> Self:
         """Create new instance with updated parameters (immutable)."""
