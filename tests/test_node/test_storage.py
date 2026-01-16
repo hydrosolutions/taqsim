@@ -381,7 +381,7 @@ class TestStorageRelease:
         assert released == 50.0
         assert storage.storage == 0.0
 
-    def test_release_zero_no_event(self):
+    def test_release_zero_records_event_with_zero_amount(self):
         storage = make_storage(
             capacity=1000.0,
             initial_storage=500.0,
@@ -390,7 +390,10 @@ class TestStorageRelease:
         released = storage.release(inflow=0.0, t=0, dt=1.0)
 
         assert released == 0.0
-        assert len(storage.events_of_type(WaterReleased)) == 0
+        events = storage.events_of_type(WaterReleased)
+        assert len(events) == 1
+        assert events[0].amount == 0.0
+        assert events[0].t == 0
 
     def test_release_negative_rule_output_clamped_to_zero(self):
         storage = make_storage(

@@ -168,15 +168,17 @@ class TestTraceTransformation:
 
 
 class TestTraceArithmetic:
-    def test_add_traces_intersection_semantics(self):
+    def test_add_traces_union_semantics(self):
         trace1 = Trace.from_dict({0: 1.0, 1: 2.0, 2: 3.0})
         trace2 = Trace.from_dict({1: 10.0, 2: 20.0, 3: 30.0})
 
         result = trace1 + trace2
 
-        assert len(result) == 2  # Only timesteps 1 and 2 are common
-        assert result[1] == 12.0
-        assert result[2] == 23.0
+        assert len(result) == 4  # Union: timesteps 0, 1, 2, 3
+        assert result[0] == 1.0  # 1.0 + 0.0
+        assert result[1] == 12.0  # 2.0 + 10.0
+        assert result[2] == 23.0  # 3.0 + 20.0
+        assert result[3] == 30.0  # 0.0 + 30.0
 
     def test_add_scalar(self):
         trace = Trace.from_dict({0: 1.0, 1: 2.0})
@@ -219,6 +221,28 @@ class TestTraceArithmetic:
         assert result[0] == 7.0
         assert result[1] == 3.0
 
+    def test_sub_traces_union_semantics(self):
+        trace1 = Trace.from_dict({0: 10.0, 1: 20.0})
+        trace2 = Trace.from_dict({1: 5.0, 2: 15.0})
+
+        result = trace1 - trace2
+
+        assert len(result) == 3  # Union: timesteps 0, 1, 2
+        assert result[0] == 10.0  # 10.0 - 0.0
+        assert result[1] == 15.0  # 20.0 - 5.0
+        assert result[2] == -15.0  # 0.0 - 15.0
+
+    def test_sub_with_empty_trace_preserves_self(self):
+        trace = Trace.from_dict({0: 10.0, 1: 20.0, 2: 30.0})
+        empty = Trace.empty()
+
+        result = trace - empty
+
+        assert len(result) == 3
+        assert result[0] == 10.0
+        assert result[1] == 20.0
+        assert result[2] == 30.0
+
     def test_mul_traces(self):
         trace1 = Trace.from_dict({0: 2.0, 1: 3.0})
         trace2 = Trace.from_dict({0: 4.0, 1: 5.0})
@@ -243,6 +267,16 @@ class TestTraceArithmetic:
 
         assert result[0] == 20.0
         assert result[1] == 30.0
+
+    def test_mul_with_empty_trace_returns_zeros(self):
+        trace = Trace.from_dict({0: 10.0, 1: 20.0})
+        empty = Trace.empty()
+
+        result = trace * empty
+
+        assert len(result) == 2
+        assert result[0] == 0.0  # 10.0 * 0.0
+        assert result[1] == 0.0  # 20.0 * 0.0
 
     def test_div_traces(self):
         trace1 = Trace.from_dict({0: 10.0, 1: 20.0})
@@ -269,6 +303,18 @@ class TestTraceArithmetic:
         assert result[0] == 5.0
         assert result[1] == 2.0
 
+    def test_div_skips_zero_divisor_timesteps(self):
+        trace1 = Trace.from_dict({0: 10.0, 1: 20.0, 2: 30.0})
+        trace2 = Trace.from_dict({0: 2.0, 1: 0.0, 2: 5.0})
+
+        result = trace1 / trace2
+
+        assert len(result) == 2  # Skips t=1 where divisor is 0
+        assert result[0] == 5.0
+        assert result[2] == 6.0
+        with pytest.raises(KeyError):
+            _ = result[1]  # t=1 was skipped
+
     def test_neg(self):
         trace = Trace.from_dict({0: 5.0, 1: -3.0})
 
@@ -292,6 +338,18 @@ class TestTraceArithmetic:
 
         assert result[0] == 25.0  # (2*2 + 1)^2 = 25
         assert result[1] == 81.0  # (4*2 + 1)^2 = 81
+
+    def test_union_semantics_includes_all_timesteps(self):
+        trace1 = Trace.from_dict({0: 1.0, 2: 3.0})
+        trace2 = Trace.from_dict({1: 2.0, 3: 4.0})
+
+        result = trace1 + trace2
+
+        assert result.timesteps() == [0, 1, 2, 3]
+        assert result[0] == 1.0  # only in trace1
+        assert result[1] == 2.0  # only in trace2
+        assert result[2] == 3.0  # only in trace1
+        assert result[3] == 4.0  # only in trace2
 
 
 class TestTraceAggregation:

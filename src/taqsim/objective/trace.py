@@ -65,6 +65,21 @@ class Trace:
     def to_dict(self) -> dict[int, float]:
         return dict(self._data)
 
+    def get(self, t: int, default: float = 0.0) -> float:
+        return self._data.get(t, default)
+
+    def align(
+        self, other: Trace, fill_self: float = 0.0, fill_other: float = 0.0
+    ) -> tuple[Trace, Trace]:
+        all_t = set(self._data.keys()) | set(other._data.keys())
+        return (
+            Trace(_data={t: self._data.get(t, fill_self) for t in all_t}),
+            Trace(_data={t: other._data.get(t, fill_other) for t in all_t}),
+        )
+
+    def reindex(self, timesteps: range | list[int], fill_value: float = 0.0) -> Trace:
+        return Trace(_data={t: self._data.get(t, fill_value) for t in timesteps})
+
     def map(self, fn: Callable[[float], float]) -> Trace:
         return Trace(_data={t: fn(v) for t, v in self._data.items()})
 
@@ -73,8 +88,8 @@ class Trace:
 
     def __add__(self, other: Trace | float) -> Trace:
         if isinstance(other, Trace):
-            common = set(self._data.keys()) & set(other._data.keys())
-            return Trace(_data={t: self._data[t] + other._data[t] for t in common})
+            all_t = set(self._data.keys()) | set(other._data.keys())
+            return Trace(_data={t: self._data.get(t, 0.0) + other._data.get(t, 0.0) for t in all_t})
         return Trace(_data={t: v + other for t, v in self._data.items()})
 
     def __radd__(self, other: float) -> Trace:
@@ -82,8 +97,8 @@ class Trace:
 
     def __sub__(self, other: Trace | float) -> Trace:
         if isinstance(other, Trace):
-            common = set(self._data.keys()) & set(other._data.keys())
-            return Trace(_data={t: self._data[t] - other._data[t] for t in common})
+            all_t = set(self._data.keys()) | set(other._data.keys())
+            return Trace(_data={t: self._data.get(t, 0.0) - other._data.get(t, 0.0) for t in all_t})
         return Trace(_data={t: v - other for t, v in self._data.items()})
 
     def __rsub__(self, other: float) -> Trace:
@@ -91,8 +106,8 @@ class Trace:
 
     def __mul__(self, other: Trace | float) -> Trace:
         if isinstance(other, Trace):
-            common = set(self._data.keys()) & set(other._data.keys())
-            return Trace(_data={t: self._data[t] * other._data[t] for t in common})
+            all_t = set(self._data.keys()) | set(other._data.keys())
+            return Trace(_data={t: self._data.get(t, 0.0) * other._data.get(t, 0.0) for t in all_t})
         return Trace(_data={t: v * other for t, v in self._data.items()})
 
     def __rmul__(self, other: float) -> Trace:
@@ -100,8 +115,12 @@ class Trace:
 
     def __truediv__(self, other: Trace | float) -> Trace:
         if isinstance(other, Trace):
-            common = set(self._data.keys()) & set(other._data.keys())
-            return Trace(_data={t: self._data[t] / other._data[t] for t in common})
+            all_t = set(self._data.keys()) | set(other._data.keys())
+            return Trace(_data={
+                t: self._data.get(t, 0.0) / other._data[t]
+                for t in all_t
+                if other._data.get(t, 0.0) != 0.0
+            })
         return Trace(_data={t: v / other for t, v in self._data.items()})
 
     def __rtruediv__(self, other: float) -> Trace:

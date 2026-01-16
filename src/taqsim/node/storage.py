@@ -84,7 +84,7 @@ class Storage(BaseNode):
 
         if actual_release > 0:
             self._current_storage -= actual_release
-            self.record(WaterReleased(amount=actual_release, t=t))
+        self.record(WaterReleased(amount=actual_release, t=t))
 
         return actual_release
 
