@@ -267,8 +267,8 @@ class TestValidation:
 
         system.validate()
 
-        # Source should have edge1 in its targets
-        assert "edge1" in source.targets
+        # Source should have sink (target node ID) in its targets
+        assert "sink" in source.targets
 
 
 class TestSimulation:
@@ -390,3 +390,102 @@ class TestSimulation:
         received_events = sink.events_of_type(WaterReceived)
         assert len(received_events) == 1
         assert received_events[0].amount == 50.0
+
+
+class TestSplitterRouting:
+    """Regression tests for splitter routing with node IDs."""
+
+    def test_splitter_routes_water_to_downstream_nodes(self):
+        """SplitRule returning node IDs routes water correctly."""
+
+        class ProportionalSplit:
+            def split(self, node, amount: float, t: int) -> dict[str, float]:
+                return {"sink1": amount * 0.6, "sink2": amount * 0.4}
+
+        system = WaterSystem()
+        source = make_source()
+        splitter = make_splitter(split_rule=ProportionalSplit())
+        sink1 = make_sink(id="sink1")
+        sink2 = make_sink(id="sink2")
+
+        system.add_node(source)
+        system.add_node(splitter)
+        system.add_node(sink1)
+        system.add_node(sink2)
+
+        system.add_edge(make_edge(id="e1", source="source", target="splitter"))
+        system.add_edge(make_edge(id="e2", source="splitter", target="sink1"))
+        system.add_edge(make_edge(id="e3", source="splitter", target="sink2"))
+
+        system.simulate(timesteps=1)
+
+        # sink1 should receive 60% (60.0)
+        sink1_recv = sink1.events_of_type(WaterReceived)
+        assert len(sink1_recv) == 1
+        assert sink1_recv[0].amount == 60.0
+
+        # sink2 should receive 40% (40.0)
+        sink2_recv = sink2.events_of_type(WaterReceived)
+        assert len(sink2_recv) == 1
+        assert sink2_recv[0].amount == 40.0
+
+    def test_splitter_node_targets_are_node_ids(self):
+        """After validation, node.targets contains downstream node IDs."""
+        system = WaterSystem()
+        source = make_source()
+        splitter = make_splitter()
+        sink1 = make_sink(id="sink1")
+        sink2 = make_sink(id="sink2")
+
+        system.add_node(source)
+        system.add_node(splitter)
+        system.add_node(sink1)
+        system.add_node(sink2)
+
+        system.add_edge(make_edge(id="e1", source="source", target="splitter"))
+        system.add_edge(make_edge(id="e2", source="splitter", target="sink1"))
+        system.add_edge(make_edge(id="e3", source="splitter", target="sink2"))
+
+        system.validate()
+
+        # Splitter targets should be node IDs, not edge IDs
+        assert set(splitter.targets) == {"sink1", "sink2"}
+
+    def test_splitter_raises_on_invalid_target_node(self):
+        """SplitRule returning invalid node ID raises ValueError."""
+
+        class BadSplit:
+            def split(self, node, amount: float, t: int) -> dict[str, float]:
+                return {"nonexistent_node": amount}
+
+        system = WaterSystem()
+        source = make_source()
+        splitter = make_splitter(split_rule=BadSplit())
+        sink = make_sink()
+
+        system.add_node(source)
+        system.add_node(splitter)
+        system.add_node(sink)
+
+        system.add_edge(make_edge(id="e1", source="source", target="splitter"))
+        system.add_edge(make_edge(id="e2", source="splitter", target="sink"))
+
+        with pytest.raises(ValueError, match="nonexistent_node"):
+            system.simulate(timesteps=1)
+
+    def test_single_output_node_routes_via_node_id(self):
+        """Single-output nodes route correctly with node ID targets."""
+        system = WaterSystem()
+        source = make_source()
+        sink = make_sink()
+
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(make_edge(id="e1", source="source", target="sink"))
+
+        system.simulate(timesteps=1)
+
+        # Verify water flows correctly from source to sink
+        received_events = sink.events_of_type(WaterReceived)
+        assert len(received_events) == 1
+        assert received_events[0].amount == 100.0  # Default source inflow

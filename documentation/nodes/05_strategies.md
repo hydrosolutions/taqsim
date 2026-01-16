@@ -67,7 +67,7 @@ class ReleaseRule(Protocol):
 
 ### SplitRule
 
-Determines how water is distributed among multiple targets.
+Determines how water is distributed among downstream nodes.
 
 ```python
 @runtime_checkable
@@ -77,7 +77,14 @@ class SplitRule(Protocol):
         node: Splitter,           # the splitter node (provides targets)
         amount: float,            # total amount to distribute
         t: int                    # timestep
-    ) -> dict[str, float]: ...   # {target_id: amount}
+    ) -> dict[str, float]: ...   # {downstream_node_id: amount}
+```
+
+The returned dict keys are **downstream node IDs** (not edge IDs). For example, if a splitter routes water to nodes "irrigation" and "thermal":
+
+```python
+def split(self, node: Splitter, amount: float, t: int) -> dict[str, float]:
+    return {"irrigation": amount * 0.6, "thermal": amount * 0.4}
 ```
 
 ### LossRule

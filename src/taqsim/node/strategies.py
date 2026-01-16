@@ -14,6 +14,20 @@ class ReleaseRule(Protocol):
 
 @runtime_checkable
 class SplitRule(Protocol):
+    """Protocol for water distribution strategies at Splitter nodes.
+
+    The split() method determines how incoming water is distributed
+    among downstream nodes.
+
+    Returns:
+        dict mapping downstream node IDs to water amounts.
+        Keys must be valid node IDs that the splitter connects to.
+
+    Example:
+        def split(self, node: Splitter, amount: float, t: int) -> dict[str, float]:
+            return {"irrigation": amount * 0.6, "thermal": amount * 0.4}
+    """
+
     def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]: ...
 
 

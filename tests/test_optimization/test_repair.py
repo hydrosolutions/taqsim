@@ -198,7 +198,7 @@ class TimeVaryingSplit(Strategy):
     r2: tuple[float, ...] = (0.4, 0.5, 0.6)
 
     def split(self, node, amount: float, t: int) -> dict[str, float]:
-        return {"a": amount * self.r1[t], "b": amount * self.r2[t]}
+        return {"sink_a": amount * self.r1[t], "sink_b": amount * self.r2[t]}
 
 
 class TestMakeRepairTimeVarying:
@@ -238,7 +238,7 @@ class TestMakeRepairTimeVarying:
     def test_constraint_applied_per_timestep(self):
         """SumToOne applied to r1[t], r2[t] for each t."""
         splitter = Splitter(id="split", split_rule=TimeVaryingSplit())
-        splitter._set_targets(["a", "b"])
+        splitter._set_targets(["sink_a", "sink_b"])
         sink_a = Sink(id="sink_a")
         sink_b = Sink(id="sink_b")
         source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
@@ -287,7 +287,7 @@ class TestMakeRepairTimeVarying:
     def test_idempotent_with_time_varying(self):
         """repair(repair(x)) == repair(x) for time-varying params."""
         splitter = Splitter(id="split", split_rule=TimeVaryingSplit())
-        splitter._set_targets(["a", "b"])
+        splitter._set_targets(["sink_a", "sink_b"])
         sink_a = Sink(id="sink_a")
         sink_b = Sink(id="sink_b")
         source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
@@ -325,7 +325,7 @@ class CyclicalSplit(Strategy):
 
     def split(self, node, amount: float, t: int) -> dict[str, float]:
         idx = t % len(self.r1)
-        return {"a": amount * self.r1[idx], "b": amount * self.r2[idx]}
+        return {"sink_a": amount * self.r1[idx], "sink_b": amount * self.r2[idx]}
 
 
 @dataclass(frozen=True)
@@ -370,7 +370,7 @@ class TestMakeRepairCyclical:
     def test_constraint_applied_per_cycle_position(self):
         """For SumToOne constraint on cyclical params, repair ensures sum=1 at each cycle position."""
         splitter = Splitter(id="split", split_rule=CyclicalSplit())
-        splitter._set_targets(["a", "b"])
+        splitter._set_targets(["sink_a", "sink_b"])
         sink_a = Sink(id="sink_a")
         sink_b = Sink(id="sink_b")
         source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))

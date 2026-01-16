@@ -23,6 +23,7 @@ class WaterSystem:
     _edges: dict[str, Edge] = field(default_factory=dict, init=False, repr=False)
     _graph: nx.DiGraph = field(default_factory=nx.DiGraph, init=False, repr=False)
     _validated: bool = field(default=False, init=False, repr=False)
+    _source_target_to_edge: dict[tuple[str, str], str] = field(default_factory=dict, init=False, repr=False)
 
     def add_node(self, node: BaseNode) -> None:
         if node.id in self._nodes:
@@ -104,15 +105,36 @@ class WaterSystem:
         self._validated = True
 
     def _set_targets(self) -> None:
+        """Set targets (downstream node IDs) for each node and build edge lookup."""
+        self._source_target_to_edge.clear()
+
         for node_id, node in self._nodes.items():
             if isinstance(node, Sink):
                 continue
 
-            # Find outgoing edges for this node
             outgoing_edges = [edge for edge in self._edges.values() if edge.source == node_id]
 
-            target_edge_ids = [e.id for e in outgoing_edges]
-            node._set_targets(target_edge_ids)
+            # Set targets as downstream NODE IDs (not edge IDs)
+            target_node_ids = [e.target for e in outgoing_edges]
+            node._set_targets(target_node_ids)
+
+            # Build edge lookup: (source_node, target_node) -> edge_id
+            for edge in outgoing_edges:
+                self._source_target_to_edge[(node_id, edge.target)] = edge.id
+
+    def _get_edge_to(self, source_node_id: str, target_node_id: str) -> str:
+        """Get the edge ID connecting source to target node.
+
+        Raises:
+            ValueError: If no edge exists between the nodes.
+        """
+        key = (source_node_id, target_node_id)
+        if key not in self._source_target_to_edge:
+            raise ValueError(
+                f"No edge from '{source_node_id}' to '{target_node_id}'. "
+                f"Check that SplitRule returns valid downstream node IDs."
+            )
+        return self._source_target_to_edge[key]
 
     def simulate(self, timesteps: int) -> None:
         if not self._validated:
@@ -132,20 +154,21 @@ class WaterSystem:
         # Handle WaterOutput events (single-output nodes: Source, Storage, Demand, PassThrough)
         output_events = [e for e in events if isinstance(e, WaterOutput)]
         for event in output_events:
-            # Single-output nodes have exactly one target edge
             if not node.targets:
                 continue
-            target_edge_id = node.targets[0]
-            self._deliver_to_edge(target_edge_id, event.amount, t)
+            target_node_id = node.targets[0]  # Now a node ID
+            edge_id = self._get_edge_to(node_id, target_node_id)
+            self._deliver_to_edge(edge_id, event.amount, t)
 
         # Handle WaterDistributed events (Splitter with multiple targets)
         distributed_events = [e for e in events if isinstance(e, WaterDistributed)]
         for event in distributed_events:
-            self._deliver_to_edge(event.target_id, event.amount, t)
+            edge_id = self._get_edge_to(node_id, event.target_id)  # target_id is now a node ID
+            self._deliver_to_edge(edge_id, event.amount, t)
 
     def _deliver_to_edge(self, edge_id: str, amount: float, t: int) -> None:
         if edge_id not in self._edges:
-            return
+            raise ValueError(f"Edge '{edge_id}' not found in system")
 
         edge = self._edges[edge_id]
         edge.receive(amount, t)
