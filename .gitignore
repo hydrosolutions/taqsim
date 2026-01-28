@@ -161,5 +161,7 @@ data_old/
 *.csv
 .DS_Store
 
+# Reference materials - keep only text versions
+materials/*.pdf
 
 scratchpad/

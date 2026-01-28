@@ -16,6 +16,7 @@ dependencies = [
     "pyzmq>=27.1.0",
     "ipykernel>=7.1.0",
     "ctrl-freak>=0.1.0",
+    "pymupdf>=1.26.7",
 ]
 
 [build-system]

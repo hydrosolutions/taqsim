@@ -14,15 +14,15 @@ This repository is part of an ongoing project and actively maintained.
 
 ## Features
 
-- **Six node types**: Source, Storage, Demand, Sink, Splitter, PassThrough
-- **Configurable behavior**: Pluggable strategies for release rules, loss calculations, and flow splitting
-- **Event sourcing**: Every water movement recorded as queryable events
-- **Validation**: Automatic network structure validation (acyclic, connected, proper terminals)
-- **Visualization**: Geographic network plotting with `system.visualize()`
+-   **Six node types**: Source, Storage, Demand, Sink, Splitter, PassThrough
+-   **Configurable behavior**: Pluggable strategies for release rules, loss calculations, and flow splitting
+-   **Event sourcing**: Every water movement recorded as queryable events
+-   **Validation**: Automatic network structure validation (acyclic, connected, proper terminals)
+-   **Visualization**: Geographic network plotting with `system.visualize()`
 
 ## Installation
 
-```sh
+``` sh
 git clone https://github.com/hydrosolutions/taqsim.git
 cd taqsim
 uv sync
@@ -30,7 +30,7 @@ uv sync
 
 ## Quick Example
 
-```python
+``` python
 from taqsim import WaterSystem, Source, Demand, Sink, Edge, TimeSeries
 
 # Simple loss rule that applies no losses
@@ -65,10 +65,10 @@ deficits = farm.events_of_type(DeficitRecorded)
 
 ## Documentation
 
-- [Node Architecture](documentation/nodes/01_architecture.md)
-- [Node Types](documentation/nodes/06_node_types.md)
-- [Edge Architecture](documentation/edges/01_architecture.md)
-- [System Architecture](documentation/system/01_architecture.md)
+-   [Node Architecture](documentation/nodes/01_architecture.md)
+-   [Node Types](documentation/nodes/06_node_types.md)
+-   [Edge Architecture](documentation/edges/01_architecture.md)
+-   [System Architecture](documentation/system/01_architecture.md)
 
 ## Contact
 
