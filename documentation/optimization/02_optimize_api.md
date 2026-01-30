@@ -14,6 +14,7 @@ def optimize(
     warm_start: bool = False,
     verbose: bool = False,
     callback: Callable[[Population, int], bool] | None = None,
+    n_workers: int = 1,
 ) -> OptimizeResult:
 ```
 
@@ -30,6 +31,7 @@ def optimize(
 | `warm_start` | `bool` | `False` | Reserved for future warm-start support |
 | `verbose` | `bool` | `False` | Print generation progress to stdout |
 | `callback` | `Callable[[Population, int], bool] \| None` | `None` | Per-generation callback; return `True` to stop early |
+| `n_workers` | `int` | `1` | Number of parallel workers. Use `1` for sequential, `-1` for all CPU cores. |
 
 ## Returns
 
@@ -123,6 +125,27 @@ result2 = optimize(system, objectives, timesteps=12, seed=42)
 # result1 and result2 are identical
 ```
 
+### n_workers
+
+Controls parallel evaluation of the fitness function:
+
+- **`1`** (default): Sequential execution. Use for debugging or when `evaluate` is not picklable.
+- **`-1`**: Use all available CPU cores.
+- **`n > 1`**: Use exactly `n` worker processes.
+
+```python
+# Sequential (default)
+result = optimize(system, objectives, timesteps=12, n_workers=1)
+
+# Use all CPU cores
+result = optimize(system, objectives, timesteps=12, n_workers=-1)
+
+# Fixed 4 workers
+result = optimize(system, objectives, timesteps=12, n_workers=4)
+```
+
+**Note:** Parallel execution requires the evaluate function to be picklable. If you encounter `PicklingError`, try using top-level functions instead of lambdas or closures.
+
 ## Error Handling
 
 | Exception | Condition |
@@ -131,6 +154,7 @@ result2 = optimize(system, objectives, timesteps=12, seed=42)
 | `ValueError` | No tunable parameters in system |
 | `ValueError` | Empty objectives list |
 | `ValueError` | `pop_size < 4` |
+| `ValueError` | `n_workers` is 0 or less than -1 |
 
 ```python
 from taqsim.system import ValidationError
@@ -160,6 +184,7 @@ For expensive simulations, consider:
 1. Reducing `timesteps` during exploration
 2. Using `verbose=True` to monitor convergence
 3. Implementing early stopping via `callback`
+4. **Using `n_workers=-1` for parallel evaluation on multi-core systems**
 
 ```python
 def early_stop(pop: Population, gen: int) -> bool:

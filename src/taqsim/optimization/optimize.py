@@ -58,6 +58,7 @@ def optimize(
     warm_start: bool = False,
     verbose: bool = False,
     callback: Callable[[Population, int], bool] | None = None,
+    n_workers: int = 1,
 ) -> OptimizeResult:
     """Run multi-objective optimization on a water system.
 
@@ -128,13 +129,14 @@ def optimize(
         n_generations=generations,
         seed=init_seed,
         callback=final_callback,
+        n_workers=n_workers,
     )
 
     # Build OptimizeResult
     # Extract Pareto front (rank == 0)
     pareto_mask = final_pop.rank == 0
-    pareto_x = final_pop.x[pareto_mask]
-    pareto_obj = final_pop.objectives[pareto_mask]
+    pareto_x = final_pop.population.x[pareto_mask]
+    pareto_obj = final_pop.population.objectives[pareto_mask]
 
     # Reverse direction transform for scores
     solutions: list[Solution] = []
@@ -165,4 +167,4 @@ def optimize(
             )
         )
 
-    return OptimizeResult(solutions=solutions, population=final_pop)
+    return OptimizeResult(solutions=solutions, population=final_pop.population)

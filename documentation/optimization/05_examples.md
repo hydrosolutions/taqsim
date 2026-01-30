@@ -322,6 +322,75 @@ result = optimize(
 
 ---
 
+## Example 5: Parallel Optimization
+
+For large populations or expensive fitness evaluations, parallel processing can significantly reduce optimization time.
+
+### Basic Parallel Usage
+
+```python
+# Sequential (default)
+result = optimize(
+    system=system,
+    objectives=objectives,
+    timesteps=12,
+    n_workers=1,  # One worker, sequential
+)
+
+# Use all available CPU cores
+result = optimize(
+    system=system,
+    objectives=objectives,
+    timesteps=12,
+    n_workers=-1,  # All cores
+)
+
+# Fixed number of workers
+result = optimize(
+    system=system,
+    objectives=objectives,
+    timesteps=12,
+    n_workers=4,  # Exactly 4 workers
+)
+```
+
+### When to Use Parallel Optimization
+
+Parallel optimization is most beneficial when:
+
+- **Fitness evaluation is expensive**: Each simulation takes significant time
+- **Population is large**: More individuals to evaluate per generation
+- **Many timesteps**: Longer simulations per evaluation
+- **Multi-core system**: You have CPU cores available
+
+For small problems (quick evaluations, small populations), the overhead of process spawning may outweigh benefits.
+
+### Troubleshooting Parallel Execution
+
+**PicklingError**: When using `n_workers > 1`, the evaluate function and all objects it references must be picklable. Common fixes:
+
+1. **Use top-level functions** instead of lambdas or nested functions
+2. **Avoid closures** that capture unpicklable objects
+3. **Ensure Strategy classes are picklable** (dataclasses usually work well)
+
+```python
+# ❌ This may fail with n_workers > 1 (closure captures local variable)
+def make_evaluator(system, objectives):
+    def evaluate(x):
+        candidate = system.with_vector(x.tolist())
+        ...
+    return evaluate
+
+# ✅ This works (top-level function, no closure)
+def evaluate(x, system=system, objectives=objectives):
+    candidate = system.with_vector(x.tolist())
+    ...
+```
+
+**Note**: The built-in `optimize()` function handles pickling correctly. This troubleshooting applies if you're building custom evaluation functions.
+
+---
+
 ## Troubleshooting
 
 ### No Improvement Over Generations

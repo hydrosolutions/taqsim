@@ -237,3 +237,135 @@ class TestOptimizeValidation:
                 generations=3,
                 seed=42,
             )
+
+
+class TestOptimizeNWorkers:
+    def test_default_n_workers_backwards_compatible(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """Ensure existing code without n_workers continues to work."""
+        result = optimize(
+            minimal_water_system,
+            [simple_minimize_objective],
+            timesteps=5,
+            pop_size=10,
+            generations=3,
+            seed=42,
+        )
+        assert len(result.solutions) >= 1
+
+    def test_n_workers_one_produces_valid_result(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """Explicit n_workers=1 should work the same as default."""
+        result = optimize(
+            minimal_water_system,
+            [simple_minimize_objective],
+            timesteps=5,
+            pop_size=10,
+            generations=3,
+            seed=42,
+            n_workers=1,
+        )
+        assert len(result.solutions) >= 1
+
+    def test_n_workers_two_parallel_execution(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """Parallel execution with 2 workers should produce valid results."""
+        result = optimize(
+            minimal_water_system,
+            [simple_minimize_objective],
+            timesteps=5,
+            pop_size=10,
+            generations=3,
+            seed=42,
+            n_workers=2,
+        )
+        assert len(result.solutions) >= 1
+
+    def test_n_workers_minus_one_all_cores(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """n_workers=-1 should use all CPU cores."""
+        result = optimize(
+            minimal_water_system,
+            [simple_minimize_objective],
+            timesteps=5,
+            pop_size=10,
+            generations=3,
+            seed=42,
+            n_workers=-1,
+        )
+        assert len(result.solutions) >= 1
+
+    def test_n_workers_zero_raises_value_error(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """n_workers=0 is invalid and should raise ValueError."""
+        with pytest.raises(ValueError, match="n_workers must be positive or -1"):
+            optimize(
+                minimal_water_system,
+                [simple_minimize_objective],
+                timesteps=5,
+                pop_size=10,
+                generations=3,
+                seed=42,
+                n_workers=0,
+            )
+
+    def test_n_workers_negative_two_raises_value_error(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """n_workers=-2 is invalid and should raise ValueError."""
+        with pytest.raises(ValueError, match="n_workers must be positive or -1"):
+            optimize(
+                minimal_water_system,
+                [simple_minimize_objective],
+                timesteps=5,
+                pop_size=10,
+                generations=3,
+                seed=42,
+                n_workers=-2,
+            )
+
+    def test_parallel_determinism_same_seed(
+        self,
+        minimal_water_system: WaterSystem,
+        simple_minimize_objective: Objective,
+    ) -> None:
+        """Same seed with parallel workers should produce same results."""
+        result1 = optimize(
+            minimal_water_system,
+            [simple_minimize_objective],
+            timesteps=5,
+            pop_size=10,
+            generations=3,
+            seed=42,
+            n_workers=2,
+        )
+        result2 = optimize(
+            minimal_water_system,
+            [simple_minimize_objective],
+            timesteps=5,
+            pop_size=10,
+            generations=3,
+            seed=42,
+            n_workers=2,
+        )
+        assert len(result1.solutions) == len(result2.solutions)
+        for s1, s2 in zip(result1.solutions, result2.solutions, strict=True):
+            assert s1.parameters == s2.parameters
+            assert s1.scores == s2.scores
