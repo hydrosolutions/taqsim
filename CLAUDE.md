@@ -1,5 +1,9 @@
 # Claude Agent Guidelines
 
+## Project Overview
+
+Taqsim is a water system simulation framework using event sourcing. It models water systems as directed acyclic graphs (DAGs) of nodes connected by edges, where water flows from sources through the network—getting stored, consumed, split—and eventually reaching sinks. All operations emit events, providing a complete audit trail of the simulation.
+
 ## Task Management Principles
 
 ### Avoid Task Jags
