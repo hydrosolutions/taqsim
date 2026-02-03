@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import numpy as np
-from ctrl_freak import Population, nsga2, polynomial_mutation, sbx_crossover
+from ctrl_freak import NSGA2Result, nsga2, polynomial_mutation, sbx_crossover
 
 from taqsim.objective import Objective
 from taqsim.system import ValidationError, WaterSystem
@@ -23,11 +23,11 @@ def _derive_seeds(seed: int | None, n: int) -> list[int]:
 
 def _make_verbose_callback(
     objectives: list[Objective],
-    user_callback: Callable[[Population, int], bool] | None,
-) -> Callable[[Population, int], bool]:
-    def callback(pop: Population, gen: int) -> bool:
+    user_callback: Callable[[NSGA2Result, int], bool] | None,
+) -> Callable[[NSGA2Result, int], bool]:
+    def callback(pop: NSGA2Result, gen: int) -> bool:
         n_pareto = int(np.sum(pop.rank == 0)) if pop.rank is not None else 0
-        pareto_obj = pop.objectives[pop.rank == 0] if pop.rank is not None else pop.objectives
+        pareto_obj = pop.population.objectives[pop.rank == 0] if pop.rank is not None else pop.population.objectives
         if pareto_obj is not None and len(pareto_obj) > 0:
             # Reverse transformation for maximize objectives
             display_vals = []
@@ -57,7 +57,7 @@ def optimize(
     seed: int | None = None,
     warm_start: bool = False,
     verbose: bool = False,
-    callback: Callable[[Population, int], bool] | None = None,
+    callback: Callable[[NSGA2Result, int], bool] | None = None,
     n_workers: int = 1,
 ) -> OptimizeResult:
     """Run multi-objective optimization on a water system.
