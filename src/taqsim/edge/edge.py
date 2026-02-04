@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from taqsim.common import CAPACITY_EXCEEDED
 
@@ -23,6 +23,8 @@ class Edge:
     capacity: float
     loss_rule: EdgeLossRule | None = field(default=None)
     targets: list[str] = field(default_factory=list)
+    tags: frozenset[str] = field(default_factory=frozenset)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     events: list[EdgeEvent] = field(default_factory=list, init=False, repr=False)
     _received_this_step: float = field(default=0.0, init=False, repr=False)

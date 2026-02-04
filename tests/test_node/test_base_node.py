@@ -195,3 +195,89 @@ class TestBaseNodeInheritance:
 
         assert len(node.events) == 1
         assert node.events[0].t == 3
+
+
+class TestBaseNodeTags:
+    def test_default_tags_is_empty_frozenset(self):
+        node = BaseNode(id="test")
+        assert node.tags == frozenset()
+
+    def test_custom_tags_accepted(self):
+        node = BaseNode(id="test", tags=frozenset({"irrigation", "primary"}))
+        assert node.tags == frozenset({"irrigation", "primary"})
+
+    def test_tags_type_is_frozenset(self):
+        node = BaseNode(id="test", tags=frozenset({"tag1"}))
+        assert isinstance(node.tags, frozenset)
+
+    def test_tags_is_immutable(self):
+        node = BaseNode(id="test", tags=frozenset({"original"}))
+        with pytest.raises(AttributeError):
+            node.tags.add("new")  # frozenset has no add method
+
+
+class TestBaseNodeMetadata:
+    def test_default_metadata_is_empty_dict(self):
+        node = BaseNode(id="test")
+        assert node.metadata == {}
+
+    def test_custom_metadata_accepted(self):
+        node = BaseNode(id="test", metadata={"priority": 1, "color": "blue"})
+        assert node.metadata == {"priority": 1, "color": "blue"}
+
+    def test_metadata_type_is_dict(self):
+        node = BaseNode(id="test", metadata={"key": "value"})
+        assert isinstance(node.metadata, dict)
+
+    def test_metadata_not_shared_between_instances(self):
+        n1 = BaseNode(id="n1")
+        n2 = BaseNode(id="n2")
+        n1.metadata["key"] = "value"
+        assert "key" not in n2.metadata
+
+
+class TestBaseNodeInheritanceTags:
+    """Verify all node subclasses inherit tags and metadata."""
+
+    def test_source_inherits_tags(self):
+        from taqsim.node import Source
+        from taqsim.node.timeseries import TimeSeries
+
+        source = Source(
+            id="test",
+            inflow=TimeSeries([100.0]),
+            tags=frozenset({"upstream"}),
+            metadata={"capacity": 1000},
+        )
+        assert source.tags == frozenset({"upstream"})
+        assert source.metadata == {"capacity": 1000}
+
+    def test_storage_inherits_tags(self):
+        from taqsim.node import Storage
+
+        # Storage requires release_rule and loss_rule - create minimal fakes
+        class FakeReleaseRule:
+            def release(self, node, inflow, t, dt):
+                return 0.0
+
+        class FakeLossRule:
+            def calculate(self, node, t, dt):
+                return {}
+
+        storage = Storage(
+            id="test",
+            capacity=1000.0,
+            release_rule=FakeReleaseRule(),
+            loss_rule=FakeLossRule(),
+            tags=frozenset({"reservoir"}),
+            metadata={"built_year": 2020},
+        )
+        assert storage.tags == frozenset({"reservoir"})
+        assert storage.metadata == {"built_year": 2020}
+
+    def test_sink_inherits_tags(self):
+        from taqsim.node import Sink
+
+        sink = Sink(id="test", tags=frozenset({"terminal"}), metadata={"type": "ocean"})
+        assert sink.tags == frozenset({"terminal"})
+        assert sink.metadata == {"type": "ocean"}

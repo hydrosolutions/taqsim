@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from taqsim.common import Strategy
 
@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 class BaseNode:
     id: str
     location: tuple[float, float] | None = field(default=None, kw_only=True)  # (lat, lon) in WGS84
+    tags: frozenset[str] = field(default_factory=frozenset, kw_only=True)
+    metadata: dict[str, Any] = field(default_factory=dict, kw_only=True)
     events: list[NodeEvent] = field(default_factory=list, init=False, repr=False)
     _targets: list[str] = field(default_factory=list, init=False, repr=False)
 

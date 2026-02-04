@@ -833,3 +833,77 @@ class TestCyclicalConstraintValidation:
         error_msg = str(exc_info.value)
         # Error message should indicate cycle position 1
         assert "low[1]" in error_msg and "high[1]" in error_msg
+
+
+class TestStrategyTags:
+    """Tests for Strategy __tags__ ClassVar and tags() method."""
+
+    def test_default_tags_is_empty_frozenset(self):
+        """Strategy without __tags__ returns empty frozenset."""
+
+        @dataclass(frozen=True)
+        class NoTagsStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ()
+
+        strategy = NoTagsStrategy()
+        assert strategy.tags() == frozenset()
+
+    def test_strategy_with_class_tags(self):
+        """Strategy with __tags__ returns declared tags."""
+
+        @dataclass(frozen=True)
+        class TaggedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ()
+            __tags__: ClassVar[frozenset[str]] = frozenset({"operational", "seasonal"})
+
+        strategy = TaggedStrategy()
+        assert strategy.tags() == frozenset({"operational", "seasonal"})
+
+    def test_tags_returns_frozenset_type(self):
+        """tags() returns a frozenset."""
+
+        @dataclass(frozen=True)
+        class TaggedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ()
+            __tags__: ClassVar[frozenset[str]] = frozenset({"test"})
+
+        strategy = TaggedStrategy()
+        assert isinstance(strategy.tags(), frozenset)
+
+
+class TestStrategyMetadata:
+    """Tests for Strategy __metadata__ ClassVar and metadata() method."""
+
+    def test_default_metadata_is_empty_mapping(self):
+        """Strategy without __metadata__ returns empty mapping."""
+
+        @dataclass(frozen=True)
+        class NoMetadataStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ()
+
+        strategy = NoMetadataStrategy()
+        assert strategy.metadata() == {}
+
+    def test_strategy_with_class_metadata(self):
+        """Strategy with __metadata__ returns declared metadata."""
+        from collections.abc import Mapping
+
+        @dataclass(frozen=True)
+        class MetadataStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ()
+            __metadata__: ClassVar[Mapping[str, object]] = {"version": 1, "author": "test"}
+
+        strategy = MetadataStrategy()
+        assert strategy.metadata() == {"version": 1, "author": "test"}
+
+    def test_metadata_returns_mapping_type(self):
+        """metadata() returns a Mapping."""
+        from collections.abc import Mapping
+
+        @dataclass(frozen=True)
+        class MetadataStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ()
+            __metadata__: ClassVar[Mapping[str, object]] = {"key": "value"}
+
+        strategy = MetadataStrategy()
+        assert isinstance(strategy.metadata(), Mapping)

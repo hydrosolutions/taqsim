@@ -514,3 +514,33 @@ system.simulate(120)  # No error - city_fraction cycles through its 12 values
 | Access pattern | `value[t]` | `value[t % len(value)]` |
 | Length validation | Raises InsufficientLengthError if too short | Skipped |
 | Use case | Unique value per timestep | Repeating patterns (seasonal, weekly) |
+
+## Strategy Tags and Metadata
+
+Strategies support class-level tags and metadata via `ClassVar` declarations:
+
+```python
+@dataclass(frozen=True)
+class SeasonalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __tags__: ClassVar[frozenset[str]] = frozenset({"operational", "seasonal"})
+    __metadata__: ClassVar[Mapping[str, object]] = {"version": 2}
+
+    rate: tuple[float, ...] = (50.0, 60.0, 70.0)
+
+# Access via methods
+strategy = SeasonalRelease()
+strategy.tags()      # frozenset({'operational', 'seasonal'})
+strategy.metadata()  # {'version': 2}
+```
+
+| Element | Purpose |
+|---------|---------|
+| `__tags__` | Class-level frozenset of string labels |
+| `__metadata__` | Class-level mapping of key-value data |
+| `tags()` | Accessor method returning `__tags__` |
+| `metadata()` | Accessor method returning `__metadata__` |
+
+Note: Strategy tags/metadata are type-level (defined at class definition), not instance-level like nodes and edges.
+
+See [Tags and Metadata](../common/03_tags_metadata.md) for details.

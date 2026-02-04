@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from taqsim.common import CAPACITY_EXCEEDED, EVAPORATION, SEEPAGE, LossReason
@@ -17,6 +19,8 @@ def make_edge(
     target: str = "target_node",
     capacity: float = 100.0,
     losses: dict[LossReason, float] | None = None,
+    tags: frozenset[str] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> Edge:
     return Edge(
         id=id,
@@ -24,6 +28,8 @@ def make_edge(
         target=target,
         capacity=capacity,
         loss_rule=FakeEdgeLossRule(losses),
+        tags=tags or frozenset(),
+        metadata=metadata or {},
     )
 
 
@@ -309,3 +315,42 @@ class TestEdgeProtocolCompliance:
     def test_edge_has_trace_method(self):
         edge = make_edge()
         assert callable(getattr(edge, "trace", None))
+
+
+class TestEdgeTags:
+    def test_default_tags_is_empty_frozenset(self):
+        edge = make_edge()
+        assert edge.tags == frozenset()
+
+    def test_custom_tags_accepted(self):
+        edge = make_edge(tags=frozenset({"canal", "primary"}))
+        assert edge.tags == frozenset({"canal", "primary"})
+
+    def test_tags_type_is_frozenset(self):
+        edge = make_edge(tags=frozenset({"river"}))
+        assert isinstance(edge.tags, frozenset)
+
+    def test_tags_is_immutable(self):
+        edge = make_edge(tags=frozenset({"original"}))
+        with pytest.raises(AttributeError):
+            edge.tags.add("new")  # frozenset has no add method
+
+
+class TestEdgeMetadata:
+    def test_default_metadata_is_empty_dict(self):
+        edge = make_edge()
+        assert edge.metadata == {}
+
+    def test_custom_metadata_accepted(self):
+        edge = make_edge(metadata={"length_km": 50.5, "material": "concrete"})
+        assert edge.metadata == {"length_km": 50.5, "material": "concrete"}
+
+    def test_metadata_type_is_dict(self):
+        edge = make_edge(metadata={"key": "value"})
+        assert isinstance(edge.metadata, dict)
+
+    def test_metadata_not_shared_between_instances(self):
+        e1 = make_edge(id="e1")
+        e2 = make_edge(id="e2")
+        e1.metadata["key"] = "value"
+        assert "key" not in e2.metadata

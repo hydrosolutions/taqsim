@@ -109,3 +109,26 @@ class EdgeLossRule(Protocol):
 ```
 
 The loss rule receives the edge, current flow, timestep, and dt, returning a dictionary mapping loss reasons to amounts.
+
+## Tags and Metadata
+
+Edges support optional `tags` and `metadata` fields for annotation by intelligence layers:
+
+```python
+canal = Edge(
+    id="main_canal",
+    source="reservoir",
+    target="city_demand",
+    capacity=200.0,
+    loss_rule=canal_loss_rule,
+    tags=frozenset({"canal", "primary"}),
+    metadata={"length_km": 45.5},
+)
+```
+
+- `tags: frozenset[str]` - Immutable set of string labels for categorization
+- `metadata: dict[str, Any]` - Flexible dictionary for arbitrary key-value data
+
+Taqsim stores these as opaque data; intelligence layers interpret them.
+
+See [Tags and Metadata](../common/03_tags_metadata.md) for details.

@@ -141,3 +141,23 @@ source = Source(
 Location is used by `WaterSystem` for:
 - Geographic visualization via `visualize()`
 - Edge length computation via `edge_length()` and `edge_lengths()`
+
+## Tags and Metadata
+
+Nodes support optional `tags` and `metadata` fields for annotation by intelligence layers:
+
+```python
+source = Source(
+    id="river_intake",
+    inflow=TimeSeries([100.0] * 12),
+    tags=frozenset({"upstream", "primary"}),
+    metadata={"watershed": "jordan", "capacity_mcm": 50},
+)
+```
+
+- `tags: frozenset[str]` - Immutable set of string labels for categorization
+- `metadata: dict[str, Any]` - Flexible dictionary for arbitrary key-value data
+
+Taqsim stores these as opaque data; intelligence layers interpret them.
+
+See [Tags and Metadata](../common/03_tags_metadata.md) for details.

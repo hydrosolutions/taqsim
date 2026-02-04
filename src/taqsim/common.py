@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar, Self
 
@@ -46,6 +47,8 @@ class Strategy:
     __constraints__: ClassVar[tuple["Constraint", ...]] = ()
     __time_varying__: ClassVar[tuple[str, ...]] = ()
     __cyclical__: ClassVar[tuple[str, ...]] = ()
+    __tags__: ClassVar[frozenset[str]] = frozenset()
+    __metadata__: ClassVar[Mapping[str, object]] = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -137,6 +140,14 @@ class Strategy:
     def cyclical(self) -> tuple[str, ...]:
         """Return names of cyclical time-varying parameters."""
         return self.__cyclical__
+
+    def tags(self) -> frozenset[str]:
+        """Return tags for this strategy type."""
+        return self.__tags__
+
+    def metadata(self) -> Mapping[str, object]:
+        """Return metadata for this strategy type."""
+        return self.__metadata__
 
     def with_params(self, **kwargs: ParamValue) -> Self:
         """Create new instance with updated parameters (immutable)."""
