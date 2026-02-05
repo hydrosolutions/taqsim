@@ -12,6 +12,8 @@
 
 ## Design Principles
 
+See [Design Philosophy](../00_philosophy.md) for the foundational principle: **expose everything, decide nothing**.
+
 ### Separation of Concerns
 
 | Component | Responsibility |

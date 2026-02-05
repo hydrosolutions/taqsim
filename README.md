@@ -20,6 +20,14 @@ This repository is part of an ongoing project and actively maintained.
 - **Validation**: Automatic network structure validation (acyclic, connected, proper terminals)
 - **Visualization**: Geographic network plotting with `system.visualize()`
 
+## Design Philosophy
+
+Taqsim follows a single rule: **expose everything, decide nothing**.
+
+The simulation engine routes water, records events, and exposes all state for external analysis. It never interprets data or makes policy decisions. Optimization, visualization, and decision support are separate concerns built on top of taqsim's transparent foundation.
+
+See [Design Philosophy](documentation/00_philosophy.md) for details.
+
 ## Installation
 
 ```sh

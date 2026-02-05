@@ -188,6 +188,8 @@ def group_edges_by_type(system: WaterSystem) -> dict[str, list[Edge]]:
 
 ### Separation of Concerns
 
+This follows taqsim's core principle: [expose everything, decide nothing](../00_philosophy.md).
+
 Taqsim intentionally does **not** interpret tags or metadata:
 
 - The simulation engine treats them as opaque storage
