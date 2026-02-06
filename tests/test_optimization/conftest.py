@@ -4,14 +4,15 @@ from typing import TYPE_CHECKING, ClassVar
 import pytest
 
 from taqsim import Edge, Objective, Sink, Source, Storage, Strategy, TimeSeries, WaterSystem
+from taqsim.testing import NoEdgeLoss, NoLoss
 from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
-    from taqsim.common import LossReason
+    pass
 
 
 @dataclass(frozen=True)
-class FakeReleaseRule(Strategy):
+class FakeReleasePolicy(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("rate",)
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
     rate: float = 50.0
@@ -20,31 +21,19 @@ class FakeReleaseRule(Strategy):
         return min(self.rate, node.storage)
 
 
-@dataclass(frozen=True)
-class FakeLossRule:
-    def calculate(self, node: "Storage", t: Timestep) -> dict["LossReason", float]:
-        return {}
-
-
-@dataclass(frozen=True)
-class FakeEdgeLossRule:
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict["LossReason", float]:
-        return {}
+@pytest.fixture
+def fake_release_policy() -> FakeReleasePolicy:
+    return FakeReleasePolicy()
 
 
 @pytest.fixture
-def fake_release_rule() -> FakeReleaseRule:
-    return FakeReleaseRule()
+def fake_loss_rule() -> NoLoss:
+    return NoLoss()
 
 
 @pytest.fixture
-def fake_loss_rule() -> FakeLossRule:
-    return FakeLossRule()
-
-
-@pytest.fixture
-def fake_edge_loss_rule() -> FakeEdgeLossRule:
-    return FakeEdgeLossRule()
+def fake_edge_loss_rule() -> NoEdgeLoss:
+    return NoEdgeLoss()
 
 
 @pytest.fixture
@@ -57,14 +46,14 @@ def minimal_water_system() -> WaterSystem:
             id="dam",
             capacity=1000.0,
             initial_storage=500.0,
-            release_rule=FakeReleaseRule(),
-            loss_rule=FakeLossRule(),
+            release_policy=FakeReleasePolicy(),
+            loss_rule=NoLoss(),
         )
     )
     system.add_node(Sink(id="sink"))
 
-    system.add_edge(Edge(id="e1", source="src", target="dam", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
-    system.add_edge(Edge(id="e2", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+    system.add_edge(Edge(id="e1", source="src", target="dam", capacity=1000.0, loss_rule=NoEdgeLoss()))
+    system.add_edge(Edge(id="e2", source="dam", target="sink", capacity=1000.0, loss_rule=NoEdgeLoss()))
 
     system.validate()
     return system
@@ -74,7 +63,7 @@ def minimal_water_system() -> WaterSystem:
 def simple_minimize_objective() -> Objective:
     def evaluate(system: WaterSystem) -> float:
         dam = system.nodes["dam"]
-        return dam.release_rule.rate
+        return dam.release_policy.rate
 
     return Objective(name="minimize_rate", direction="minimize", evaluate=evaluate)
 
@@ -83,6 +72,6 @@ def simple_minimize_objective() -> Objective:
 def simple_maximize_objective() -> Objective:
     def evaluate(system: WaterSystem) -> float:
         dam = system.nodes["dam"]
-        return dam.release_rule.rate
+        return dam.release_policy.rate
 
     return Objective(name="maximize_rate", direction="maximize", evaluate=evaluate)

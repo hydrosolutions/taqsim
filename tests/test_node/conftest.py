@@ -3,8 +3,9 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
-from taqsim.common import EVAPORATION, SEEPAGE, LossReason, Strategy
+from taqsim.common import Strategy
 from taqsim.node.timeseries import TimeSeries
+from taqsim.testing import ConstantLoss
 from taqsim.time import Timestep
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ def varying_timeseries() -> TimeSeries:
 
 
 @dataclass(frozen=True)
-class FakeReleaseRule(Strategy):
+class FakeReleasePolicy(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("fraction",)
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"fraction": (0.0, 1.0)}
     fraction: float = 0.5
@@ -32,7 +33,7 @@ class FakeReleaseRule(Strategy):
 
 
 @dataclass(frozen=True)
-class FakeSplitRule(Strategy):
+class FakeSplitPolicy(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ()
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {}
 
@@ -44,28 +45,16 @@ class FakeSplitRule(Strategy):
         return dict.fromkeys(targets, share)
 
 
-class FakeLossRule:
-    def __init__(self, evap_rate: float = 0.01, seepage_rate: float = 0.005):
-        self.evap_rate = evap_rate
-        self.seepage_rate = seepage_rate
-
-    def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
-        return {
-            EVAPORATION: node.storage * self.evap_rate,
-            SEEPAGE: node.storage * self.seepage_rate,
-        }
+@pytest.fixture
+def fake_release_policy() -> FakeReleasePolicy:
+    return FakeReleasePolicy()
 
 
 @pytest.fixture
-def fake_release_rule() -> FakeReleaseRule:
-    return FakeReleaseRule()
+def fake_split_policy() -> FakeSplitPolicy:
+    return FakeSplitPolicy()
 
 
 @pytest.fixture
-def fake_split_rule() -> FakeSplitRule:
-    return FakeSplitRule()
-
-
-@pytest.fixture
-def fake_loss_rule() -> FakeLossRule:
-    return FakeLossRule()
+def fake_loss_rule() -> ConstantLoss:
+    return ConstantLoss()

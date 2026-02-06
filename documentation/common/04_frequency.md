@@ -75,7 +75,7 @@ class Timestep:
 | `index` | `int` | Zero-based simulation step number |
 | `frequency` | `Frequency` | Temporal resolution of the simulation |
 
-### __index__ Protocol
+### **index** Protocol
 
 `Timestep` implements `__index__`, which means it can be used anywhere Python expects an integer index:
 
@@ -114,6 +114,7 @@ idx = (t.index * param_freq // t.frequency) % len(value)
 ```
 
 Where:
+
 - `t.index` is the current simulation step
 - `param_freq` is the `Frequency` declared for this parameter (from `__cyclical_freq__`)
 - `t.frequency` is the simulation's `Frequency`

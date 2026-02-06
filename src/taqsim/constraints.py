@@ -25,8 +25,8 @@ class ConstraintSpec:
     """Fully resolved constraint specification for repair functions."""
 
     constraint: Constraint
-    prefix: str  # e.g., "dam.release_rule"
-    param_paths: dict[str, str]  # {"r1": "dam.release_rule.r1", ...}
+    prefix: str  # e.g., "dam.release_policy"
+    param_paths: dict[str, str]  # {"r1": "dam.release_policy.r1", ...}
     param_bounds: dict[str, tuple[float, float]]  # {"r1": (0.0, 1.0), ...}
     time_varying_params: frozenset[str] = frozenset()  # {"r1", "r2"} if time-varying
 

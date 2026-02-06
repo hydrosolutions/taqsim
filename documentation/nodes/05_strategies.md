@@ -45,17 +45,17 @@ class FixedRelease(Strategy):
 
 ### Note on Physical Models
 
-`LossRule` implementations do **not** inherit from `Strategy`. They are physical models representing infrastructure, not operational policies. Only `ReleaseRule` and `SplitRule` are optimizable.
+`LossRule` implementations do **not** inherit from `Strategy`. They are physical models representing infrastructure, not operational policies. Only `ReleasePolicy` and `SplitPolicy` are optimizable.
 
 ## Protocol Definitions
 
-### ReleaseRule
+### ReleasePolicy
 
 Controls how storage nodes release water.
 
 ```python
 @runtime_checkable
-class ReleaseRule(Protocol):
+class ReleasePolicy(Protocol):
     def release(
         self,
         node: Storage,  # the storage node (provides storage, dead_storage, capacity)
@@ -65,13 +65,13 @@ class ReleaseRule(Protocol):
     ) -> float: ...     # amount to release
 ```
 
-### SplitRule
+### SplitPolicy
 
 Determines how water is distributed among downstream nodes.
 
 ```python
 @runtime_checkable
-class SplitRule(Protocol):
+class SplitPolicy(Protocol):
     def split(
         self,
         node: Splitter,           # the splitter node (provides targets)
@@ -168,7 +168,7 @@ from taqsim.common import Strategy
 from taqsim.constraints import SumToOne
 
 @dataclass(frozen=True)
-class MySplitRule(Strategy):
+class MySplitPolicy(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("ratio_a", "ratio_b")
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"ratio_a": (0, 1), "ratio_b": (0, 1)}
     __constraints__: ClassVar[tuple[SumToOne, ...]] = (SumToOne(("ratio_a", "ratio_b")),)
@@ -306,15 +306,15 @@ source = Source(
     id="river",
     inflow=TimeSeries(values=[10.0, 15.0]),
     targets=["dam"],
-    split_rule=split
+    split_policy=split
 )
 
 storage = Storage(
     id="dam",
     capacity=1000.0,
-    release_rule=release,
+    release_policy=release,
     loss_rule=loss,
-    split_rule=split,
+    split_policy=split,
     targets=["downstream"]
 )
 ```
@@ -324,13 +324,13 @@ storage = Storage(
 Strategies satisfy protocols via structural typing:
 
 ```python
-from taqsim.node import SplitRule, ReleaseRule, LossRule
+from taqsim.node import SplitPolicy, ReleasePolicy, LossRule
 
 split = EqualSplit()
-assert isinstance(split, SplitRule)
+assert isinstance(split, SplitPolicy)
 
 release = FixedRelease(rate=5.0)
-assert isinstance(release, ReleaseRule)
+assert isinstance(release, ReleasePolicy)
 
 loss = ZeroLoss()
 assert isinstance(loss, LossRule)

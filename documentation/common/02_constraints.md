@@ -99,8 +99,8 @@ class BandedRelease(Strategy):
 @dataclass(frozen=True, slots=True)
 class ConstraintSpec:
     constraint: Constraint
-    prefix: str                              # e.g., "dam.release_rule"
-    param_paths: dict[str, str]              # {"r1": "dam.release_rule.r1", ...}
+    prefix: str                              # e.g., "dam.release_policy"
+    param_paths: dict[str, str]              # {"r1": "dam.release_policy.r1", ...}
     param_bounds: dict[str, tuple[float, float]]  # {"r1": (0.0, 1.0), ...}
 ```
 
@@ -314,8 +314,8 @@ class AllocationSplit(Strategy):
 # Build system with constrained strategies
 system = WaterSystem(dt=86400.0)
 system.add_node(Source(id="river", inflow=TimeSeries([100.0] * 12)))
-system.add_node(Storage(id="dam", capacity=1000.0, release_rule=BandedRelease()))
-system.add_node(Splitter(id="junction", split_rule=AllocationSplit()))
+system.add_node(Storage(id="dam", capacity=1000.0, release_policy=BandedRelease()))
+system.add_node(Splitter(id="junction", split_policy=AllocationSplit()))
 system.add_node(Sink(id="city_sink"))
 system.add_node(Sink(id="farm_sink"))
 system.add_node(Sink(id="env_sink"))

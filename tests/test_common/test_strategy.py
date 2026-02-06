@@ -32,11 +32,11 @@ class TestStrategy:
 
     def test_params_handles_tuple_values(self):
         @dataclass(frozen=True)
-        class SplitRule(Strategy):
+        class FakeSplitStrategy(Strategy):
             __params__: ClassVar[tuple[str, ...]] = ("ratios",)
             ratios: tuple[float, ...] = (0.6, 0.4)
 
-        strategy = SplitRule()
+        strategy = FakeSplitStrategy()
         params = strategy.params()
 
         assert params == {"ratios": (0.6, 0.4)}
@@ -79,8 +79,8 @@ class TestParamSpec:
     """Tests for ParamSpec dataclass."""
 
     def test_scalar_param_spec(self):
-        spec = ParamSpec(path="dam.release_rule.rate", value=50.0)
-        assert spec.path == "dam.release_rule.rate"
+        spec = ParamSpec(path="dam.release_policy.rate", value=50.0)
+        assert spec.path == "dam.release_policy.rate"
         assert spec.value == 50.0
 
     def test_param_spec_is_frozen(self):

@@ -19,12 +19,12 @@ class TestBaseNodeReset:
 class TestStorageReset:
     """Tests for Storage.reset()."""
 
-    def test_reset_restores_initial_storage(self, fake_release_rule, fake_loss_rule):
+    def test_reset_restores_initial_storage(self, fake_release_policy, fake_loss_rule):
         storage = Storage(
             id="dam",
             capacity=1000.0,
             initial_storage=500.0,
-            release_rule=fake_release_rule,
+            release_policy=fake_release_policy,
             loss_rule=fake_loss_rule,
         )
 
@@ -63,10 +63,10 @@ class TestDemandReset:
 class TestSplitterReset:
     """Tests for Splitter.reset()."""
 
-    def test_reset_clears_received_accumulator(self, fake_split_rule):
+    def test_reset_clears_received_accumulator(self, fake_split_policy):
         splitter = Splitter(
             id="junction",
-            split_rule=fake_split_rule,
+            split_policy=fake_split_policy,
         )
         splitter._set_targets(["a", "b"])
 

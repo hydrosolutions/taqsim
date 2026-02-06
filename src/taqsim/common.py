@@ -189,5 +189,5 @@ class Strategy:
 class ParamSpec:
     """Describes a single tunable parameter in the system."""
 
-    path: str  # e.g., "dam.release_rule.rate"
+    path: str  # e.g., "dam.release_policy.rate"
     value: float  # scalar value

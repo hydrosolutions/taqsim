@@ -6,9 +6,10 @@ import pytest
 from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSystem
 from taqsim.common import Strategy
 from taqsim.constraints import ConstraintSpec, Ordered, SumToOne
+from taqsim.testing import NoLoss
 from taqsim.time import Frequency, Timestep
 
-from .conftest import FakeEdgeLossRule, FakeLossRule
+from .conftest import FakeEdgeLossRule
 
 if TYPE_CHECKING:
     pass
@@ -113,14 +114,14 @@ def build_test_system() -> WaterSystem:
             id="dam",
             capacity=1000.0,
             initial_storage=500.0,
-            release_rule=FixedRelease(rate=50.0),
+            release_policy=FixedRelease(rate=50.0),
             loss_rule=SimpleLoss(),
         )
     )
     system.add_node(
         Splitter(
             id="junction",
-            split_rule=ProportionalSplit(r1=0.6, r2=0.4),
+            split_policy=ProportionalSplit(r1=0.6, r2=0.4),
         )
     )
     system.add_node(Sink(id="city"))
@@ -144,11 +145,11 @@ class TestParamSchema:
 
         paths = [s.path for s in schema]
 
-        # Should include release_rule params
-        assert "dam.release_rule.rate" in paths
-        # Should include split_rule params
-        assert "junction.split_rule.r1" in paths
-        assert "junction.split_rule.r2" in paths
+        # Should include release_policy params
+        assert "dam.release_policy.rate" in paths
+        # Should include split_policy params
+        assert "junction.split_policy.r1" in paths
+        assert "junction.split_policy.r2" in paths
         # Should NOT include loss_rule (not a Strategy)
         assert not any("loss_rule" in p for p in paths)
 
@@ -295,13 +296,13 @@ class TestParamBounds:
         system = build_test_system()
         bounds = system.param_bounds()
 
-        assert "dam.release_rule.rate" in bounds
-        assert bounds["dam.release_rule.rate"] == (0.0, 200.0)
+        assert "dam.release_policy.rate" in bounds
+        assert bounds["dam.release_policy.rate"] == (0.0, 200.0)
 
-        assert "junction.split_rule.r1" in bounds
-        assert "junction.split_rule.r2" in bounds
-        assert bounds["junction.split_rule.r1"] == (0.0, 1.0)
-        assert bounds["junction.split_rule.r2"] == (0.0, 1.0)
+        assert "junction.split_policy.r1" in bounds
+        assert "junction.split_policy.r2" in bounds
+        assert bounds["junction.split_policy.r1"] == (0.0, 1.0)
+        assert bounds["junction.split_policy.r2"] == (0.0, 1.0)
 
     def test_raises_for_missing_bounds(self):
         """Raises ValueError when strategy params lack bounds."""
@@ -312,7 +313,7 @@ class TestParamBounds:
                 id="tank",
                 capacity=1000.0,
                 initial_storage=500.0,
-                release_rule=UnboundedStrategy(value=10.0),
+                release_policy=UnboundedStrategy(value=10.0),
                 loss_rule=SimpleLoss(),
             )
         )
@@ -326,10 +327,10 @@ class TestParamBounds:
         system = build_test_system()
         bounds = system.param_bounds()
 
-        split_keys = [k for k in bounds if "split_rule" in k]
+        split_keys = [k for k in bounds if "split_policy" in k]
         assert len(split_keys) == 2
-        assert "junction.split_rule.r1" in split_keys
-        assert "junction.split_rule.r2" in split_keys
+        assert "junction.split_policy.r1" in split_keys
+        assert "junction.split_policy.r2" in split_keys
 
 
 class TestBoundsVector:
@@ -352,7 +353,7 @@ class TestBoundsVector:
         bounds_vec = system.bounds_vector()
 
         for spec, bound in zip(schema, bounds_vec, strict=True):
-            if "release_rule.rate" in spec.path:
+            if "release_policy.rate" in spec.path:
                 assert bound == (0.0, 200.0)
             elif "r1" in spec.path or "r2" in spec.path:
                 assert bound == (0.0, 1.0)
@@ -378,14 +379,14 @@ class TestConstraintSpecs:
                 id="dam",
                 capacity=1000.0,
                 initial_storage=500.0,
-                release_rule=OrderedRelease(low=10.0, high=50.0),
+                release_policy=OrderedRelease(low=10.0, high=50.0),
                 loss_rule=SimpleLoss(),
             )
         )
         system.add_node(
             Splitter(
                 id="junction",
-                split_rule=ConstrainedSplit(r1=0.5, r2=0.3, r3=0.2),
+                split_policy=ConstrainedSplit(r1=0.5, r2=0.3, r3=0.2),
             )
         )
         system.add_node(Sink(id="city"))
@@ -416,7 +417,7 @@ class TestConstraintSpecs:
                 id="tank",
                 capacity=1000.0,
                 initial_storage=500.0,
-                release_rule=OrderedRelease(low=10.0, high=50.0),
+                release_policy=OrderedRelease(low=10.0, high=50.0),
                 loss_rule=SimpleLoss(),
             )
         )
@@ -431,14 +432,14 @@ class TestConstraintSpecs:
         spec = specs[0]
 
         assert isinstance(spec, ConstraintSpec)
-        assert spec.prefix == "tank.release_rule"
+        assert spec.prefix == "tank.release_policy"
         assert isinstance(spec.constraint, Ordered)
         assert spec.constraint.params == ("low", "high")
 
         # Check param_paths
         assert spec.param_paths == {
-            "low": "tank.release_rule.low",
-            "high": "tank.release_rule.high",
+            "low": "tank.release_policy.low",
+            "high": "tank.release_policy.high",
         }
 
         # Check param_bounds
@@ -484,8 +485,8 @@ class TestParamSchemaTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -496,18 +497,18 @@ class TestParamSchemaTimeVarying:
         schema = system.param_schema()
         paths = [s.path for s in schema]
 
-        assert "dam.release_rule.rate[0]" in paths
-        assert "dam.release_rule.rate[1]" in paths
-        assert "dam.release_rule.rate[2]" in paths
-        assert "dam.release_rule.rate" not in paths  # No base path
+        assert "dam.release_policy.rate[0]" in paths
+        assert "dam.release_policy.rate[1]" in paths
+        assert "dam.release_policy.rate[2]" in paths
+        assert "dam.release_policy.rate" not in paths  # No base path
 
     def test_values_match_tuple_elements(self):
         """ParamSpec.value for rate[i] equals strategy.rate[i]."""
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -518,9 +519,9 @@ class TestParamSchemaTimeVarying:
         schema = system.param_schema()
         schema_dict = {s.path: s.value for s in schema}
 
-        assert schema_dict["dam.release_rule.rate[0]"] == 10.0
-        assert schema_dict["dam.release_rule.rate[1]"] == 20.0
-        assert schema_dict["dam.release_rule.rate[2]"] == 30.0
+        assert schema_dict["dam.release_policy.rate[0]"] == 10.0
+        assert schema_dict["dam.release_policy.rate[1]"] == 20.0
+        assert schema_dict["dam.release_policy.rate[2]"] == 30.0
 
 
 class TestToVectorTimeVarying:
@@ -531,8 +532,8 @@ class TestToVectorTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -548,8 +549,8 @@ class TestToVectorTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=MixedParamRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=MixedParamRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -570,8 +571,8 @@ class TestWithVectorTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -580,7 +581,7 @@ class TestWithVectorTimeVarying:
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
 
         new_system = system.with_vector([40.0, 50.0, 60.0])
-        new_strategy = new_system.nodes["dam"].release_rule
+        new_strategy = new_system.nodes["dam"].release_policy
         assert new_strategy.rate == (40.0, 50.0, 60.0)
 
     def test_roundtrip_preserves_values(self):
@@ -588,8 +589,8 @@ class TestWithVectorTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -610,8 +611,8 @@ class TestBoundsVectorTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -627,8 +628,8 @@ class TestBoundsVectorTimeVarying:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=MixedParamRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=MixedParamRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -647,8 +648,8 @@ class TestValidateTimeVaryingLengths:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -667,8 +668,8 @@ class TestValidateTimeVaryingLengths:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=TimeVaryingRelease(),
-            loss_rule=FakeLossRule(),
+            release_policy=TimeVaryingRelease(),
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -756,8 +757,8 @@ class TestValidateTimeVaryingLengthsCyclical:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=CyclicalRelease(),  # 3 values, cyclical
-            loss_rule=FakeLossRule(),
+            release_policy=CyclicalRelease(),  # 3 values, cyclical
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -776,8 +777,8 @@ class TestValidateTimeVaryingLengthsCyclical:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=NonCyclicalRelease(),  # 3 values, non-cyclical
-            loss_rule=FakeLossRule(),
+            release_policy=NonCyclicalRelease(),  # 3 values, non-cyclical
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -795,8 +796,8 @@ class TestValidateTimeVaryingLengthsCyclical:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=MixedCyclicalRelease(),  # base=3 cyclical, multiplier=10 non-cyclical
-            loss_rule=FakeLossRule(),
+            release_policy=MixedCyclicalRelease(),  # base=3 cyclical, multiplier=10 non-cyclical
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -813,8 +814,8 @@ class TestValidateTimeVaryingLengthsCyclical:
         storage = Storage(
             id="dam",
             capacity=1000.0,
-            release_rule=AllCyclicalRelease(),  # base=2, multiplier=3, both cyclical
-            loss_rule=FakeLossRule(),
+            release_policy=AllCyclicalRelease(),  # base=2, multiplier=3, both cyclical
+            loss_rule=NoLoss(),
         )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)

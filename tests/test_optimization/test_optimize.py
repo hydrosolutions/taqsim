@@ -110,11 +110,11 @@ class TestOptimizeObjectives:
             seed=42,
         )
         bounds = minimal_water_system.param_bounds()
-        rate_lo, _ = bounds["dam.release_rule.rate"]
+        rate_lo, _ = bounds["dam.release_policy.rate"]
 
         best_solution = min(result.solutions, key=lambda s: s.scores[simple_minimize_objective.name])
         assert best_solution.scores[simple_minimize_objective.name] <= 50.0
-        assert best_solution.parameters["dam.release_rule.rate"] >= rate_lo
+        assert best_solution.parameters["dam.release_policy.rate"] >= rate_lo
 
     def test_respects_maximize_direction(
         self,
@@ -130,11 +130,11 @@ class TestOptimizeObjectives:
             seed=42,
         )
         bounds = minimal_water_system.param_bounds()
-        _, rate_hi = bounds["dam.release_rule.rate"]
+        _, rate_hi = bounds["dam.release_policy.rate"]
 
         best_solution = max(result.solutions, key=lambda s: s.scores[simple_maximize_objective.name])
         assert best_solution.scores[simple_maximize_objective.name] >= 50.0
-        assert best_solution.parameters["dam.release_rule.rate"] <= rate_hi
+        assert best_solution.parameters["dam.release_policy.rate"] <= rate_hi
 
 
 class TestOptimizeDeterminism:

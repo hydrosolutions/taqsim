@@ -48,12 +48,12 @@ class ZeroLoss:
 storage = Storage(
     id="reservoir",
     capacity=1000.0,
-    release_rule=FixedRelease(rate=50.0),
+    release_policy=FixedRelease(rate=50.0),
     loss_rule=ZeroLoss()
 )
 
 storage.strategies()
-# -> {"release_rule": FixedRelease(rate=50.0)}
+# -> {"release_policy": FixedRelease(rate=50.0)}
 # Note: loss_rule is NOT included (LossRule is not a Strategy)
 ```
 
@@ -136,8 +136,8 @@ for node_id, node in system.nodes.items():
 ### Example Output
 
 ```
-reservoir.release_rule: {"rate": 50.0}
-junction.split_rule: {"ratio_a": 0.6, "ratio_b": 0.4}
+reservoir.release_policy: {"rate": 50.0}
+junction.split_policy: {"ratio_a": 0.6, "ratio_b": 0.4}
 ```
 
 ---
@@ -283,11 +283,11 @@ best_params = optimizer.minimize(
 
 ```python
 # Strategies are immutable - use with_params() to create new instances
-old_release = storage.release_rule
+old_release = storage.release_policy
 new_release = old_release.with_params(rate=75.0)
 
 # Update the node (requires mutable node)
-storage.release_rule = new_release
+storage.release_policy = new_release
 ```
 
 For full details on system-level vectorization API (`to_vector()`, `with_vector()`, `param_bounds()`, `constraint_specs()`), see [Parameter Exposure](../system/03_parameter_exposure.md).

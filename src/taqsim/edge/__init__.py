@@ -5,7 +5,7 @@ from .events import (
     WaterLost,
     WaterReceived,
 )
-from .losses import EdgeLossRule
+from .losses import EdgeLossRule, NoEdgeLoss
 
 __all__ = [
     # Events
@@ -15,6 +15,7 @@ __all__ = [
     "WaterReceived",
     # Strategies
     "EdgeLossRule",
+    "NoEdgeLoss",
     # Edge
     "Edge",
 ]

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from taqsim.common import LossReason
@@ -9,12 +10,12 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
-class ReleaseRule(Protocol):
+class ReleasePolicy(Protocol):
     def release(self, node: "Storage", inflow: float, t: "Timestep") -> float: ...
 
 
 @runtime_checkable
-class SplitRule(Protocol):
+class SplitPolicy(Protocol):
     """Protocol for water distribution strategies at Splitter nodes.
 
     The split() method determines how incoming water is distributed
@@ -35,3 +36,9 @@ class SplitRule(Protocol):
 @runtime_checkable
 class LossRule(Protocol):
     def calculate(self, node: "Storage", t: "Timestep") -> dict[LossReason, float]: ...
+
+
+@dataclass(frozen=True)
+class NoLoss:
+    def calculate(self, node: "Storage", t: "Timestep") -> dict[LossReason, float]:
+        return {}

@@ -397,7 +397,7 @@ class TestSplitterRouting:
     """Regression tests for splitter routing with node IDs."""
 
     def test_splitter_routes_water_to_downstream_nodes(self):
-        """SplitRule returning node IDs routes water correctly."""
+        """SplitPolicy returning node IDs routes water correctly."""
 
         class ProportionalSplit:
             def split(self, node, amount: float, t: Timestep) -> dict[str, float]:
@@ -405,7 +405,7 @@ class TestSplitterRouting:
 
         system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
-        splitter = make_splitter(split_rule=ProportionalSplit())
+        splitter = make_splitter(split_policy=ProportionalSplit())
         sink1 = make_sink(id="sink1")
         sink2 = make_sink(id="sink2")
 
@@ -453,7 +453,7 @@ class TestSplitterRouting:
         assert set(splitter.targets) == {"sink1", "sink2"}
 
     def test_splitter_raises_on_invalid_target_node(self):
-        """SplitRule returning invalid node ID raises ValueError."""
+        """SplitPolicy returning invalid node ID raises ValueError."""
 
         class BadSplit:
             def split(self, node, amount: float, t: Timestep) -> dict[str, float]:
@@ -461,7 +461,7 @@ class TestSplitterRouting:
 
         system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
-        splitter = make_splitter(split_rule=BadSplit())
+        splitter = make_splitter(split_policy=BadSplit())
         sink = make_sink()
 
         system.add_node(source)

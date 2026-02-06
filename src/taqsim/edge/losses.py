@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from taqsim.common import LossReason
@@ -10,3 +11,9 @@ if TYPE_CHECKING:
 @runtime_checkable
 class EdgeLossRule(Protocol):
     def calculate(self, edge: "Edge", flow: float, t: "Timestep") -> dict[LossReason, float]: ...
+
+
+@dataclass(frozen=True)
+class NoEdgeLoss:
+    def calculate(self, edge: "Edge", flow: float, t: "Timestep") -> dict[LossReason, float]:
+        return {}

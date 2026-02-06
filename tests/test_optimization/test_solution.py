@@ -12,20 +12,20 @@ class TestSolutionInit:
         vector = np.array([50.0])
         solution = Solution(
             scores={"obj1": 1.0},
-            parameters={"dam.release_rule.rate": 50.0},
+            parameters={"dam.release_policy.rate": 50.0},
             _vector=vector,
             _template=minimal_water_system,
         )
 
         assert solution.scores == {"obj1": 1.0}
-        assert solution.parameters == {"dam.release_rule.rate": 50.0}
+        assert solution.parameters == {"dam.release_policy.rate": 50.0}
 
     def test_stores_scores_dict(self, minimal_water_system: WaterSystem) -> None:
         scores = {"objective_a": 10.5, "objective_b": 20.3}
         vector = np.array([50.0])
         solution = Solution(
             scores=scores,
-            parameters={"dam.release_rule.rate": 50.0},
+            parameters={"dam.release_policy.rate": 50.0},
             _vector=vector,
             _template=minimal_water_system,
         )
@@ -35,7 +35,7 @@ class TestSolutionInit:
         assert solution.scores["objective_b"] == 20.3
 
     def test_stores_parameters_dict(self, minimal_water_system: WaterSystem) -> None:
-        parameters = {"dam.release_rule.rate": 75.0, "other.param": 25.0}
+        parameters = {"dam.release_policy.rate": 75.0, "other.param": 25.0}
         vector = np.array([75.0])
         solution = Solution(
             scores={"obj": 1.0},
@@ -45,7 +45,7 @@ class TestSolutionInit:
         )
 
         assert solution.parameters == parameters
-        assert solution.parameters["dam.release_rule.rate"] == 75.0
+        assert solution.parameters["dam.release_policy.rate"] == 75.0
         assert solution.parameters["other.param"] == 25.0
 
 
@@ -54,7 +54,7 @@ class TestSolutionImmutability:
         vector = np.array([50.0])
         solution = Solution(
             scores={"obj": 1.0},
-            parameters={"dam.release_rule.rate": 50.0},
+            parameters={"dam.release_policy.rate": 50.0},
             _vector=vector,
             _template=minimal_water_system,
         )
@@ -68,7 +68,7 @@ class TestSolutionToSystem:
         vector = np.array([50.0])
         solution = Solution(
             scores={"obj": 1.0},
-            parameters={"dam.release_rule.rate": 50.0},
+            parameters={"dam.release_policy.rate": 50.0},
             _vector=vector,
             _template=minimal_water_system,
         )
@@ -82,7 +82,7 @@ class TestSolutionToSystem:
         vector = np.array([new_rate])
         solution = Solution(
             scores={"obj": 1.0},
-            parameters={"dam.release_rule.rate": new_rate},
+            parameters={"dam.release_policy.rate": new_rate},
             _vector=vector,
             _template=minimal_water_system,
         )
@@ -90,13 +90,13 @@ class TestSolutionToSystem:
         result = solution.to_system()
         dam = result.nodes["dam"]
 
-        assert dam.release_rule.rate == new_rate
+        assert dam.release_policy.rate == new_rate
 
     def test_returns_fresh_instance(self, minimal_water_system: WaterSystem) -> None:
         vector = np.array([50.0])
         solution = Solution(
             scores={"obj": 1.0},
-            parameters={"dam.release_rule.rate": 50.0},
+            parameters={"dam.release_policy.rate": 50.0},
             _vector=vector,
             _template=minimal_water_system,
         )
@@ -107,16 +107,16 @@ class TestSolutionToSystem:
         assert result1 is not result2
 
     def test_preserves_original_template(self, minimal_water_system: WaterSystem) -> None:
-        original_rate = minimal_water_system.nodes["dam"].release_rule.rate
+        original_rate = minimal_water_system.nodes["dam"].release_policy.rate
         new_rate = 99.0
         vector = np.array([new_rate])
         solution = Solution(
             scores={"obj": 1.0},
-            parameters={"dam.release_rule.rate": new_rate},
+            parameters={"dam.release_policy.rate": new_rate},
             _vector=vector,
             _template=minimal_water_system,
         )
 
         _ = solution.to_system()
 
-        assert minimal_water_system.nodes["dam"].release_rule.rate == original_rate
+        assert minimal_water_system.nodes["dam"].release_policy.rate == original_rate

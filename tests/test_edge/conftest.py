@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
+from taqsim.testing import NoEdgeLoss, ProportionalEdgeLoss
 from taqsim.time import Timestep
 
 if TYPE_CHECKING:
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class FakeEdgeLossRule:
-    """Fake implementation of EdgeLossRule protocol for testing."""
+    """Fake implementation of EdgeLossRule protocol for testing with custom losses."""
 
     def __init__(self, losses: dict[LossReason, float] | None = None):
         self._losses = losses if losses is not None else {}
@@ -19,20 +20,9 @@ class FakeEdgeLossRule:
         return self._losses
 
 
-class ProportionalEdgeLossRule:
-    """Loss rule that calculates losses as fraction of flow."""
-
-    def __init__(self, loss_fraction: float = 0.1):
-        self.loss_fraction = loss_fraction
-
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[LossReason, float]:
-        loss = flow * self.loss_fraction
-        return {SEEPAGE: loss}
-
-
 @pytest.fixture
-def fake_edge_loss_rule() -> FakeEdgeLossRule:
-    return FakeEdgeLossRule()
+def fake_edge_loss_rule() -> NoEdgeLoss:
+    return NoEdgeLoss()
 
 
 @pytest.fixture
@@ -41,5 +31,5 @@ def fake_edge_loss_rule_with_losses() -> FakeEdgeLossRule:
 
 
 @pytest.fixture
-def proportional_loss_rule() -> ProportionalEdgeLossRule:
-    return ProportionalEdgeLossRule(loss_fraction=0.1)
+def proportional_loss_rule() -> ProportionalEdgeLoss:
+    return ProportionalEdgeLoss(loss_fraction=0.1)

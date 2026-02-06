@@ -31,10 +31,11 @@ from .constraints import (
     Ordered,
     SumToOne,
 )
-from .edge import Edge, EdgeEvent, EdgeLossRule, WaterDelivered, WaterLost, WaterReceived
+from .edge import Edge, EdgeEvent, EdgeLossRule, NoEdgeLoss, WaterDelivered, WaterLost, WaterReceived
 from .node import (
     BaseNode,
     Demand,
+    NoLoss,
     PassThrough,
     Sink,
     Source,
@@ -80,6 +81,7 @@ __all__ = [
     "Solution",
     # Nodes
     "BaseNode",
+    "NoLoss",
     "Source",
     "Storage",
     "Demand",
@@ -91,6 +93,7 @@ __all__ = [
     "Edge",
     "EdgeEvent",
     "EdgeLossRule",
+    "NoEdgeLoss",
     "WaterReceived",
     "WaterLost",
     "WaterDelivered",

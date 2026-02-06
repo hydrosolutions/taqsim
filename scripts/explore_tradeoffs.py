@@ -94,8 +94,9 @@ def generate_thermal_demand(n_years: int, base_demand: float, seed: int) -> list
 # --- Strategies ---
 
 
-def volume_to_head(volume: float, v_dead: float = 10.0, v_max: float = 150.0,
-                   h_dead: float = 20.0, h_max: float = 100.0) -> float:
+def volume_to_head(
+    volume: float, v_dead: float = 10.0, v_max: float = 150.0, h_dead: float = 20.0, h_max: float = 100.0
+) -> float:
     v_clamped = max(v_dead, min(v_max, volume))
     return h_dead + (v_clamped - v_dead) * (h_max - h_dead) / (v_max - v_dead)
 
@@ -167,7 +168,9 @@ class ZeroStorageLoss:
 # --- Objectives ---
 
 
-def hydropower_objective(reservoir_id: str, turbine_id: str, initial_storage: float, efficiency: float = 0.85) -> Objective:
+def hydropower_objective(
+    reservoir_id: str, turbine_id: str, initial_storage: float, efficiency: float = 0.85
+) -> Objective:
     def evaluate(system: WaterSystem) -> float:
         turbine = system.nodes[turbine_id]
         reservoir = system.nodes[reservoir_id]
@@ -185,6 +188,7 @@ def hydropower_objective(reservoir_id: str, turbine_id: str, initial_storage: fl
 
 def flood_objective(node_id: str) -> Objective:
     """Minimize flood/spill at a PassThrough node."""
+
     def evaluate(system: WaterSystem) -> float:
         return system.nodes[node_id].trace(WaterSpilled).sum()
 
@@ -193,6 +197,7 @@ def flood_objective(node_id: str) -> Objective:
 
 def deficit_objective(node_id: str, name: str) -> Objective:
     """Minimize deficit at a Demand node."""
+
     def evaluate(system: WaterSystem) -> float:
         return system.nodes[node_id].trace(DeficitRecorded, field="deficit").sum()
 
@@ -231,29 +236,35 @@ def build_system(config: Config) -> WaterSystem:
 
     # Nodes
     system.add_node(Source(id="river", inflow=TimeSeries(inflows)))
-    system.add_node(Storage(
-        id="reservoir",
-        capacity=150.0,
-        dead_storage=10.0,
-        initial_storage=75.0,
-        release_rule=SLOPRelease(),
-        loss_rule=ZeroStorageLoss(),
-    ))
+    system.add_node(
+        Storage(
+            id="reservoir",
+            capacity=150.0,
+            dead_storage=10.0,
+            initial_storage=75.0,
+            release_policy=SLOPRelease(),
+            loss_rule=ZeroStorageLoss(),
+        )
+    )
     system.add_node(PassThrough(id="turbine", capacity=60.0))
     system.add_node(PassThrough(id="city", capacity=config.city_capacity))  # Bottleneck!
-    system.add_node(Splitter(id="splitter", split_rule=SeasonalRatio()))
-    system.add_node(Demand(
-        id="irrigation",
-        requirement=TimeSeries(irrigation_demand),
-        consumption_fraction=1.0,  # Fully consumptive
-        efficiency=0.85,
-    ))
-    system.add_node(Demand(
-        id="thermal_plant",
-        requirement=TimeSeries(thermal_demand),
-        consumption_fraction=0.0,  # Non-consumptive (cooling)
-        efficiency=1.0,
-    ))
+    system.add_node(Splitter(id="splitter", split_policy=SeasonalRatio()))
+    system.add_node(
+        Demand(
+            id="irrigation",
+            requirement=TimeSeries(irrigation_demand),
+            consumption_fraction=1.0,  # Fully consumptive
+            efficiency=0.85,
+        )
+    )
+    system.add_node(
+        Demand(
+            id="thermal_plant",
+            requirement=TimeSeries(thermal_demand),
+            consumption_fraction=0.0,  # Non-consumptive (cooling)
+            efficiency=1.0,
+        )
+    )
     system.add_node(Sink(id="irrigation_sink"))
     system.add_node(Sink(id="thermal_sink"))
 
@@ -333,10 +344,10 @@ def evaluate_config(config: Config, pop_size: int = 50, generations: int = 30) -
 
 def sample_config(rng: random.Random, trial: int) -> Config:
     return Config(
-        city_capacity=rng.uniform(25.0, 50.0),       # Sweet spot for trade-offs
-        irrigation_peak=rng.uniform(25.0, 40.0),     # Peak irrigation demand
-        thermal_base=rng.uniform(20.0, 35.0),        # Base thermal cooling demand
-        inflow_scale=rng.uniform(0.8, 1.2),          # Moderate variation
+        city_capacity=rng.uniform(25.0, 50.0),  # Sweet spot for trade-offs
+        irrigation_peak=rng.uniform(25.0, 40.0),  # Peak irrigation demand
+        thermal_base=rng.uniform(20.0, 35.0),  # Base thermal cooling demand
+        inflow_scale=rng.uniform(0.8, 1.2),  # Moderate variation
         seed=rng.randint(0, 100000),
     )
 
@@ -396,7 +407,9 @@ def run_exploration(n_trials: int = 100, seed: int = 42) -> None:
         log.info(f"Best config: {json.dumps(best_result['config'], indent=2)}")
         log.info(f"Pareto count: {best_result['pareto_count']}")
         log.info(f"Spreads: {json.dumps(best_result['spreads'], indent=2)}")
-        log.info(f"Ranges: {json.dumps({k: [round(v[0], 2), round(v[1], 2)] for k, v in best_result['ranges'].items()}, indent=2)}")
+        log.info(
+            f"Ranges: {json.dumps({k: [round(v[0], 2), round(v[1], 2)] for k, v in best_result['ranges'].items()}, indent=2)}"
+        )
 
 
 if __name__ == "__main__":

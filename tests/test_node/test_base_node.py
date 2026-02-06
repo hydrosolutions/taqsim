@@ -256,19 +256,19 @@ class TestBaseNodeInheritanceTags:
     def test_storage_inherits_tags(self):
         from taqsim.node import Storage
 
-        # Storage requires release_rule and loss_rule - create minimal fakes
-        class FakeReleaseRule:
-            def release(self, node, inflow, t, dt):
+        # Storage requires release_policy and loss_rule - create minimal fakes
+        class FakeReleasePolicy:
+            def release(self, node, inflow, t):
                 return 0.0
 
         class FakeLossRule:
-            def calculate(self, node, t, dt):
+            def calculate(self, node, t):
                 return {}
 
         storage = Storage(
             id="test",
             capacity=1000.0,
-            release_rule=FakeReleaseRule(),
+            release_policy=FakeReleasePolicy(),
             loss_rule=FakeLossRule(),
             tags=frozenset({"reservoir"}),
             metadata={"built_year": 2020},

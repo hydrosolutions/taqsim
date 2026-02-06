@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
-from taqsim.node.strategies import LossRule, ReleaseRule, SplitRule
+from taqsim.node.strategies import LossRule, ReleasePolicy, SplitPolicy
 from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
@@ -9,24 +9,24 @@ if TYPE_CHECKING:
     from taqsim.node.storage import Storage
 
 
-class TestReleaseRuleProtocol:
+class TestReleasePolicyProtocol:
     def test_class_with_release_satisfies_protocol(self):
         class ValidRelease:
             def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
                 return node.storage * 0.5
 
-        assert isinstance(ValidRelease(), ReleaseRule)
+        assert isinstance(ValidRelease(), ReleasePolicy)
 
     def test_class_without_release_does_not_satisfy(self):
         class NoRelease:
             pass
 
-        assert not isinstance(NoRelease(), ReleaseRule)
+        assert not isinstance(NoRelease(), ReleasePolicy)
 
-    def test_fake_release_rule_satisfies_protocol(self, fake_release_rule):
-        assert isinstance(fake_release_rule, ReleaseRule)
+    def test_fake_release_policy_satisfies_protocol(self, fake_release_policy):
+        assert isinstance(fake_release_policy, ReleasePolicy)
 
-    def test_release_returns_float(self, fake_release_rule, fake_loss_rule):
+    def test_release_returns_float(self, fake_release_policy, fake_loss_rule):
         from taqsim.node.storage import Storage
 
         class ValidRelease:
@@ -37,7 +37,7 @@ class TestReleaseRuleProtocol:
             id="test",
             capacity=200.0,
             initial_storage=100.0,
-            release_rule=fake_release_rule,
+            release_policy=fake_release_policy,
             loss_rule=fake_loss_rule,
         )
         rule = ValidRelease()
@@ -45,31 +45,31 @@ class TestReleaseRuleProtocol:
         assert result == 50.0
 
 
-class TestSplitRuleProtocol:
+class TestSplitPolicyProtocol:
     def test_class_with_split_satisfies_protocol(self):
         class ValidSplit:
             def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
-        assert isinstance(ValidSplit(), SplitRule)
+        assert isinstance(ValidSplit(), SplitPolicy)
 
     def test_class_without_split_does_not_satisfy(self):
         class NoSplit:
             pass
 
-        assert not isinstance(NoSplit(), SplitRule)
+        assert not isinstance(NoSplit(), SplitPolicy)
 
-    def test_fake_split_rule_satisfies_protocol(self, fake_split_rule):
-        assert isinstance(fake_split_rule, SplitRule)
+    def test_fake_split_policy_satisfies_protocol(self, fake_split_policy):
+        assert isinstance(fake_split_policy, SplitPolicy)
 
-    def test_split_returns_dict(self, fake_split_rule):
+    def test_split_returns_dict(self, fake_split_policy):
         from taqsim.node.splitter import Splitter
 
         class ValidSplit:
             def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
-        splitter = Splitter(id="test", split_rule=fake_split_rule)
+        splitter = Splitter(id="test", split_policy=fake_split_policy)
         splitter._set_targets(["a", "b"])
         strategy = ValidSplit()
         result = strategy.split(splitter, 100.0, Timestep(0, Frequency.MONTHLY))
@@ -93,7 +93,7 @@ class TestLossRuleProtocol:
     def test_fake_loss_rule_satisfies_protocol(self, fake_loss_rule):
         assert isinstance(fake_loss_rule, LossRule)
 
-    def test_calculate_returns_dict_with_loss_reasons(self, fake_release_rule, fake_loss_rule):
+    def test_calculate_returns_dict_with_loss_reasons(self, fake_release_policy, fake_loss_rule):
         from taqsim.node.storage import Storage
 
         class ValidLoss:
@@ -107,7 +107,7 @@ class TestLossRuleProtocol:
             id="test",
             capacity=2000.0,
             initial_storage=1000.0,
-            release_rule=fake_release_rule,
+            release_policy=fake_release_policy,
             loss_rule=fake_loss_rule,
         )
         rule = ValidLoss()
@@ -117,19 +117,19 @@ class TestLossRuleProtocol:
 
 
 class TestProtocolNonSatisfaction:
-    def test_class_with_wrong_method_name_does_not_satisfy_release_rule(self):
+    def test_class_with_wrong_method_name_does_not_satisfy_release_policy(self):
         class WrongMethod:
             def release_water(self, node: "Storage", inflow: float, t: Timestep) -> float:
                 return 0.0
 
-        assert not isinstance(WrongMethod(), ReleaseRule)
+        assert not isinstance(WrongMethod(), ReleasePolicy)
 
-    def test_class_with_wrong_method_name_does_not_satisfy_split_rule(self):
+    def test_class_with_wrong_method_name_does_not_satisfy_split_policy(self):
         class WrongMethod:
             def divide(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
                 return {}
 
-        assert not isinstance(WrongMethod(), SplitRule)
+        assert not isinstance(WrongMethod(), SplitPolicy)
 
     def test_class_with_wrong_method_name_does_not_satisfy_loss_rule(self):
         class WrongMethod:
@@ -143,6 +143,6 @@ class TestProtocolNonSatisfaction:
             pass
 
         instance = EmptyClass()
-        assert not isinstance(instance, ReleaseRule)
-        assert not isinstance(instance, SplitRule)
+        assert not isinstance(instance, ReleasePolicy)
+        assert not isinstance(instance, SplitPolicy)
         assert not isinstance(instance, LossRule)

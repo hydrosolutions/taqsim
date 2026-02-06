@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     pass
 
 
-class FakeReleaseRule:
+class FakeReleasePolicy:
     def __init__(self, release_amount: float = 0.0):
         self._release_amount = release_amount
 
@@ -32,7 +32,7 @@ class FakeReleaseRule:
         return self._release_amount
 
 
-class SpyReleaseRule:
+class SpyReleasePolicy:
     def __init__(self, release_amount: float = 0.0):
         self._release_amount = release_amount
         self.calls: list[dict] = []
@@ -73,7 +73,7 @@ def make_storage(
         id="test_storage",
         capacity=capacity,
         initial_storage=initial_storage,
-        release_rule=FakeReleaseRule(release_amount),
+        release_policy=FakeReleasePolicy(release_amount),
         loss_rule=FakeLossRule(losses),
     )
 
@@ -104,12 +104,12 @@ class TestStorageInit:
         storage = make_storage(capacity=1000.0, initial_storage=1000.0)
         assert storage.storage == 1000.0
 
-    def test_release_rule_required(self):
-        with pytest.raises(ValueError, match="release_rule is required"):
+    def test_release_policy_required(self):
+        with pytest.raises(ValueError, match="release_policy is required"):
             Storage(
                 id="test",
                 capacity=1000.0,
-                release_rule=None,
+                release_policy=None,
                 loss_rule=FakeLossRule(),
             )
 
@@ -118,7 +118,7 @@ class TestStorageInit:
             Storage(
                 id="test",
                 capacity=1000.0,
-                release_rule=FakeReleaseRule(),
+                release_policy=FakeReleasePolicy(),
                 loss_rule=None,
             )
 
@@ -128,7 +128,7 @@ class TestStorageInit:
                 id="test",
                 capacity=1000.0,
                 dead_storage=-1.0,
-                release_rule=FakeReleaseRule(),
+                release_policy=FakeReleasePolicy(),
                 loss_rule=FakeLossRule(),
             )
 
@@ -138,7 +138,7 @@ class TestStorageInit:
                 id="test",
                 capacity=1000.0,
                 dead_storage=1500.0,
-                release_rule=FakeReleaseRule(),
+                release_policy=FakeReleasePolicy(),
                 loss_rule=FakeLossRule(),
             )
 
@@ -151,7 +151,7 @@ class TestStorageInit:
             id="test",
             capacity=1000.0,
             dead_storage=1000.0,
-            release_rule=FakeReleaseRule(),
+            release_policy=FakeReleasePolicy(),
             loss_rule=FakeLossRule(),
         )
         assert storage.dead_storage == 1000.0
@@ -410,7 +410,7 @@ class TestStorageRelease:
             capacity=1000.0,
             initial_storage=500.0,
             dead_storage=200.0,
-            release_rule=FakeReleaseRule(1000.0),
+            release_policy=FakeReleasePolicy(1000.0),
             loss_rule=FakeLossRule(),
         )
         released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
@@ -424,7 +424,7 @@ class TestStorageRelease:
             capacity=1000.0,
             initial_storage=200.0,
             dead_storage=200.0,
-            release_rule=FakeReleaseRule(100.0),
+            release_policy=FakeReleasePolicy(100.0),
             loss_rule=FakeLossRule(),
         )
         released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
@@ -438,7 +438,7 @@ class TestStorageRelease:
             capacity=1000.0,
             initial_storage=100.0,
             dead_storage=200.0,
-            release_rule=FakeReleaseRule(50.0),
+            release_policy=FakeReleasePolicy(50.0),
             loss_rule=FakeLossRule(),
         )
         released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
@@ -447,13 +447,13 @@ class TestStorageRelease:
         assert storage.storage == 100.0
 
     def test_release_passes_dead_storage_to_rule(self):
-        spy_rule = SpyReleaseRule(50.0)
+        spy_rule = SpyReleasePolicy(50.0)
         storage = Storage(
             id="test",
             capacity=1000.0,
             initial_storage=500.0,
             dead_storage=150.0,
-            release_rule=spy_rule,
+            release_policy=spy_rule,
             loss_rule=FakeLossRule(),
         )
         storage.release(inflow=25.0, t=Timestep(3, Frequency.MONTHLY))

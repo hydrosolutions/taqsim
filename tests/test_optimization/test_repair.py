@@ -74,14 +74,14 @@ def build_constrained_system() -> WaterSystem:
             id="dam",
             capacity=1000.0,
             initial_storage=500.0,
-            release_rule=OrderedRelease(low=10.0, high=50.0),
+            release_policy=OrderedRelease(low=10.0, high=50.0),
             loss_rule=SimpleLoss(),
         )
     )
     system.add_node(
         Splitter(
             id="junction",
-            split_rule=ConstrainedSplit(r1=0.5, r2=0.3, r3=0.2),
+            split_policy=ConstrainedSplit(r1=0.5, r2=0.3, r3=0.2),
         )
     )
     system.add_node(Sink(id="city"))
@@ -131,12 +131,12 @@ class TestMakeRepair:
         schema = system.param_schema()
 
         # Find indices of r1, r2, r3
-        ratio_indices = [i for i, s in enumerate(schema) if "split_rule" in s.path]
+        ratio_indices = [i for i, s in enumerate(schema) if "split_policy" in s.path]
 
         # Build vector dynamically with ratios that don't sum to 1
         x = np.zeros(len(schema))
         for i, spec in enumerate(schema):
-            if "split_rule" in spec.path:
+            if "split_policy" in spec.path:
                 x[i] = 0.3  # sum = 0.9 (need to scale to 1.0)
             elif "high" in spec.path:
                 x[i] = 40.0
@@ -173,7 +173,7 @@ class TestMakeRepair:
         # Build vector with constraint violations dynamically
         x = np.zeros(len(schema))
         for i, spec in enumerate(schema):
-            if "split_rule" in spec.path:
+            if "split_policy" in spec.path:
                 x[i] = 0.5  # Each ratio, sum > 1.0
             elif "high" in spec.path:
                 x[i] = 20.0  # Low > High
@@ -219,7 +219,7 @@ class TestMakeRepairTimeVarying:
             def release(self, node, inflow: float, t: Timestep) -> float:
                 return self.rate[t]
 
-        storage = Storage(id="dam", capacity=1000.0, release_rule=TVRelease(), loss_rule=SimpleLoss())
+        storage = Storage(id="dam", capacity=1000.0, release_policy=TVRelease(), loss_rule=SimpleLoss())
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
@@ -238,7 +238,7 @@ class TestMakeRepairTimeVarying:
 
     def test_constraint_applied_per_timestep(self):
         """SumToOne applied to r1[t], r2[t] for each t."""
-        splitter = Splitter(id="split", split_rule=TimeVaryingSplit())
+        splitter = Splitter(id="split", split_policy=TimeVaryingSplit())
         splitter._set_targets(["sink_a", "sink_b"])
         sink_a = Sink(id="sink_a")
         sink_b = Sink(id="sink_b")
@@ -268,7 +268,7 @@ class TestMakeRepairTimeVarying:
     def test_constant_only_constraints_unchanged(self):
         """Constraints with only constants behave as before."""
         # Use existing OrderedRelease from the file (constant params)
-        storage = Storage(id="dam", capacity=1000.0, release_rule=OrderedRelease(), loss_rule=SimpleLoss())
+        storage = Storage(id="dam", capacity=1000.0, release_policy=OrderedRelease(), loss_rule=SimpleLoss())
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
@@ -287,7 +287,7 @@ class TestMakeRepairTimeVarying:
 
     def test_idempotent_with_time_varying(self):
         """repair(repair(x)) == repair(x) for time-varying params."""
-        splitter = Splitter(id="split", split_rule=TimeVaryingSplit())
+        splitter = Splitter(id="split", split_policy=TimeVaryingSplit())
         splitter._set_targets(["sink_a", "sink_b"])
         sink_a = Sink(id="sink_a")
         sink_b = Sink(id="sink_b")
@@ -351,7 +351,9 @@ class TestMakeRepairCyclical:
 
     def test_cyclical_param_clips_each_position(self):
         """Each position in cyclical param tuple is clipped to bounds independently."""
-        storage = Storage(id="dam", capacity=1000.0, release_rule=CyclicalReleaseNoConstraint(), loss_rule=SimpleLoss())
+        storage = Storage(
+            id="dam", capacity=1000.0, release_policy=CyclicalReleaseNoConstraint(), loss_rule=SimpleLoss()
+        )
         sink = Sink(id="sink")
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
@@ -372,7 +374,7 @@ class TestMakeRepairCyclical:
 
     def test_constraint_applied_per_cycle_position(self):
         """For SumToOne constraint on cyclical params, repair ensures sum=1 at each cycle position."""
-        splitter = Splitter(id="split", split_rule=CyclicalSplit())
+        splitter = Splitter(id="split", split_policy=CyclicalSplit())
         splitter._set_targets(["sink_a", "sink_b"])
         sink_a = Sink(id="sink_a")
         sink_b = Sink(id="sink_b")

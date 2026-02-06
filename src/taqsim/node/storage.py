@@ -11,7 +11,7 @@ from .events import (
     WaterSpilled,
     WaterStored,
 )
-from .strategies import LossRule, ReleaseRule
+from .strategies import LossRule, ReleasePolicy
 
 
 @dataclass
@@ -19,7 +19,7 @@ class Storage(BaseNode):
     capacity: float
     initial_storage: float = 0.0
     dead_storage: float = 0.0
-    release_rule: ReleaseRule | None = field(default=None)
+    release_policy: ReleasePolicy | None = field(default=None)
     loss_rule: LossRule | None = field(default=None)
     _current_storage: float = field(init=False, repr=False)
     _received_this_step: float = field(default=0.0, init=False, repr=False)
@@ -35,8 +35,8 @@ class Storage(BaseNode):
             raise ValueError("dead_storage cannot be negative")
         if self.dead_storage > self.capacity:
             raise ValueError("dead_storage cannot exceed capacity")
-        if self.release_rule is None:
-            raise ValueError("release_rule is required")
+        if self.release_policy is None:
+            raise ValueError("release_policy is required")
         if self.loss_rule is None:
             raise ValueError("loss_rule is required")
         self._current_storage = self.initial_storage
@@ -80,7 +80,7 @@ class Storage(BaseNode):
         return total_loss
 
     def release(self, inflow: float, t: Timestep) -> float:
-        raw_release = self.release_rule.release(self, inflow, t)
+        raw_release = self.release_policy.release(self, inflow, t)
         available = max(0.0, self._current_storage - self.dead_storage)
         actual_release = max(0.0, min(raw_release, available))
 

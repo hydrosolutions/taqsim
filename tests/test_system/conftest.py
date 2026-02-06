@@ -6,10 +6,11 @@ from taqsim.common import LossReason
 from taqsim.edge import Edge
 from taqsim.node import Sink, Source, Splitter, Storage
 from taqsim.node.timeseries import TimeSeries
+from taqsim.testing import NoEdgeLoss, NoLoss
 from taqsim.time import Timestep
 
 
-class FakeSplitRule:
+class FakeSplitPolicy:
     def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
         targets = node.targets
         if not targets:
@@ -18,17 +19,12 @@ class FakeSplitRule:
         return dict.fromkeys(targets, share)
 
 
-class FakeReleaseRule:
+class FakeReleasePolicy:
     def __init__(self, fraction: float = 0.5):
         self.fraction = fraction
 
     def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
         return node.storage * self.fraction
-
-
-class FakeLossRule:
-    def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
-        return {}
 
 
 class FakeEdgeLossRule:
@@ -40,23 +36,23 @@ class FakeEdgeLossRule:
 
 
 @pytest.fixture
-def fake_split_rule() -> FakeSplitRule:
-    return FakeSplitRule()
+def fake_split_policy() -> FakeSplitPolicy:
+    return FakeSplitPolicy()
 
 
 @pytest.fixture
-def fake_release_rule() -> FakeReleaseRule:
-    return FakeReleaseRule()
+def fake_release_policy() -> FakeReleasePolicy:
+    return FakeReleasePolicy()
 
 
 @pytest.fixture
-def fake_loss_rule() -> FakeLossRule:
-    return FakeLossRule()
+def fake_loss_rule() -> NoLoss:
+    return NoLoss()
 
 
 @pytest.fixture
-def fake_edge_loss_rule() -> FakeEdgeLossRule:
-    return FakeEdgeLossRule()
+def fake_edge_loss_rule() -> NoEdgeLoss:
+    return NoEdgeLoss()
 
 
 @pytest.fixture
@@ -98,16 +94,16 @@ def make_sink(
 
 def make_splitter(
     id: str = "splitter",
-    split_rule: FakeSplitRule | None = None,
+    split_policy: FakeSplitPolicy | None = None,
     location: tuple[float, float] | None = None,
     tags: frozenset[str] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Splitter:
-    if split_rule is None:
-        split_rule = FakeSplitRule()
+    if split_policy is None:
+        split_policy = FakeSplitPolicy()
     return Splitter(
         id=id,
-        split_rule=split_rule,
+        split_policy=split_policy,
         location=location,
         tags=tags or frozenset(),
         metadata=metadata or {},
@@ -118,21 +114,21 @@ def make_storage(
     id: str = "storage",
     capacity: float = 1000.0,
     initial_storage: float = 500.0,
-    release_rule: FakeReleaseRule | None = None,
-    loss_rule: FakeLossRule | None = None,
+    release_policy: FakeReleasePolicy | None = None,
+    loss_rule: NoLoss | None = None,
     location: tuple[float, float] | None = None,
     tags: frozenset[str] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Storage:
-    if release_rule is None:
-        release_rule = FakeReleaseRule()
+    if release_policy is None:
+        release_policy = FakeReleasePolicy()
     if loss_rule is None:
-        loss_rule = FakeLossRule()
+        loss_rule = NoLoss()
     return Storage(
         id=id,
         capacity=capacity,
         initial_storage=initial_storage,
-        release_rule=release_rule,
+        release_policy=release_policy,
         loss_rule=loss_rule,
         location=location,
         tags=tags or frozenset(),

@@ -9,7 +9,7 @@ from taqsim.system import WaterSystem
 from taqsim.time import Frequency, Timestep
 
 
-class FakeReleaseRule:
+class FakeReleasePolicy:
     def release(
         self,
         node: "Storage",
@@ -38,7 +38,7 @@ def simple_system() -> WaterSystem:
         id="reservoir",
         capacity=1000.0,
         initial_storage=500.0,
-        release_rule=FakeReleaseRule(),
+        release_policy=FakeReleasePolicy(),
         loss_rule=FakeLossRule(),
     )
     sink = Sink(id="outlet")

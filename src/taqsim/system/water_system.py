@@ -133,7 +133,7 @@ class WaterSystem:
         if key not in self._source_target_to_edge:
             raise ValueError(
                 f"No edge from '{source_node_id}' to '{target_node_id}'. "
-                f"Check that SplitRule returns valid downstream node IDs."
+                f"Check that SplitPolicy returns valid downstream node IDs."
             )
         return self._source_target_to_edge[key]
 

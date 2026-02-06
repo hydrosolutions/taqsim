@@ -106,9 +106,9 @@ from taqsim.system import WaterSystem
 # Create nodes (no targets specified)
 # (Assume rule, losses, equal_split are pre-defined strategy implementations)
 source = Source(id="river", inflow=TimeSeries([100.0] * 12))
-dam = Storage(id="dam", capacity=1000, release_rule=rule, loss_rule=losses)
+dam = Storage(id="dam", capacity=1000, release_policy=rule, loss_rule=losses)
 turbine = PassThrough(id="turbine")
-junction = Splitter(id="junction", split_rule=equal_split)
+junction = Splitter(id="junction", split_policy=equal_split)
 farm = Demand(id="farm", requirement=TimeSeries([30.0] * 12))
 city = Sink(id="city")
 
