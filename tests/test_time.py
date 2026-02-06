@@ -1,8 +1,9 @@
 from dataclasses import FrozenInstanceError
+from datetime import date, timedelta
 
 import pytest
 
-from taqsim.time import Frequency, Timestep
+from taqsim.time import Frequency, Timestep, _add_months, time_index
 
 
 class TestFrequency:
@@ -149,3 +150,173 @@ class TestTimestepFrozen:
         ts = Timestep(1, Frequency.DAILY)
         with pytest.raises((AttributeError, TypeError)):
             ts.new_attr = "nope"  # type: ignore[attr-defined]
+
+
+class TestAddMonths:
+    def test_zero_months_returns_same_date(self) -> None:
+        assert _add_months(date(2024, 6, 15), 0) == date(2024, 6, 15)
+
+    def test_forward_one_month(self) -> None:
+        assert _add_months(date(2024, 1, 15), 1) == date(2024, 2, 15)
+
+    def test_clamp_jan31_to_feb28_non_leap(self) -> None:
+        assert _add_months(date(2023, 1, 31), 1) == date(2023, 2, 28)
+
+    def test_clamp_jan31_to_feb29_leap(self) -> None:
+        assert _add_months(date(2024, 1, 31), 1) == date(2024, 2, 29)
+
+    def test_crosses_year_boundary(self) -> None:
+        assert _add_months(date(2024, 11, 15), 3) == date(2025, 2, 15)
+
+    def test_twelve_months_equals_one_year(self) -> None:
+        assert _add_months(date(2024, 3, 10), 12) == date(2025, 3, 10)
+
+    def test_feb29_plus_twelve_months_clamps(self) -> None:
+        assert _add_months(date(2024, 2, 29), 12) == date(2025, 2, 28)
+
+
+class TestTimeIndexDaily:
+    def test_three_consecutive_days(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.DAILY, 3)
+        assert result == (date(2024, 1, 1), date(2024, 1, 2), date(2024, 1, 3))
+
+    def test_crosses_month_boundary(self) -> None:
+        result = time_index(date(2024, 1, 30), Frequency.DAILY, 3)
+        assert result == (date(2024, 1, 30), date(2024, 1, 31), date(2024, 2, 1))
+
+    def test_crosses_year_boundary(self) -> None:
+        result = time_index(date(2024, 12, 30), Frequency.DAILY, 4)
+        assert result == (
+            date(2024, 12, 30),
+            date(2024, 12, 31),
+            date(2025, 1, 1),
+            date(2025, 1, 2),
+        )
+
+    def test_crosses_leap_day(self) -> None:
+        result = time_index(date(2024, 2, 28), Frequency.DAILY, 3)
+        assert result == (date(2024, 2, 28), date(2024, 2, 29), date(2024, 3, 1))
+
+    def test_full_year_has_365_entries(self) -> None:
+        result = time_index(date(2023, 1, 1), Frequency.DAILY, 365)
+        assert len(result) == 365
+        assert result[-1] == date(2023, 12, 31)
+
+    def test_full_leap_year_has_366_entries(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.DAILY, 366)
+        assert len(result) == 366
+        assert result[-1] == date(2024, 12, 31)
+
+
+class TestTimeIndexWeekly:
+    def test_four_consecutive_weeks(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.WEEKLY, 4)
+        assert result == (
+            date(2024, 1, 1),
+            date(2024, 1, 8),
+            date(2024, 1, 15),
+            date(2024, 1, 22),
+        )
+
+    def test_crosses_month_boundary(self) -> None:
+        result = time_index(date(2024, 1, 22), Frequency.WEEKLY, 3)
+        assert result == (date(2024, 1, 22), date(2024, 1, 29), date(2024, 2, 5))
+
+    def test_spacing_is_seven_days(self) -> None:
+        result = time_index(date(2024, 3, 1), Frequency.WEEKLY, 5)
+        for i in range(1, len(result)):
+            assert result[i] - result[i - 1] == timedelta(days=7)
+
+
+class TestTimeIndexMonthly:
+    def test_three_consecutive_months(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.MONTHLY, 3)
+        assert result == (date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1))
+
+    def test_preserves_start_day(self) -> None:
+        result = time_index(date(2024, 1, 15), Frequency.MONTHLY, 3)
+        assert result == (date(2024, 1, 15), date(2024, 2, 15), date(2024, 3, 15))
+
+    def test_clamps_day_for_shorter_month(self) -> None:
+        result = time_index(date(2024, 1, 31), Frequency.MONTHLY, 4)
+        assert result == (
+            date(2024, 1, 31),
+            date(2024, 2, 29),
+            date(2024, 3, 31),
+            date(2024, 4, 30),
+        )
+
+    def test_clamps_jan31_to_feb28(self) -> None:
+        result = time_index(date(2023, 1, 31), Frequency.MONTHLY, 2)
+        assert result == (date(2023, 1, 31), date(2023, 2, 28))
+
+    def test_clamps_jan31_to_feb29_in_leap_year(self) -> None:
+        result = time_index(date(2024, 1, 31), Frequency.MONTHLY, 2)
+        assert result == (date(2024, 1, 31), date(2024, 2, 29))
+
+    def test_crosses_year_boundary(self) -> None:
+        result = time_index(date(2024, 11, 1), Frequency.MONTHLY, 4)
+        assert result == (
+            date(2024, 11, 1),
+            date(2024, 12, 1),
+            date(2025, 1, 1),
+            date(2025, 2, 1),
+        )
+
+    def test_two_full_years(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.MONTHLY, 24)
+        assert len(result) == 24
+        assert result[0] == date(2024, 1, 1)
+        assert result[12] == date(2025, 1, 1)
+        assert result[23] == date(2025, 12, 1)
+
+
+class TestTimeIndexYearly:
+    def test_three_consecutive_years(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.YEARLY, 3)
+        assert result == (date(2024, 1, 1), date(2025, 1, 1), date(2026, 1, 1))
+
+    def test_preserves_month_and_day(self) -> None:
+        result = time_index(date(2024, 6, 15), Frequency.YEARLY, 3)
+        assert result == (date(2024, 6, 15), date(2025, 6, 15), date(2026, 6, 15))
+
+    def test_leap_day_start_clamps_to_feb28(self) -> None:
+        result = time_index(date(2024, 2, 29), Frequency.YEARLY, 2)
+        assert result == (date(2024, 2, 29), date(2025, 2, 28))
+
+    def test_leap_day_start_returns_to_feb29_on_next_leap_year(self) -> None:
+        result = time_index(date(2024, 2, 29), Frequency.YEARLY, 5)
+        assert result[0] == date(2024, 2, 29)
+        assert result[1] == date(2025, 2, 28)
+        assert result[2] == date(2026, 2, 28)
+        assert result[3] == date(2027, 2, 28)
+        assert result[4] == date(2028, 2, 29)
+
+
+class TestTimeIndexBoundary:
+    def test_n_zero_returns_empty_tuple(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.DAILY, 0)
+        assert result == ()
+
+    def test_n_one_returns_start_date_only(self) -> None:
+        result = time_index(date(2024, 6, 15), Frequency.MONTHLY, 1)
+        assert result == (date(2024, 6, 15),)
+
+    def test_returns_tuple_not_list(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.DAILY, 3)
+        assert isinstance(result, tuple)
+
+    def test_all_elements_are_date_instances(self) -> None:
+        result = time_index(date(2024, 1, 1), Frequency.WEEKLY, 4)
+        assert all(isinstance(d, date) for d in result)
+
+    def test_first_element_is_always_start_date(self) -> None:
+        for freq in Frequency:
+            result = time_index(date(2024, 3, 15), freq, 1)
+            assert result[0] == date(2024, 3, 15)
+
+
+class TestTimeIndexErrors:
+    def test_negative_n_raises_value_error(self) -> None:
+        with pytest.raises(ValueError, match="non-negative"):
+            time_index(date(2024, 1, 1), Frequency.DAILY, -1)

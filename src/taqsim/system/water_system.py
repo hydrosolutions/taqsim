@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import date
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -8,7 +9,7 @@ from taqsim.edge import Edge
 from taqsim.geo import haversine
 from taqsim.node import BaseNode, Demand, PassThrough, Receives, Sink, Source, Splitter, Storage
 from taqsim.node.events import WaterDistributed, WaterOutput
-from taqsim.time import Frequency, Timestep
+from taqsim.time import Frequency, Timestep, time_index
 
 from .validation import ValidationError
 
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 @dataclass
 class WaterSystem:
     frequency: Frequency
+    start_date: date | None = None
 
     _nodes: dict[str, BaseNode] = field(default_factory=dict, init=False, repr=False)
     _edges: dict[str, Edge] = field(default_factory=dict, init=False, repr=False)
@@ -188,6 +190,11 @@ class WaterSystem:
     @property
     def edges(self) -> dict[str, Edge]:
         return self._edges
+
+    def time_index(self, n: int) -> tuple[date, ...]:
+        if self.start_date is None:
+            raise ValueError("time_index() requires start_date to be set")
+        return time_index(self.start_date, self.frequency, n)
 
     def param_schema(self) -> list[ParamSpec]:
         """Discover all tunable parameters from node strategies.
@@ -481,7 +488,7 @@ class WaterSystem:
         """Create a new system with updated strategy parameters."""
         import copy
 
-        new_system = WaterSystem(frequency=self.frequency)
+        new_system = WaterSystem(frequency=self.frequency, start_date=self.start_date)
 
         # Clone nodes with updated strategies
         for node_id, node in self._nodes.items():

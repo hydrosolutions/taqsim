@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason, Strategy
@@ -171,9 +172,10 @@ def make_edge(
 def make_system(
     *components: "BaseNode | Edge",
     frequency: Frequency = Frequency.MONTHLY,
+    start_date: date | None = None,
     validate: bool = True,
 ) -> WaterSystem:
-    system = WaterSystem(frequency=frequency)
+    system = WaterSystem(frequency=frequency, start_date=start_date)
     for component in components:
         if isinstance(component, Edge):
             system.add_edge(component)

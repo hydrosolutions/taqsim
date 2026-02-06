@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
+from datetime import date, timedelta
 from enum import IntEnum
 
 
@@ -43,3 +45,27 @@ class Timestep:
         if to_freq is None:
             to_freq = self.frequency
         return Frequency.scale(value, from_freq, to_freq)
+
+
+def _add_months(d: date, months: int) -> date:
+    total = d.year * 12 + d.month - 1 + months
+    year, month = divmod(total, 12)
+    month += 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(d.day, last_day))
+
+
+def time_index(start: date, frequency: Frequency, n: int) -> tuple[date, ...]:
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    if n == 0:
+        return ()
+    match frequency:
+        case Frequency.DAILY:
+            return tuple(start + timedelta(days=i) for i in range(n))
+        case Frequency.WEEKLY:
+            return tuple(start + timedelta(weeks=i) for i in range(n))
+        case Frequency.MONTHLY:
+            return tuple(_add_months(start, i) for i in range(n))
+        case Frequency.YEARLY:
+            return tuple(_add_months(start, i * 12) for i in range(n))

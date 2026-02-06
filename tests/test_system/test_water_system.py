@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 
 from taqsim.node import WaterReceived
 from taqsim.node.events import WaterGenerated
@@ -31,6 +32,14 @@ class TestWaterSystemInit:
     def test_starts_with_empty_edges(self):
         system = WaterSystem(frequency=Frequency.MONTHLY)
         assert system.edges == {}
+
+    def test_start_date_defaults_to_none(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        assert system.start_date is None
+
+    def test_start_date_accepts_date(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY, start_date=date(2024, 1, 1))
+        assert system.start_date == date(2024, 1, 1)
 
 
 class TestAddNode:
@@ -490,3 +499,96 @@ class TestSplitterRouting:
         received_events = sink.events_of_type(WaterReceived)
         assert len(received_events) == 1
         assert received_events[0].amount == 100.0  # Default source inflow
+
+
+class TestWaterSystemTimeIndex:
+    def test_raises_when_start_date_is_none(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        with pytest.raises(ValueError, match="start_date"):
+            system.time_index(12)
+
+    def test_monthly_returns_monthly_dates(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY, start_date=date(2024, 1, 1))
+        result = system.time_index(3)
+        assert result == (date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1))
+
+    def test_daily_returns_daily_dates(self):
+        system = WaterSystem(frequency=Frequency.DAILY, start_date=date(2024, 6, 1))
+        result = system.time_index(3)
+        assert result == (date(2024, 6, 1), date(2024, 6, 2), date(2024, 6, 3))
+
+    def test_length_matches_n(self):
+        system = WaterSystem(frequency=Frequency.WEEKLY, start_date=date(2024, 1, 1))
+        result = system.time_index(10)
+        assert len(result) == 10
+
+    def test_first_date_is_start_date(self):
+        system = WaterSystem(frequency=Frequency.YEARLY, start_date=date(2020, 5, 20))
+        result = system.time_index(3)
+        assert result[0] == date(2020, 5, 20)
+
+    def test_returns_tuple_of_dates(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY, start_date=date(2024, 1, 1))
+        result = system.time_index(3)
+        assert isinstance(result, tuple)
+        assert all(isinstance(d, date) for d in result)
+
+
+class TestStartDatePreservation:
+    def test_with_vector_preserves_start_date(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY, start_date=date(2024, 1, 1))
+        source = make_source()
+        sink = make_sink()
+        edge = make_edge(source="source", target="sink")
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(edge)
+        system.validate()
+
+        vector = system.to_vector()
+        new_system = system.with_vector(vector)
+        assert new_system.start_date == date(2024, 1, 1)
+
+    def test_reset_preserves_start_date(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY, start_date=date(2024, 6, 15))
+        source = make_source()
+        sink = make_sink()
+        edge = make_edge(source="source", target="sink")
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(edge)
+        system.simulate(timesteps=3)
+        system.reset()
+        assert system.start_date == date(2024, 6, 15)
+
+    def test_system_simulates_without_start_date(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        sink = make_sink()
+        edge = make_edge(source="source", target="sink")
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(edge)
+        system.simulate(timesteps=3)
+        assert system.start_date is None
+
+
+class TestMakeSystemStartDate:
+    def test_make_system_passes_start_date(self):
+        from taqsim.testing import make_system as testing_make_system
+        system = testing_make_system(
+            make_source(),
+            make_sink(),
+            make_edge(source="source", target="sink"),
+            start_date=date(2024, 1, 1),
+        )
+        assert system.start_date == date(2024, 1, 1)
+
+    def test_make_system_defaults_start_date_to_none(self):
+        from taqsim.testing import make_system as testing_make_system
+        system = testing_make_system(
+            make_source(),
+            make_sink(),
+            make_edge(source="source", target="sink"),
+        )
+        assert system.start_date is None
