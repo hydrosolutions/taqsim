@@ -5,6 +5,7 @@ import pytest
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason, Strategy
 from taqsim.node.timeseries import TimeSeries
+from taqsim.time import Timestep
 
 if TYPE_CHECKING:
     from taqsim.node import Splitter, Storage
@@ -26,7 +27,7 @@ class FakeReleaseRule(Strategy):
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"fraction": (0.0, 1.0)}
     fraction: float = 0.5
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
         return node.storage * self.fraction
 
 
@@ -35,7 +36,7 @@ class FakeSplitRule(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ()
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {}
 
-    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
         targets = node.targets
         if not targets:
             return {}
@@ -48,10 +49,10 @@ class FakeLossRule:
         self.evap_rate = evap_rate
         self.seepage_rate = seepage_rate
 
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
         return {
-            EVAPORATION: node.storage * self.evap_rate * dt,
-            SEEPAGE: node.storage * self.seepage_rate * dt,
+            EVAPORATION: node.storage * self.evap_rate,
+            SEEPAGE: node.storage * self.seepage_rate,
         }
 
 

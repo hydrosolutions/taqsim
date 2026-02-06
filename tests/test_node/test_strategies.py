@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.strategies import LossRule, ReleaseRule, SplitRule
+from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
     from taqsim.node.splitter import Splitter
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
 class TestReleaseRuleProtocol:
     def test_class_with_release_satisfies_protocol(self):
         class ValidRelease:
-            def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+            def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
                 return node.storage * 0.5
 
         assert isinstance(ValidRelease(), ReleaseRule)
@@ -29,7 +30,7 @@ class TestReleaseRuleProtocol:
         from taqsim.node.storage import Storage
 
         class ValidRelease:
-            def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+            def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
                 return min(node.storage, inflow)
 
         storage = Storage(
@@ -40,14 +41,14 @@ class TestReleaseRuleProtocol:
             loss_rule=fake_loss_rule,
         )
         rule = ValidRelease()
-        result = rule.release(storage, 50.0, 0, 1.0)
+        result = rule.release(storage, 50.0, Timestep(0, Frequency.MONTHLY))
         assert result == 50.0
 
 
 class TestSplitRuleProtocol:
     def test_class_with_split_satisfies_protocol(self):
         class ValidSplit:
-            def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+            def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
         assert isinstance(ValidSplit(), SplitRule)
@@ -65,20 +66,20 @@ class TestSplitRuleProtocol:
         from taqsim.node.splitter import Splitter
 
         class ValidSplit:
-            def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+            def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
                 return {target: amount / len(node.targets) for target in node.targets}
 
         splitter = Splitter(id="test", split_rule=fake_split_rule)
         splitter._set_targets(["a", "b"])
         strategy = ValidSplit()
-        result = strategy.split(splitter, 100.0, 0)
+        result = strategy.split(splitter, 100.0, Timestep(0, Frequency.MONTHLY))
         assert result == {"a": 50.0, "b": 50.0}
 
 
 class TestLossRuleProtocol:
     def test_class_with_calculate_satisfies_protocol(self):
         class ValidLoss:
-            def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]:
+            def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
                 return {EVAPORATION: node.storage * 0.01}
 
         assert isinstance(ValidLoss(), LossRule)
@@ -96,10 +97,10 @@ class TestLossRuleProtocol:
         from taqsim.node.storage import Storage
 
         class ValidLoss:
-            def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]:
+            def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
                 return {
-                    EVAPORATION: node.storage * 0.01 * dt,
-                    SEEPAGE: node.storage * 0.005 * dt,
+                    EVAPORATION: node.storage * 0.01,
+                    SEEPAGE: node.storage * 0.005,
                 }
 
         storage = Storage(
@@ -110,7 +111,7 @@ class TestLossRuleProtocol:
             loss_rule=fake_loss_rule,
         )
         rule = ValidLoss()
-        result = rule.calculate(storage, 0, 1.0)
+        result = rule.calculate(storage, Timestep(0, Frequency.MONTHLY))
         assert result[EVAPORATION] == 10.0
         assert result[SEEPAGE] == 5.0
 
@@ -118,21 +119,21 @@ class TestLossRuleProtocol:
 class TestProtocolNonSatisfaction:
     def test_class_with_wrong_method_name_does_not_satisfy_release_rule(self):
         class WrongMethod:
-            def release_water(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+            def release_water(self, node: "Storage", inflow: float, t: Timestep) -> float:
                 return 0.0
 
         assert not isinstance(WrongMethod(), ReleaseRule)
 
     def test_class_with_wrong_method_name_does_not_satisfy_split_rule(self):
         class WrongMethod:
-            def divide(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+            def divide(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
                 return {}
 
         assert not isinstance(WrongMethod(), SplitRule)
 
     def test_class_with_wrong_method_name_does_not_satisfy_loss_rule(self):
         class WrongMethod:
-            def compute_loss(self, node: "Storage", t: int, dt: float) -> dict[str, float]:
+            def compute_loss(self, node: "Storage", t: Timestep) -> dict[str, float]:
                 return {}
 
         assert not isinstance(WrongMethod(), LossRule)

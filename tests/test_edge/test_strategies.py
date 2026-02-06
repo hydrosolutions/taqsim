@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.edge.losses import EdgeLossRule
+from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
     from taqsim.edge.edge import Edge
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 class TestEdgeLossRuleProtocol:
     def test_class_with_calculate_satisfies_protocol(self):
         class ValidLoss:
-            def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
+            def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[LossReason, float]:
                 return {EVAPORATION: flow * 0.01}
 
         assert isinstance(ValidLoss(), EdgeLossRule)
@@ -28,10 +29,10 @@ class TestEdgeLossRuleProtocol:
         from taqsim.edge.edge import Edge
 
         class ValidLoss:
-            def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[LossReason, float]:
+            def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[LossReason, float]:
                 return {
-                    EVAPORATION: flow * 0.01 * dt,
-                    SEEPAGE: flow * 0.005 * dt,
+                    EVAPORATION: flow * 0.01,
+                    SEEPAGE: flow * 0.005,
                 }
 
         edge = Edge(
@@ -42,7 +43,7 @@ class TestEdgeLossRuleProtocol:
             loss_rule=fake_edge_loss_rule,
         )
         rule = ValidLoss()
-        result = rule.calculate(edge, 1000.0, 0, 1.0)
+        result = rule.calculate(edge, 1000.0, Timestep(0, Frequency.MONTHLY))
         assert result[EVAPORATION] == 10.0
         assert result[SEEPAGE] == 5.0
 
@@ -59,7 +60,7 @@ class TestEdgeLossRuleProtocol:
             capacity=200.0,
             loss_rule=fake_edge_loss_rule,
         )
-        result = proportional_loss_rule.calculate(edge, 100.0, 0, 1.0)
+        result = proportional_loss_rule.calculate(edge, 100.0, Timestep(0, Frequency.MONTHLY))
         assert SEEPAGE in result
         assert result[SEEPAGE] == 10.0
 
@@ -67,7 +68,7 @@ class TestEdgeLossRuleProtocol:
 class TestProtocolNonSatisfaction:
     def test_class_with_wrong_method_name_does_not_satisfy(self):
         class WrongMethod:
-            def compute_loss(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[str, float]:
+            def compute_loss(self, edge: "Edge", flow: float, t: Timestep) -> dict[str, float]:
                 return {}
 
         assert not isinstance(WrongMethod(), EdgeLossRule)

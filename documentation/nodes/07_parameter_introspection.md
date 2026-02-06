@@ -37,12 +37,12 @@ class FixedRelease(Strategy):
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
     rate: float = 50.0
 
-    def release(self, node, inflow: float, t: int, dt: float) -> float:
-        return min(self.rate * dt, node.storage - node.dead_storage)
+    def release(self, node, inflow: float, t: Timestep) -> float:
+        return min(self.rate, node.storage - node.dead_storage)
 
 class ZeroLoss:
     """Physical model (not a Strategy)."""
-    def calculate(self, node, t: int, dt: float) -> dict:
+    def calculate(self, node, t: Timestep) -> dict:
         return {}
 
 storage = Storage(
@@ -203,6 +203,35 @@ class ProportionalSplit(Strategy):
 strategy = ProportionalSplit()
 strategy.constraints(node)
 # -> (SumToOne(params=('ratio_a', 'ratio_b'), target=1.0),)
+```
+
+### cyclical_freq()
+
+Returns the frequency associated with each cyclical time-varying parameter. This lets optimization and analysis tools discover the periodicity of cyclical parameters defined on a strategy.
+
+```python
+from taqsim.time import Frequency
+
+@dataclass(frozen=True)
+class SeasonalRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("monthly_rates",)
+    __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"monthly_rates": (0.0, 100.0)}
+    __time_varying__: ClassVar[tuple[str, ...]] = ("monthly_rates",)
+    __cyclical__: ClassVar[tuple[str, ...]] = ("monthly_rates",)
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"monthly_rates": Frequency.MONTHLY}
+    monthly_rates: tuple[float, ...] = (50.0,) * 12
+
+strategy = SeasonalRelease()
+strategy.cyclical_freq()
+# -> {"monthly_rates": Frequency.MONTHLY}
+```
+
+Strategies that have no cyclical parameters return an empty dict:
+
+```python
+strategy = FixedRelease(rate=50.0)
+strategy.cyclical_freq()
+# -> {}
 ```
 
 ### with_params(**kwargs)

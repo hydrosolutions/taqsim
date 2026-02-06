@@ -10,6 +10,7 @@ from taqsim.node.events import (
     WaterReceived,
 )
 from taqsim.node.protocols import Consumes, Receives
+from taqsim.time import Frequency, Timestep
 
 
 class FakeTimeSeries:
@@ -42,13 +43,13 @@ class TestDemandReceive:
     def test_accepts_water_and_returns_amount(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        accepted = node.receive(amount=100.0, source_id="source_a", t=0)
+        accepted = node.receive(amount=100.0, source_id="source_a", t=Timestep(0, Frequency.MONTHLY))
         assert accepted == 100.0
 
     def test_records_water_received_event(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        node.receive(amount=50.0, source_id="upstream", t=3)
+        node.receive(amount=50.0, source_id="upstream", t=Timestep(3, Frequency.MONTHLY))
 
         events = node.events_of_type(WaterReceived)
         assert len(events) == 1
@@ -59,15 +60,15 @@ class TestDemandReceive:
     def test_accumulates_received_water(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        node.receive(amount=30.0, source_id="a", t=0)
-        node.receive(amount=20.0, source_id="b", t=0)
+        node.receive(amount=30.0, source_id="a", t=Timestep(0, Frequency.MONTHLY))
+        node.receive(amount=20.0, source_id="b", t=Timestep(0, Frequency.MONTHLY))
         assert node._received_this_step == 50.0
 
     def test_records_multiple_receive_events(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        node.receive(amount=10.0, source_id="a", t=0)
-        node.receive(amount=20.0, source_id="b", t=0)
+        node.receive(amount=10.0, source_id="a", t=Timestep(0, Frequency.MONTHLY))
+        node.receive(amount=20.0, source_id="b", t=Timestep(0, Frequency.MONTHLY))
 
         events = node.events_of_type(WaterReceived)
         assert len(events) == 2
@@ -75,7 +76,7 @@ class TestDemandReceive:
     def test_receive_with_zero_amount(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        accepted = node.receive(amount=0.0, source_id="source", t=0)
+        accepted = node.receive(amount=0.0, source_id="source", t=Timestep(0, Frequency.MONTHLY))
         assert accepted == 0.0
 
 
@@ -83,21 +84,21 @@ class TestDemandConsume:
     def test_consumes_up_to_requirement(self):
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts)
-        consumed, remaining = node.consume(available=100.0, t=0, dt=1.0)
+        consumed, remaining = node.consume(available=100.0, t=Timestep(0, Frequency.MONTHLY))
         assert consumed == 50.0
         assert remaining == 50.0
 
     def test_consumes_all_when_less_than_requirement(self):
         ts = FakeTimeSeries(values={0: 100.0})
         node = Demand(id="d1", requirement=ts)
-        consumed, remaining = node.consume(available=30.0, t=0, dt=1.0)
+        consumed, remaining = node.consume(available=30.0, t=Timestep(0, Frequency.MONTHLY))
         assert consumed == 30.0
         assert remaining == 0.0
 
     def test_records_water_consumed_event(self):
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts)
-        node.consume(available=100.0, t=0, dt=1.0)
+        node.consume(available=100.0, t=Timestep(0, Frequency.MONTHLY))
 
         events = node.events_of_type(WaterConsumed)
         assert len(events) == 1
@@ -107,7 +108,7 @@ class TestDemandConsume:
     def test_records_deficit_when_underfulfilled(self):
         ts = FakeTimeSeries(values={0: 100.0})
         node = Demand(id="d1", requirement=ts)
-        node.consume(available=60.0, t=0, dt=1.0)
+        node.consume(available=60.0, t=Timestep(0, Frequency.MONTHLY))
 
         deficits = node.events_of_type(DeficitRecorded)
         assert len(deficits) == 1
@@ -119,29 +120,29 @@ class TestDemandConsume:
     def test_no_deficit_when_fully_satisfied(self):
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts)
-        node.consume(available=100.0, t=0, dt=1.0)
+        node.consume(available=100.0, t=Timestep(0, Frequency.MONTHLY))
 
         deficits = node.events_of_type(DeficitRecorded)
         assert len(deficits) == 0
 
-    def test_dt_scales_requirement(self):
+    def test_timestep_uses_requirement_directly(self):
         ts = FakeTimeSeries(values={0: 10.0})
         node = Demand(id="d1", requirement=ts)
-        consumed, remaining = node.consume(available=100.0, t=0, dt=3.0)
-        assert consumed == 30.0  # 10 * 3
-        assert remaining == 70.0
+        consumed, remaining = node.consume(available=100.0, t=Timestep(0, Frequency.MONTHLY))
+        assert consumed == 10.0
+        assert remaining == 90.0
 
     def test_consume_with_zero_available(self):
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts)
-        consumed, remaining = node.consume(available=0.0, t=0, dt=1.0)
+        consumed, remaining = node.consume(available=0.0, t=Timestep(0, Frequency.MONTHLY))
         assert consumed == 0.0
         assert remaining == 0.0
 
     def test_consume_with_zero_requirement(self):
         ts = FakeTimeSeries(values={0: 0.0})
         node = Demand(id="d1", requirement=ts)
-        consumed, remaining = node.consume(available=100.0, t=0, dt=1.0)
+        consumed, remaining = node.consume(available=100.0, t=Timestep(0, Frequency.MONTHLY))
         assert consumed == 0.0
         assert remaining == 100.0
 
@@ -151,7 +152,7 @@ class TestDemandUpdate:
         ts = FakeTimeSeries(values={0: 30.0})
         node = Demand(id="d1", requirement=ts)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         consumed_events = node.events_of_type(WaterConsumed)
         assert len(consumed_events) == 1
@@ -166,14 +167,14 @@ class TestDemandUpdate:
         ts = FakeTimeSeries(values={0: 10.0})
         node = Demand(id="d1", requirement=ts)
         node._received_this_step = 50.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
         assert node._received_this_step == 0.0
 
     def test_full_receive_update_cycle(self):
         ts = FakeTimeSeries(values={0: 25.0})
         node = Demand(id="d1", requirement=ts)
-        node.receive(amount=100.0, source_id="upstream", t=0)
-        node.update(t=0, dt=1.0)
+        node.receive(amount=100.0, source_id="upstream", t=Timestep(0, Frequency.MONTHLY))
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         received = node.events_of_type(WaterReceived)
         assert len(received) == 1
@@ -191,7 +192,7 @@ class TestDemandUpdate:
     def test_update_with_zero_received(self):
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts)
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         consumed = node.events_of_type(WaterConsumed)
         assert len(consumed) == 1
@@ -205,7 +206,7 @@ class TestDemandUpdate:
         ts = FakeTimeSeries(values={0: 100.0})
         node = Demand(id="d1", requirement=ts)
         node._received_this_step = 50.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         output = node.events_of_type(WaterOutput)
         assert len(output) == 0
@@ -214,7 +215,7 @@ class TestDemandUpdate:
         ts = FakeTimeSeries(values={0: 100.0})
         node = Demand(id="d1", requirement=ts)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         output = node.events_of_type(WaterOutput)
         assert len(output) == 0
@@ -234,13 +235,13 @@ class TestDemandProtocolCompliance:
     def test_receive_signature_matches_protocol(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        result = node.receive(amount=10.0, source_id="src", t=0)
+        result = node.receive(amount=10.0, source_id="src", t=Timestep(0, Frequency.MONTHLY))
         assert isinstance(result, float)
 
     def test_consume_signature_matches_protocol(self):
         ts = FakeTimeSeries()
         node = Demand(id="d1", requirement=ts)
-        result = node.consume(available=10.0, t=0, dt=1.0)
+        result = node.consume(available=10.0, t=Timestep(0, Frequency.MONTHLY))
         assert isinstance(result, tuple)
         assert len(result) == 2
 
@@ -277,7 +278,7 @@ class TestDemandConsumptionFractionBehavior:
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts, consumption_fraction=1.0)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         consumed_events = node.events_of_type(WaterConsumed)
         assert len(consumed_events) == 1
@@ -287,7 +288,7 @@ class TestDemandConsumptionFractionBehavior:
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts, consumption_fraction=0.0)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         consumed_events = node.events_of_type(WaterConsumed)
         assert len(consumed_events) == 1
@@ -301,7 +302,7 @@ class TestDemandConsumptionFractionBehavior:
         ts = FakeTimeSeries(values={0: 100.0})
         node = Demand(id="d1", requirement=ts, consumption_fraction=0.3)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         consumed_events = node.events_of_type(WaterConsumed)
         assert len(consumed_events) == 1
@@ -315,7 +316,7 @@ class TestDemandConsumptionFractionBehavior:
         ts = FakeTimeSeries(values={0: 100.0})
         node = Demand(id="d1", requirement=ts, consumption_fraction=0.3)
         node._received_this_step = 60.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         deficits = node.events_of_type(DeficitRecorded)
         assert len(deficits) == 1
@@ -327,7 +328,7 @@ class TestDemandConsumptionFractionBehavior:
         ts = FakeTimeSeries(values={0: 30.0})
         node = Demand(id="d1", requirement=ts, consumption_fraction=0.5)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         consumed_events = node.events_of_type(WaterConsumed)
         assert len(consumed_events) == 1
@@ -376,7 +377,7 @@ class TestDemandEfficiencyBehavior:
         ts = FakeTimeSeries(values={0: 50.0})
         node = Demand(id="d1", requirement=ts, efficiency=1.0)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         lost_events = node.events_of_type(WaterLost)
         assert len(lost_events) == 0
@@ -385,7 +386,7 @@ class TestDemandEfficiencyBehavior:
         ts = FakeTimeSeries(values={0: 80.0})
         node = Demand(id="d1", requirement=ts, efficiency=0.8)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         lost_events = node.events_of_type(WaterLost)
         assert len(lost_events) == 1
@@ -396,7 +397,7 @@ class TestDemandEfficiencyBehavior:
         ts = FakeTimeSeries(values={0: 80.0})
         node = Demand(id="d1", requirement=ts, efficiency=0.8)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         lost_events = node.events_of_type(WaterLost)
         assert len(lost_events) == 1
@@ -407,7 +408,7 @@ class TestDemandEfficiencyBehavior:
         ts = FakeTimeSeries(values={0: 80.0})
         node = Demand(id="d1", requirement=ts, efficiency=0.8)
         node._received_this_step = 50.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         lost_events = node.events_of_type(WaterLost)
         assert len(lost_events) == 1
@@ -423,7 +424,7 @@ class TestDemandEfficiencyBehavior:
         ts = FakeTimeSeries(values={0: 80.0})
         node = Demand(id="d1", requirement=ts, efficiency=0.8)
         node._received_this_step = 50.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         deficits = node.events_of_type(DeficitRecorded)
         assert len(deficits) == 1
@@ -437,7 +438,7 @@ class TestDemandEfficiencyWithConsumptionFraction:
         ts = FakeTimeSeries(values={0: 80.0})
         node = Demand(id="d1", requirement=ts, efficiency=0.8, consumption_fraction=0.5)
         node._received_this_step = 100.0
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         lost_events = node.events_of_type(WaterLost)
         assert len(lost_events) == 1
@@ -457,7 +458,7 @@ class TestDemandEfficiencyWithConsumptionFraction:
         node = Demand(id="d1", requirement=ts, efficiency=0.8, consumption_fraction=0.5)
         received = 100.0
         node._received_this_step = received
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
 
         lost_events = node.events_of_type(WaterLost)
         lost = lost_events[0].amount if lost_events else 0.0

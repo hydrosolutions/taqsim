@@ -1,6 +1,7 @@
 from taqsim.node.events import WaterGenerated, WaterOutput
 from taqsim.node.protocols import Generates
 from taqsim.node.source import Source
+from taqsim.time import Frequency, Timestep
 
 
 class FakeTimeSeries:
@@ -25,25 +26,25 @@ class TestSourceInit:
 
 
 class TestSourceGenerate:
-    def test_returns_inflow_times_dt(self):
+    def test_returns_inflow_value(self):
         ts = FakeTimeSeries({0: 10.0, 1: 20.0, 2: 15.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=0, dt=1.0)
+        result = source.generate(t=Timestep(0, Frequency.MONTHLY))
         assert result == 10.0
 
-    def test_scales_by_dt(self):
+    def test_returns_inflow_for_different_frequency(self):
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=0, dt=0.5)
-        assert result == 5.0
+        result = source.generate(t=Timestep(0, Frequency.DAILY))
+        assert result == 10.0
 
     def test_records_water_generated_event(self):
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        source.generate(t=0, dt=1.0)
+        source.generate(t=Timestep(0, Frequency.MONTHLY))
 
         events = source.events_of_type(WaterGenerated)
         assert len(events) == 1
@@ -54,14 +55,14 @@ class TestSourceGenerate:
         ts = FakeTimeSeries({5: 100.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=5, dt=2.0)
-        assert result == 200.0
+        result = source.generate(t=Timestep(5, Frequency.MONTHLY))
+        assert result == 100.0
 
     def test_returns_zero_for_missing_timestep(self):
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=999, dt=1.0)
+        result = source.generate(t=Timestep(999, Frequency.MONTHLY))
         assert result == 0.0
 
 
@@ -70,7 +71,7 @@ class TestSourceUpdate:
         ts = FakeTimeSeries({0: 50.0})
         source = Source(id="src1", inflow=ts)
 
-        source.update(t=0, dt=1.0)
+        source.update(t=Timestep(0, Frequency.MONTHLY))
 
         generated = source.events_of_type(WaterGenerated)
         outputs = source.events_of_type(WaterOutput)
@@ -86,7 +87,7 @@ class TestSourceUpdate:
         ts = FakeTimeSeries({0: 100.0})
         source = Source(id="src1", inflow=ts)
 
-        source.update(t=0, dt=1.0)
+        source.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert len(source.events) == 2
         assert isinstance(source.events[0], WaterGenerated)
@@ -96,7 +97,7 @@ class TestSourceUpdate:
         ts = FakeTimeSeries({0: 0.0})
         source = Source(id="src1", inflow=ts)
 
-        source.update(t=0, dt=1.0)
+        source.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert len(source.events_of_type(WaterGenerated)) == 1
         assert len(source.events_of_type(WaterOutput)) == 0
@@ -105,9 +106,9 @@ class TestSourceUpdate:
         ts = FakeTimeSeries({0: 10.0, 1: 20.0, 2: 30.0})
         source = Source(id="src1", inflow=ts)
 
-        source.update(t=0, dt=1.0)
-        source.update(t=1, dt=1.0)
-        source.update(t=2, dt=1.0)
+        source.update(t=Timestep(0, Frequency.MONTHLY))
+        source.update(t=Timestep(1, Frequency.MONTHLY))
+        source.update(t=Timestep(2, Frequency.MONTHLY))
 
         generated = source.events_of_type(WaterGenerated)
         outputs = source.events_of_type(WaterOutput)
@@ -128,5 +129,5 @@ class TestSourceProtocolCompliance:
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=0, dt=1.0)
+        result = source.generate(t=Timestep(0, Frequency.MONTHLY))
         assert isinstance(result, float)

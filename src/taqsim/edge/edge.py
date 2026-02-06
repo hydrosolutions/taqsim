@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from taqsim.common import CAPACITY_EXCEEDED
+from taqsim.time import Timestep
 
 from .events import (
     EdgeEvent,
@@ -55,23 +56,23 @@ class Edge:
     def clear_events(self) -> None:
         self.events.clear()
 
-    def receive(self, amount: float, t: int) -> float:
-        self.record(WaterReceived(amount=amount, t=t))
+    def receive(self, amount: float, t: Timestep) -> float:
+        self.record(WaterReceived(amount=amount, t=t.index))
         self._received_this_step += amount
         return amount
 
-    def update(self, t: int, dt: float) -> float:
+    def update(self, t: Timestep) -> float:
         received = self._received_this_step
 
         # 1. Capacity check
         excess = 0.0
         if received > self.capacity:
             excess = received - self.capacity
-            self.record(WaterLost(amount=excess, reason=CAPACITY_EXCEEDED, t=t))
+            self.record(WaterLost(amount=excess, reason=CAPACITY_EXCEEDED, t=t.index))
             received = self.capacity
 
         # 2-3. Calculate and record losses
-        losses = self.loss_rule.calculate(self, received, t, dt)
+        losses = self.loss_rule.calculate(self, received, t)
         total_loss = sum(losses.values())
 
         # Scale losses if they exceed available flow
@@ -82,13 +83,13 @@ class Edge:
 
         for reason, amount in losses.items():
             if amount > 0:
-                self.record(WaterLost(amount=amount, reason=reason, t=t))
+                self.record(WaterLost(amount=amount, reason=reason, t=t.index))
 
         # 4. Calculate delivered
         delivered = received - total_loss
 
         # 5. Record delivery
-        self.record(WaterDelivered(amount=delivered, t=t))
+        self.record(WaterDelivered(amount=delivered, t=t.index))
 
         # 6. Reset
         self._received_this_step = 0.0

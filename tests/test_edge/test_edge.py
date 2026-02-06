@@ -9,6 +9,7 @@ from taqsim.edge.events import (
     WaterLost,
     WaterReceived,
 )
+from taqsim.time import Frequency, Timestep
 
 from .conftest import FakeEdgeLossRule
 
@@ -80,7 +81,7 @@ class TestEdgeInit:
 class TestEdgeReceive:
     def test_receive_records_water_received_event(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
 
         events = edge.events_of_type(WaterReceived)
         assert len(events) == 1
@@ -89,8 +90,8 @@ class TestEdgeReceive:
 
     def test_receive_accumulates_water(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.receive(30.0, t=0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.receive(30.0, t=Timestep(0, Frequency.MONTHLY))
 
         events = edge.events_of_type(WaterReceived)
         assert len(events) == 2
@@ -98,15 +99,15 @@ class TestEdgeReceive:
 
     def test_receive_returns_amount(self):
         edge = make_edge()
-        result = edge.receive(75.0, t=0)
+        result = edge.receive(75.0, t=Timestep(0, Frequency.MONTHLY))
         assert result == 75.0
 
 
 class TestEdgeUpdate:
     def test_update_records_water_delivered(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = edge.events_of_type(WaterDelivered)
         assert len(events) == 1
@@ -115,17 +116,17 @@ class TestEdgeUpdate:
 
     def test_update_returns_delivered_amount(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        delivered = edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        delivered = edge.update(t=Timestep(0, Frequency.MONTHLY))
         assert delivered == 50.0
 
     def test_update_resets_received(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         # Second update should deliver 0
-        delivered = edge.update(t=1, dt=1.0)
+        delivered = edge.update(t=Timestep(1, Frequency.MONTHLY))
         assert delivered == 0.0
 
         events = edge.events_of_type(WaterDelivered)
@@ -135,8 +136,8 @@ class TestEdgeUpdate:
 
     def test_update_capacity_exceeded_recorded(self):
         edge = make_edge(capacity=100.0)
-        edge.receive(150.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(150.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = edge.events_of_type(WaterLost)
         capacity_exceeded_events = [e for e in events if e.reason == CAPACITY_EXCEEDED]
@@ -146,23 +147,23 @@ class TestEdgeUpdate:
 
     def test_update_clamps_to_capacity(self):
         edge = make_edge(capacity=100.0)
-        edge.receive(150.0, t=0)
-        delivered = edge.update(t=0, dt=1.0)
+        edge.receive(150.0, t=Timestep(0, Frequency.MONTHLY))
+        delivered = edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         # Delivered should be clamped to capacity (no losses in this test)
         assert delivered == 100.0
 
     def test_update_calculates_losses(self):
         edge = make_edge(losses={EVAPORATION: 10.0})
-        edge.receive(100.0, t=0)
-        delivered = edge.update(t=0, dt=1.0)
+        edge.receive(100.0, t=Timestep(0, Frequency.MONTHLY))
+        delivered = edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert delivered == 90.0
 
     def test_update_records_water_lost_events(self):
         edge = make_edge(losses={EVAPORATION: 10.0, SEEPAGE: 5.0})
-        edge.receive(100.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(100.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = edge.events_of_type(WaterLost)
         assert len(events) == 2
@@ -173,8 +174,8 @@ class TestEdgeUpdate:
     def test_update_scales_losses_if_exceed_water(self):
         # Losses (80 + 20 = 100) exceed water (10)
         edge = make_edge(losses={EVAPORATION: 80.0, SEEPAGE: 20.0})
-        edge.receive(10.0, t=0)
-        delivered = edge.update(t=0, dt=1.0)
+        edge.receive(10.0, t=Timestep(0, Frequency.MONTHLY))
+        delivered = edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         # All water lost, nothing delivered
         assert delivered == 0.0
@@ -193,8 +194,8 @@ class TestEdgeUpdate:
         edge = make_edge(capacity=100.0, losses=losses)
 
         received = 120.0
-        edge.receive(received, t=0)
-        delivered = edge.update(t=0, dt=1.0)
+        edge.receive(received, t=Timestep(0, Frequency.MONTHLY))
+        delivered = edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         # excess = 120 - 100 = 20 (recorded as WaterLost with CAPACITY_EXCEEDED)
         # received after clamping = 100
@@ -214,8 +215,8 @@ class TestEdgeUpdate:
 class TestEdgeEventRecording:
     def test_events_of_type_returns_correct_events(self):
         edge = make_edge(losses={EVAPORATION: 5.0})
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         received_events = edge.events_of_type(WaterReceived)
         lost_events = edge.events_of_type(WaterLost)
@@ -227,8 +228,8 @@ class TestEdgeEventRecording:
 
     def test_clear_events_removes_all(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert len(edge.events) > 0
         edge.clear_events()
@@ -247,43 +248,43 @@ class TestEdgeTrace:
         from taqsim.objective import Trace
 
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         trace = edge.trace(WaterDelivered)
         assert isinstance(trace, Trace)
 
     def test_trace_extracts_delivered_events(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.update(t=0, dt=1.0)
-        edge.receive(30.0, t=1)
-        edge.update(t=1, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
+        edge.receive(30.0, t=Timestep(1, Frequency.MONTHLY))
+        edge.update(t=Timestep(1, Frequency.MONTHLY))
 
         trace = edge.trace(WaterDelivered)
         assert trace.to_dict() == {0: 50.0, 1: 30.0}
 
     def test_trace_extracts_received_events(self):
         edge = make_edge()
-        edge.receive(50.0, t=0)
-        edge.receive(30.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.receive(30.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         trace = edge.trace(WaterReceived)
         assert trace[0] == 80.0
 
     def test_trace_extracts_lost_events(self):
         edge = make_edge(losses={EVAPORATION: 10.0})
-        edge.receive(100.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(100.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         trace = edge.trace(WaterLost)
         assert trace[0] == 10.0
 
     def test_trace_with_custom_field(self):
         edge = make_edge(losses={EVAPORATION: 10.0})
-        edge.receive(100.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(100.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         trace = edge.trace(WaterDelivered, field="amount")
         assert trace[0] == 90.0
@@ -296,8 +297,8 @@ class TestEdgeTrace:
 
     def test_trace_aggregates_events_at_same_timestep(self):
         edge = make_edge(losses={EVAPORATION: 5.0, SEEPAGE: 3.0})
-        edge.receive(100.0, t=0)
-        edge.update(t=0, dt=1.0)
+        edge.receive(100.0, t=Timestep(0, Frequency.MONTHLY))
+        edge.update(t=Timestep(0, Frequency.MONTHLY))
 
         trace = edge.trace(WaterLost)
         assert trace[0] == 8.0

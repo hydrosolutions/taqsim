@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 import pytest
 
 from taqsim import Edge, Objective, Sink, Source, Storage, Strategy, TimeSeries, WaterSystem
+from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
     from taqsim.common import LossReason
@@ -15,21 +16,19 @@ class FakeReleaseRule(Strategy):
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
     rate: float = 50.0
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.rate * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.rate, node.storage)
 
 
 @dataclass(frozen=True)
 class FakeLossRule:
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict["LossReason", float]:
+    def calculate(self, node: "Storage", t: Timestep) -> dict["LossReason", float]:
         return {}
 
 
 @dataclass(frozen=True)
 class FakeEdgeLossRule:
-    def calculate(
-        self, edge: "Edge", flow: float, t: int, dt: float
-    ) -> dict["LossReason", float]:
+    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict["LossReason", float]:
         return {}
 
 
@@ -50,7 +49,7 @@ def fake_edge_loss_rule() -> FakeEdgeLossRule:
 
 @pytest.fixture
 def minimal_water_system() -> WaterSystem:
-    system = WaterSystem(dt=1.0)
+    system = WaterSystem(frequency=Frequency.MONTHLY)
 
     system.add_node(Source(id="src", inflow=TimeSeries(values=[100.0] * 10)))
     system.add_node(
@@ -64,12 +63,8 @@ def minimal_water_system() -> WaterSystem:
     )
     system.add_node(Sink(id="sink"))
 
-    system.add_edge(
-        Edge(id="e1", source="src", target="dam", capacity=1000.0, loss_rule=FakeEdgeLossRule())
-    )
-    system.add_edge(
-        Edge(id="e2", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule())
-    )
+    system.add_edge(Edge(id="e1", source="src", target="dam", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+    system.add_edge(Edge(id="e2", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
 
     system.validate()
     return system

@@ -175,18 +175,23 @@ The `time_varying_params` field allows repair functions to handle time-varying p
 
 ### Cyclical Parameter Constraints
 
-When all time-varying parameters in a constraint are cyclical, validation is performed **per-cycle-position** rather than per-timestep.
+When all time-varying parameters in a constraint are cyclical, validation is performed **per-cycle-position** rather than per-timestep. Note that `__cyclical_freq__` is now required alongside `__cyclical__` -- see [Strategies](../nodes/05_strategies.md) for full details on declaring cyclical parameters with their frequencies.
 
 #### Validation Behavior
 
-For cyclical parameters, constraints are checked at each position in the cycle:
+Constraint validation still operates per-cycle-position (unchanged behavior). The `__cyclical_freq__` declaration affects runtime value lookup via `param_at()`, but constraint validation at construction time iterates over cycle positions directly:
 
 ```python
+from taqsim.time import Frequency
+
 @dataclass(frozen=True)
 class SeasonalSplit(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("r1", "r2")
     __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
     __cyclical__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {
+        "r1": Frequency.MONTHLY, "r2": Frequency.MONTHLY
+    }
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
         "r1": (0.0, 1.0), "r2": (0.0, 1.0)
     }
@@ -209,6 +214,9 @@ class SeasonalBands(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("low", "high")
     __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
     __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {
+        "low": Frequency.MONTHLY, "high": Frequency.MONTHLY
+    }
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
         "low": (0.0, 100.0), "high": (0.0, 100.0)
     }

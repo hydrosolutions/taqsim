@@ -9,8 +9,6 @@ leading to hydropower=0.0 for many solutions and no dominance,
 causing all 100 individuals to end up on the Pareto frontier.
 """
 
-import pytest
-
 from taqsim.objective.trace import Trace
 
 

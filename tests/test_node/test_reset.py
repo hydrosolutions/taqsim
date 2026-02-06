@@ -1,4 +1,5 @@
 from taqsim.node import Demand, PassThrough, Source, Splitter, Storage, TimeSeries
+from taqsim.time import Frequency, Timestep
 
 # Use fixtures from conftest.py for fake strategies
 
@@ -8,7 +9,7 @@ class TestBaseNodeReset:
 
     def test_reset_clears_events(self):
         source = Source(id="s", inflow=TimeSeries(values=[100.0]))
-        source.update(t=0, dt=1.0)
+        source.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert len(source.events) > 0
         source.reset()
@@ -28,8 +29,8 @@ class TestStorageReset:
         )
 
         # Simulate some activity
-        storage.receive(200.0, "upstream", t=0)
-        storage.update(t=0, dt=1.0)
+        storage.receive(200.0, "upstream", t=Timestep(0, Frequency.MONTHLY))
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         # Storage level changed
         assert storage.storage != 500.0
@@ -50,7 +51,7 @@ class TestDemandReset:
             requirement=TimeSeries(values=[50.0]),
         )
 
-        demand.receive(30.0, "upstream", t=0)
+        demand.receive(30.0, "upstream", t=Timestep(0, Frequency.MONTHLY))
         assert demand._received_this_step == 30.0
 
         demand.reset()
@@ -69,7 +70,7 @@ class TestSplitterReset:
         )
         splitter._set_targets(["a", "b"])
 
-        splitter.receive(100.0, "upstream", t=0)
+        splitter.receive(100.0, "upstream", t=Timestep(0, Frequency.MONTHLY))
         assert splitter._received_this_step == 100.0
 
         splitter.reset()
@@ -84,7 +85,7 @@ class TestPassThroughReset:
     def test_reset_clears_received_accumulator(self):
         pt = PassThrough(id="turbine")
 
-        pt.receive(100.0, "upstream", t=0)
+        pt.receive(100.0, "upstream", t=Timestep(0, Frequency.MONTHLY))
         assert pt._received_this_step == 100.0
 
         pt.reset()

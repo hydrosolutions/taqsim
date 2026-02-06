@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from taqsim.time import Timestep
+
 from .base import BaseNode
 from .events import (
     WaterLost,
@@ -43,26 +45,26 @@ class Storage(BaseNode):
     def storage(self) -> float:
         return self._current_storage
 
-    def receive(self, amount: float, source_id: str, t: int) -> float:
-        self.record(WaterReceived(amount=amount, source_id=source_id, t=t))
+    def receive(self, amount: float, source_id: str, t: Timestep) -> float:
+        self.record(WaterReceived(amount=amount, source_id=source_id, t=t.index))
         self._received_this_step += amount
         return amount
 
-    def store(self, amount: float, t: int, dt: float) -> tuple[float, float]:
+    def store(self, amount: float, t: Timestep) -> tuple[float, float]:
         available_space = self.capacity - self._current_storage
         stored = min(amount, available_space)
         spilled = amount - stored
 
         self._current_storage += stored
-        self.record(WaterStored(amount=stored, t=t))
+        self.record(WaterStored(amount=stored, t=t.index))
 
         if spilled > 0:
-            self.record(WaterSpilled(amount=spilled, t=t))
+            self.record(WaterSpilled(amount=spilled, t=t.index))
 
         return (stored, spilled)
 
-    def lose(self, t: int, dt: float) -> float:
-        losses = self.loss_rule.calculate(self, t, dt)
+    def lose(self, t: Timestep) -> float:
+        losses = self.loss_rule.calculate(self, t)
         total_loss = sum(losses.values())
 
         if total_loss > self._current_storage:
@@ -73,37 +75,37 @@ class Storage(BaseNode):
         for reason, amount in losses.items():
             if amount > 0:
                 self._current_storage -= amount
-                self.record(WaterLost(amount=amount, reason=reason, t=t))
+                self.record(WaterLost(amount=amount, reason=reason, t=t.index))
 
         return total_loss
 
-    def release(self, inflow: float, t: int, dt: float) -> float:
-        raw_release = self.release_rule.release(self, inflow, t, dt)
+    def release(self, inflow: float, t: Timestep) -> float:
+        raw_release = self.release_rule.release(self, inflow, t)
         available = max(0.0, self._current_storage - self.dead_storage)
         actual_release = max(0.0, min(raw_release, available))
 
         if actual_release > 0:
             self._current_storage -= actual_release
-        self.record(WaterReleased(amount=actual_release, t=t))
+        self.record(WaterReleased(amount=actual_release, t=t.index))
 
         return actual_release
 
-    def update(self, t: int, dt: float) -> None:
+    def update(self, t: Timestep) -> None:
         inflow = self._received_this_step
 
         # 1. Store (handles spillway)
-        stored, spilled = self.store(inflow, t, dt)
+        stored, spilled = self.store(inflow, t)
 
         # 2. Losses
-        self.lose(t, dt)
+        self.lose(t)
 
         # 3. Release
-        released = self.release(inflow, t, dt)
+        released = self.release(inflow, t)
 
         # 4. Record output (released + spilled goes downstream)
         total_outflow = released + spilled
         if total_outflow > 0:
-            self.record(WaterOutput(amount=total_outflow, t=t))
+            self.record(WaterOutput(amount=total_outflow, t=t.index))
 
         self._received_this_step = 0.0
 

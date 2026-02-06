@@ -7,6 +7,7 @@ from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSyste
 from taqsim.common import Strategy
 from taqsim.constraints import Ordered, SumToOne
 from taqsim.optimization import make_repair
+from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
     pass
@@ -23,8 +24,8 @@ class OrderedRelease(Strategy):
     low: float = 10.0
     high: float = 50.0
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.high * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.high, node.storage)
 
 
 @dataclass(frozen=True)
@@ -51,7 +52,7 @@ class SimpleLoss:
 
     rate: float = 0.01
 
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict:
+    def calculate(self, node: "Storage", t: Timestep) -> dict:
         return {}
 
 
@@ -59,13 +60,13 @@ class SimpleLoss:
 class SimpleEdgeLoss:
     """Physical model - NOT a Strategy."""
 
-    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict:
+    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict:
         return {}
 
 
 def build_constrained_system() -> WaterSystem:
     """Build a system with constraints for testing repair."""
-    system = WaterSystem(dt=1.0)
+    system = WaterSystem(frequency=Frequency.MONTHLY)
 
     system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
     system.add_node(
@@ -215,12 +216,12 @@ class TestMakeRepairTimeVarying:
             __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
             rate: tuple[float, ...] = (50.0, 50.0, 50.0)
 
-            def release(self, node, inflow: float, t: int, dt: float) -> float:
+            def release(self, node, inflow: float, t: Timestep) -> float:
                 return self.rate[t]
 
         storage = Storage(id="dam", capacity=1000.0, release_rule=TVRelease(), loss_rule=SimpleLoss())
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
@@ -243,7 +244,7 @@ class TestMakeRepairTimeVarying:
         sink_b = Sink(id="sink_b")
         source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
 
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(source)
         system.add_node(splitter)
         system.add_node(sink_a)
@@ -269,7 +270,7 @@ class TestMakeRepairTimeVarying:
         # Use existing OrderedRelease from the file (constant params)
         storage = Storage(id="dam", capacity=1000.0, release_rule=OrderedRelease(), loss_rule=SimpleLoss())
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
@@ -292,7 +293,7 @@ class TestMakeRepairTimeVarying:
         sink_b = Sink(id="sink_b")
         source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
 
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(source)
         system.add_node(splitter)
         system.add_node(sink_a)
@@ -320,6 +321,7 @@ class CyclicalSplit(Strategy):
     __constraints__: ClassVar[tuple[SumToOne, ...]] = (SumToOne(params=("r1", "r2")),)
     __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
     __cyclical__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"r1": Frequency.MONTHLY, "r2": Frequency.MONTHLY}
     r1: tuple[float, ...] = (0.6, 0.5, 0.4)
     r2: tuple[float, ...] = (0.4, 0.5, 0.6)
 
@@ -336,9 +338,10 @@ class CyclicalReleaseNoConstraint(Strategy):
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
     __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
     __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
     rate: tuple[float, ...] = (50.0, 50.0, 50.0)
 
-    def release(self, node, inflow: float, t: int, dt: float) -> float:
+    def release(self, node, inflow: float, t: Timestep) -> float:
         idx = t % len(self.rate)
         return self.rate[idx]
 
@@ -350,7 +353,7 @@ class TestMakeRepairCyclical:
         """Each position in cyclical param tuple is clipped to bounds independently."""
         storage = Storage(id="dam", capacity=1000.0, release_rule=CyclicalReleaseNoConstraint(), loss_rule=SimpleLoss())
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
@@ -375,7 +378,7 @@ class TestMakeRepairCyclical:
         sink_b = Sink(id="sink_b")
         source = Source(id="src", inflow=TimeSeries(values=[100.0] * 10))
 
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(source)
         system.add_node(splitter)
         system.add_node(sink_a)

@@ -98,9 +98,9 @@ class FixedRelease(Strategy):
     __bounds__: ClassVar[dict[str, ParamBounds]] = {"rate": (0.0, 100.0)}
     rate: float = 50.0
 
-    def release(self, node: Storage, inflow: float, t: int, dt: float) -> float:
+    def release(self, node: Storage, inflow: float, ts: Timestep) -> float:
         available = node.storage - node.dead_storage
-        return min(self.rate * dt, available)
+        return min(self.rate, available)
 ```
 
 ### Non-Optimizable Fields
@@ -416,6 +416,24 @@ See [Constraints](../common/02_constraints.md) for full documentation on constra
 ## Time-Varying Parameters
 
 Time-varying parameters are expanded in the vector representation.
+
+### Cyclical Parameters
+
+Cyclical parameters (parameters that repeat on a periodic cycle, e.g., monthly release rules over a multi-year simulation) must declare `__cyclical_freq__` on the strategy class:
+
+```python
+@dataclass(frozen=True)
+class MonthlyRelease(Strategy):
+    __params__: ClassVar[tuple[str, ...]] = ("rate",)
+    __cyclical_freq__: ClassVar[Frequency] = Frequency.MONTHLY
+    rate: tuple[float, ...] = (50.0,) * 12  # 12 monthly values, cycled
+```
+
+The `__cyclical_freq__` tells the system the natural period of the parameter. During vectorization, only one cycle is exposed (compact form). At simulation time, the system tiles the cycle to cover the full simulation horizon. This keeps the parameter vector small regardless of simulation length.
+
+### Vectorization and Frequency
+
+Vectorization (`to_vector()`, `with_vector()`, `param_schema()`, `bounds_vector()`) operates on the **compact parameter form** and is frequency-agnostic. The `frequency` field on `WaterSystem` controls simulation-time behavior only -- it does not affect the shape or contents of the parameter vector.
 
 ### Path Expansion
 

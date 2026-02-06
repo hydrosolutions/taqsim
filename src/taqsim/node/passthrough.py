@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from taqsim.time import Timestep
+
 from .base import BaseNode
 from .events import WaterOutput, WaterPassedThrough, WaterReceived, WaterSpilled
 
@@ -13,22 +15,22 @@ class PassThrough(BaseNode):
         if self.capacity is not None and self.capacity <= 0:
             raise ValueError("capacity must be positive")
 
-    def receive(self, amount: float, source_id: str, t: int) -> float:
-        self.record(WaterReceived(amount=amount, source_id=source_id, t=t))
+    def receive(self, amount: float, source_id: str, t: Timestep) -> float:
+        self.record(WaterReceived(amount=amount, source_id=source_id, t=t.index))
         self._received_this_step += amount
         return amount
 
-    def update(self, t: int, dt: float) -> None:
+    def update(self, t: Timestep) -> None:
         amount = self._received_this_step
         if amount > 0:
             if self.capacity is not None and amount > self.capacity:
                 passed = self.capacity
                 spilled = amount - self.capacity
-                self.record(WaterSpilled(amount=spilled, t=t))
+                self.record(WaterSpilled(amount=spilled, t=t.index))
             else:
                 passed = amount
-            self.record(WaterPassedThrough(amount=passed, t=t))
-            self.record(WaterOutput(amount=passed, t=t))
+            self.record(WaterPassedThrough(amount=passed, t=t.index))
+            self.record(WaterOutput(amount=passed, t=t.index))
         self._received_this_step = 0.0
 
     def reset(self) -> None:

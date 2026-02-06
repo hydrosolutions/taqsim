@@ -1,5 +1,3 @@
-from typing import TYPE_CHECKING
-
 import pytest
 
 from taqsim.edge import Edge
@@ -8,9 +6,7 @@ from taqsim.node.events import DeficitRecorded, WaterSpilled
 from taqsim.node.timeseries import TimeSeries
 from taqsim.objective.builtins import deficit, spill
 from taqsim.system import WaterSystem
-
-if TYPE_CHECKING:
-    pass
+from taqsim.time import Frequency, Timestep
 
 
 class FakeReleaseRule:
@@ -18,25 +14,24 @@ class FakeReleaseRule:
         self,
         node: "Storage",
         inflow: float,
-        t: int,
-        dt: float,
+        t: Timestep,
     ) -> float:
         return 0.0
 
 
 class FakeLossRule:
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict[str, float]:
+    def calculate(self, node: "Storage", t: Timestep) -> dict[str, float]:
         return {}
 
 
 class FakeEdgeLossRule:
-    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict[str, float]:
+    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[str, float]:
         return {}
 
 
 @pytest.fixture
 def simple_system() -> WaterSystem:
-    system = WaterSystem(dt=1.0)
+    system = WaterSystem(frequency=Frequency.MONTHLY)
 
     source = Source(id="source", inflow=TimeSeries([100.0] * 12))
     storage = Storage(

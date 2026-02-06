@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from taqsim.node.base import BaseNode
 
 from taqsim.constraints import BoundViolationError, ConstraintViolationError
+from taqsim.time import Frequency, Timestep
 
 ParamValue = float | tuple[float, ...]
 ParamBounds = tuple[float, float]
@@ -47,6 +48,7 @@ class Strategy:
     __constraints__: ClassVar[tuple["Constraint", ...]] = ()
     __time_varying__: ClassVar[tuple[str, ...]] = ()
     __cyclical__: ClassVar[tuple[str, ...]] = ()
+    __cyclical_freq__: ClassVar[dict[str, "Frequency"]] = {}
     __tags__: ClassVar[frozenset[str]] = frozenset()
     __metadata__: ClassVar[Mapping[str, object]] = {}
 
@@ -63,6 +65,19 @@ class Strategy:
         invalid_cyc = set(cls.__cyclical__) - set(cls.__time_varying__)
         if invalid_cyc:
             raise TypeError(f"{cls.__name__}: __cyclical__ params must be in __time_varying__: {invalid_cyc}")
+        if cls.__cyclical__ and not cls.__cyclical_freq__:
+            raise TypeError(f"{cls.__name__}: __cyclical_freq__ is required when __cyclical__ is non-empty")
+        if cls.__cyclical_freq__:
+            if set(cls.__cyclical_freq__.keys()) != set(cls.__cyclical__):
+                raise TypeError(
+                    f"{cls.__name__}: __cyclical_freq__ keys must match __cyclical__: "
+                    f"got {set(cls.__cyclical_freq__.keys())}, expected {set(cls.__cyclical__)}"
+                )
+            for name, freq in cls.__cyclical_freq__.items():
+                if not isinstance(freq, Frequency):
+                    raise TypeError(
+                        f"{cls.__name__}: __cyclical_freq__['{name}'] must be a Frequency, got {type(freq).__name__}"
+                    )
 
     def __post_init__(self) -> None:
         """Validate parameter values against bounds and constraints."""
@@ -140,6 +155,19 @@ class Strategy:
     def cyclical(self) -> tuple[str, ...]:
         """Return names of cyclical time-varying parameters."""
         return self.__cyclical__
+
+    def param_at(self, name: str, t: Timestep) -> float:
+        value = getattr(self, name)
+        if not isinstance(value, tuple):
+            return value
+        if name in self.__cyclical__:
+            param_freq = self.__cyclical_freq__[name]
+            idx = (t.index * param_freq // t.frequency) % len(value)
+            return value[idx]
+        return value[t.index]
+
+    def cyclical_freq(self) -> dict[str, Frequency]:
+        return dict(self.__cyclical_freq__)
 
     def tags(self) -> frozenset[str]:
         """Return tags for this strategy type."""

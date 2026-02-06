@@ -7,6 +7,7 @@ from .events import NodeEvent
 
 if TYPE_CHECKING:
     from taqsim.objective import Trace
+    from taqsim.time import Timestep
 
 
 @dataclass
@@ -42,7 +43,7 @@ class BaseNode:
     def clear_events(self) -> None:
         self.events.clear()
 
-    def update(self, t: int, dt: float) -> None:
+    def update(self, t: "Timestep") -> None:
         raise NotImplementedError("Subclasses must implement update()")
 
     def strategies(self) -> dict[str, Strategy]:

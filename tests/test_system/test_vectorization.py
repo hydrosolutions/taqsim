@@ -6,6 +6,7 @@ import pytest
 from taqsim import Edge, Sink, Source, Splitter, Storage, TimeSeries, WaterSystem
 from taqsim.common import Strategy
 from taqsim.constraints import ConstraintSpec, Ordered, SumToOne
+from taqsim.time import Frequency, Timestep
 
 from .conftest import FakeEdgeLossRule, FakeLossRule
 
@@ -20,8 +21,8 @@ class FixedRelease(Strategy):
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 200.0)}
     rate: float = 50.0
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.rate * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.rate, node.storage)
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,7 @@ class ProportionalSplit(Strategy):
     r1: float = 0.5
     r2: float = 0.5
 
-    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
         total = self.r1 + self.r2
         ratios = (self.r1 / total, self.r2 / total)
         return {t: amount * r for t, r in zip(node.targets, ratios, strict=True)}
@@ -47,7 +48,7 @@ class UnboundedStrategy(Strategy):
     __params__: ClassVar[tuple[str, ...]] = ("value",)
     value: float = 1.0
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
         return self.value
 
 
@@ -64,7 +65,7 @@ class ConstrainedSplit(Strategy):
     r2: float = 0.3
     r3: float = 0.2
 
-    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
         ratios = (self.r1, self.r2, self.r3)
         return {t: amount * r for t, r in zip(node.targets, ratios, strict=True)}
 
@@ -80,8 +81,8 @@ class OrderedRelease(Strategy):
     low: float = 10.0
     high: float = 50.0
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.high * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.high, node.storage)
 
 
 @dataclass(frozen=True)
@@ -90,7 +91,7 @@ class SimpleLoss:
 
     rate: float = 0.01
 
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict:
+    def calculate(self, node: "Storage", t: Timestep) -> dict:
         return {}
 
 
@@ -98,13 +99,13 @@ class SimpleLoss:
 class SimpleEdgeLoss:
     """Physical model - NOT a Strategy."""
 
-    def calculate(self, edge: "Edge", flow: float, t: int, dt: float) -> dict:
+    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict:
         return {}
 
 
 def build_test_system() -> WaterSystem:
     """Build a simple test system with strategies."""
-    system = WaterSystem(dt=1.0)
+    system = WaterSystem(frequency=Frequency.MONTHLY)
 
     system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
     system.add_node(
@@ -152,7 +153,7 @@ class TestParamSchema:
         assert not any("loss_rule" in p for p in paths)
 
     def test_empty_system_returns_empty_schema(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         assert system.param_schema() == []
 
     def test_scalar_params_are_collected(self):
@@ -286,7 +287,7 @@ class TestParamBounds:
 
     def test_empty_system_returns_empty_dict(self):
         """Empty system has no bounds."""
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         assert system.param_bounds() == {}
 
     def test_collects_bounds_from_strategies(self):
@@ -304,7 +305,7 @@ class TestParamBounds:
 
     def test_raises_for_missing_bounds(self):
         """Raises ValueError when strategy params lack bounds."""
-        system = WaterSystem(dt=1.0)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="src", inflow=TimeSeries(values=[100.0] * 10)))
         system.add_node(
             Storage(
@@ -369,7 +370,7 @@ class TestConstraintSpecs:
 
     def test_constraint_specs_discovers_from_strategies(self):
         """constraint_specs() discovers constraints from node strategies."""
-        system = WaterSystem(dt=1.0)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
 
         system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
         system.add_node(
@@ -407,7 +408,7 @@ class TestConstraintSpecs:
 
     def test_constraint_specs_returns_fully_resolved_spec(self):
         """ConstraintSpec contains prefix, param_paths, and param_bounds."""
-        system = WaterSystem(dt=1.0)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
 
         system.add_node(Source(id="river", inflow=TimeSeries(values=[100.0] * 10)))
         system.add_node(
@@ -455,8 +456,8 @@ class TimeVaryingRelease(Strategy):
     __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: tuple[float, ...] = (10.0, 20.0, 30.0)
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.rate[t] * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.rate[t], node.storage)
 
 
 # Mixed strategy: constant + time-varying
@@ -471,8 +472,8 @@ class MixedParamRelease(Strategy):
     base: float = 10.0
     multiplier: tuple[float, ...] = (1.0, 1.5, 2.0)
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.base * self.multiplier[t] * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.base * self.multiplier[t], node.storage)
 
 
 class TestParamSchemaTimeVarying:
@@ -487,7 +488,7 @@ class TestParamSchemaTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -509,7 +510,7 @@ class TestParamSchemaTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -534,7 +535,7 @@ class TestToVectorTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -551,7 +552,7 @@ class TestToVectorTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -573,7 +574,7 @@ class TestWithVectorTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -591,7 +592,7 @@ class TestWithVectorTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -613,7 +614,7 @@ class TestBoundsVectorTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -630,7 +631,7 @@ class TestBoundsVectorTimeVarying:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -650,7 +651,7 @@ class TestValidateTimeVaryingLengths:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -670,7 +671,7 @@ class TestValidateTimeVaryingLengths:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -688,10 +689,11 @@ class CyclicalRelease(Strategy):
     __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
     __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
     __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
     rate: tuple[float, ...] = (10.0, 20.0, 30.0)
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.rate[t % len(self.rate)] * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.rate[t % len(self.rate)], node.storage)
 
 
 # Non-cyclical time-varying strategy (same as TimeVaryingRelease but explicit)
@@ -702,8 +704,8 @@ class NonCyclicalRelease(Strategy):
     __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
     rate: tuple[float, ...] = (10.0, 20.0, 30.0)
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
-        return min(self.rate[t] * dt, node.storage)
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
+        return min(self.rate[t], node.storage)
 
 
 # Mixed strategy: one cyclical, one non-cyclical
@@ -716,13 +718,14 @@ class MixedCyclicalRelease(Strategy):
     }
     __time_varying__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
     __cyclical__: ClassVar[tuple[str, ...]] = ("base",)  # base is cyclical, multiplier is not
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"base": Frequency.MONTHLY}
     base: tuple[float, ...] = (10.0, 20.0, 30.0)  # 3 values, cyclical
     multiplier: tuple[float, ...] = (1.0,) * 10  # 10 values, non-cyclical
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
         base_val = self.base[t % len(self.base)]
         mult_val = self.multiplier[t]
-        return min(base_val * mult_val * dt, node.storage)
+        return min(base_val * mult_val, node.storage)
 
 
 # All-cyclical strategy with multiple params
@@ -735,13 +738,14 @@ class AllCyclicalRelease(Strategy):
     }
     __time_varying__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
     __cyclical__: ClassVar[tuple[str, ...]] = ("base", "multiplier")
+    __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"base": Frequency.MONTHLY, "multiplier": Frequency.MONTHLY}
     base: tuple[float, ...] = (10.0, 20.0)  # 2 values
     multiplier: tuple[float, ...] = (1.0, 1.5, 2.0)  # 3 values
 
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float:
+    def release(self, node: "Storage", inflow: float, t: Timestep) -> float:
         base_val = self.base[t % len(self.base)]
         mult_val = self.multiplier[t % len(self.multiplier)]
-        return min(base_val * mult_val * dt, node.storage)
+        return min(base_val * mult_val, node.storage)
 
 
 class TestValidateTimeVaryingLengthsCyclical:
@@ -756,7 +760,7 @@ class TestValidateTimeVaryingLengthsCyclical:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -776,7 +780,7 @@ class TestValidateTimeVaryingLengthsCyclical:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -795,7 +799,7 @@ class TestValidateTimeVaryingLengthsCyclical:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
@@ -813,7 +817,7 @@ class TestValidateTimeVaryingLengthsCyclical:
             loss_rule=FakeLossRule(),
         )
         sink = Sink(id="sink")
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
         system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))

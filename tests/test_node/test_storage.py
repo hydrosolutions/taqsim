@@ -13,6 +13,7 @@ from taqsim.node.events import (
 )
 from taqsim.node.protocols import Loses, Receives, Stores
 from taqsim.node.storage import Storage
+from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
     pass
@@ -26,8 +27,7 @@ class FakeReleaseRule:
         self,
         node: "Storage",
         inflow: float,
-        t: int,
-        dt: float,
+        t: Timestep,
     ) -> float:
         return self._release_amount
 
@@ -41,8 +41,7 @@ class SpyReleaseRule:
         self,
         node: "Storage",
         inflow: float,
-        t: int,
-        dt: float,
+        t: Timestep,
     ) -> float:
         self.calls.append(
             {
@@ -51,7 +50,6 @@ class SpyReleaseRule:
                 "capacity": node.capacity,
                 "inflow": inflow,
                 "t": t,
-                "dt": dt,
             }
         )
         return self._release_amount
@@ -61,7 +59,7 @@ class FakeLossRule:
     def __init__(self, losses: dict[LossReason, float] | None = None):
         self._losses = losses if losses is not None else {}
 
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]:
+    def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
         return self._losses
 
 
@@ -162,7 +160,7 @@ class TestStorageInit:
 class TestStorageReceive:
     def test_receive_records_water_received_event(self):
         storage = make_storage()
-        storage.receive(100.0, "source_1", t=0)
+        storage.receive(100.0, "source_1", t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterReceived)
         assert len(events) == 1
@@ -172,13 +170,13 @@ class TestStorageReceive:
 
     def test_receive_returns_amount_received(self):
         storage = make_storage()
-        result = storage.receive(50.0, "source_1", t=0)
+        result = storage.receive(50.0, "source_1", t=Timestep(0, Frequency.MONTHLY))
         assert result == 50.0
 
     def test_receive_accumulates_for_step(self):
         storage = make_storage()
-        storage.receive(100.0, "source_1", t=0)
-        storage.receive(50.0, "source_2", t=0)
+        storage.receive(100.0, "source_1", t=Timestep(0, Frequency.MONTHLY))
+        storage.receive(50.0, "source_2", t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterReceived)
         assert len(events) == 2
@@ -186,8 +184,8 @@ class TestStorageReceive:
 
     def test_receive_from_multiple_sources(self):
         storage = make_storage()
-        storage.receive(100.0, "river", t=0)
-        storage.receive(50.0, "tributary", t=0)
+        storage.receive(100.0, "river", t=Timestep(0, Frequency.MONTHLY))
+        storage.receive(50.0, "tributary", t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterReceived)
         sources = {e.source_id for e in events}
@@ -197,7 +195,7 @@ class TestStorageReceive:
 class TestStorageStore:
     def test_store_within_capacity(self):
         storage = make_storage(capacity=1000.0, initial_storage=0.0)
-        stored, spilled = storage.store(500.0, t=0, dt=1.0)
+        stored, spilled = storage.store(500.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert stored == 500.0
         assert spilled == 0.0
@@ -205,7 +203,7 @@ class TestStorageStore:
 
     def test_store_records_water_stored_event(self):
         storage = make_storage(capacity=1000.0)
-        storage.store(300.0, t=0, dt=1.0)
+        storage.store(300.0, t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterStored)
         assert len(events) == 1
@@ -214,7 +212,7 @@ class TestStorageStore:
 
     def test_store_over_capacity_spills(self):
         storage = make_storage(capacity=100.0, initial_storage=80.0)
-        stored, spilled = storage.store(50.0, t=0, dt=1.0)
+        stored, spilled = storage.store(50.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert stored == 20.0
         assert spilled == 30.0
@@ -222,7 +220,7 @@ class TestStorageStore:
 
     def test_store_over_capacity_records_spilled_event(self):
         storage = make_storage(capacity=100.0, initial_storage=80.0)
-        storage.store(50.0, t=0, dt=1.0)
+        storage.store(50.0, t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterSpilled)
         assert len(events) == 1
@@ -231,7 +229,7 @@ class TestStorageStore:
 
     def test_store_at_full_capacity_spills_all(self):
         storage = make_storage(capacity=100.0, initial_storage=100.0)
-        stored, spilled = storage.store(50.0, t=0, dt=1.0)
+        stored, spilled = storage.store(50.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert stored == 0.0
         assert spilled == 50.0
@@ -239,7 +237,7 @@ class TestStorageStore:
 
     def test_store_zero_amount(self):
         storage = make_storage(capacity=100.0, initial_storage=50.0)
-        stored, spilled = storage.store(0.0, t=0, dt=1.0)
+        stored, spilled = storage.store(0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert stored == 0.0
         assert spilled == 0.0
@@ -253,7 +251,7 @@ class TestStorageLose:
             initial_storage=500.0,
             losses={EVAPORATION: 10.0},
         )
-        total_loss = storage.lose(t=0, dt=1.0)
+        total_loss = storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         assert total_loss == 10.0
         assert storage.storage == 490.0
@@ -264,7 +262,7 @@ class TestStorageLose:
             initial_storage=500.0,
             losses={EVAPORATION: 10.0},
         )
-        storage.lose(t=0, dt=1.0)
+        storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterLost)
         assert len(events) == 1
@@ -281,7 +279,7 @@ class TestStorageLose:
                 SEEPAGE: 5.0,
             },
         )
-        total_loss = storage.lose(t=0, dt=1.0)
+        total_loss = storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         assert total_loss == 15.0
         assert storage.storage == 485.0
@@ -297,7 +295,7 @@ class TestStorageLose:
             initial_storage=10.0,
             losses={EVAPORATION: 100.0},
         )
-        total_loss = storage.lose(t=0, dt=1.0)
+        total_loss = storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         assert total_loss == 10.0
         assert storage.storage == 0.0
@@ -311,7 +309,7 @@ class TestStorageLose:
                 SEEPAGE: 20.0,
             },
         )
-        storage.lose(t=0, dt=1.0)
+        storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterLost)
         evap = next(e for e in events if e.reason == EVAPORATION)
@@ -327,7 +325,7 @@ class TestStorageLose:
             initial_storage=500.0,
             losses={},
         )
-        total_loss = storage.lose(t=0, dt=1.0)
+        total_loss = storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         assert total_loss == 0.0
         assert storage.storage == 500.0
@@ -339,7 +337,7 @@ class TestStorageLose:
             initial_storage=500.0,
             losses={EVAPORATION: 0.0},
         )
-        storage.lose(t=0, dt=1.0)
+        storage.lose(t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterLost)
         assert len(events) == 0
@@ -352,7 +350,7 @@ class TestStorageRelease:
             initial_storage=500.0,
             release_amount=100.0,
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 100.0
         assert storage.storage == 400.0
@@ -363,7 +361,7 @@ class TestStorageRelease:
             initial_storage=500.0,
             release_amount=100.0,
         )
-        storage.release(inflow=0.0, t=0, dt=1.0)
+        storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterReleased)
         assert len(events) == 1
@@ -376,7 +374,7 @@ class TestStorageRelease:
             initial_storage=50.0,
             release_amount=100.0,
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 50.0
         assert storage.storage == 0.0
@@ -387,7 +385,7 @@ class TestStorageRelease:
             initial_storage=500.0,
             release_amount=0.0,
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 0.0
         events = storage.events_of_type(WaterReleased)
@@ -401,7 +399,7 @@ class TestStorageRelease:
             initial_storage=500.0,
             release_amount=-50.0,
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 0.0
         assert storage.storage == 500.0
@@ -415,7 +413,7 @@ class TestStorageRelease:
             release_rule=FakeReleaseRule(1000.0),
             loss_rule=FakeLossRule(),
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 300.0
         assert storage.storage == 200.0
@@ -429,7 +427,7 @@ class TestStorageRelease:
             release_rule=FakeReleaseRule(100.0),
             loss_rule=FakeLossRule(),
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 0.0
         assert storage.storage == 200.0
@@ -443,7 +441,7 @@ class TestStorageRelease:
             release_rule=FakeReleaseRule(50.0),
             loss_rule=FakeLossRule(),
         )
-        released = storage.release(inflow=0.0, t=0, dt=1.0)
+        released = storage.release(inflow=0.0, t=Timestep(0, Frequency.MONTHLY))
 
         assert released == 0.0
         assert storage.storage == 100.0
@@ -458,7 +456,7 @@ class TestStorageRelease:
             release_rule=spy_rule,
             loss_rule=FakeLossRule(),
         )
-        storage.release(inflow=25.0, t=3, dt=2.0)
+        storage.release(inflow=25.0, t=Timestep(3, Frequency.MONTHLY))
 
         assert len(spy_rule.calls) == 1
         call = spy_rule.calls[0]
@@ -467,14 +465,13 @@ class TestStorageRelease:
         assert call["capacity"] == 1000.0
         assert call["inflow"] == 25.0
         assert call["t"] == 3
-        assert call["dt"] == 2.0
 
 
 class TestStorageUpdate:
     def test_update_stores_received_water(self):
         storage = make_storage(capacity=1000.0, initial_storage=0.0)
-        storage.receive(100.0, "source", t=0)
-        storage.update(t=0, dt=1.0)
+        storage.receive(100.0, "source", t=Timestep(0, Frequency.MONTHLY))
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert storage.storage == 100.0
         events = storage.events_of_type(WaterStored)
@@ -487,7 +484,7 @@ class TestStorageUpdate:
             initial_storage=100.0,
             losses={EVAPORATION: 10.0},
         )
-        storage.update(t=0, dt=1.0)
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert storage.storage == 90.0
 
@@ -497,7 +494,7 @@ class TestStorageUpdate:
             initial_storage=100.0,
             release_amount=20.0,
         )
-        storage.update(t=0, dt=1.0)
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert storage.storage == 80.0
 
@@ -507,7 +504,7 @@ class TestStorageUpdate:
             initial_storage=100.0,
             release_amount=50.0,
         )
-        storage.update(t=0, dt=1.0)
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterOutput)
         assert len(events) == 1
@@ -520,8 +517,8 @@ class TestStorageUpdate:
             initial_storage=90.0,
             release_amount=10.0,
         )
-        storage.receive(30.0, "source", t=0)
-        storage.update(t=0, dt=1.0)
+        storage.receive(30.0, "source", t=Timestep(0, Frequency.MONTHLY))
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterOutput)
         assert len(events) == 1
@@ -534,17 +531,17 @@ class TestStorageUpdate:
             initial_storage=100.0,
             release_amount=0.0,
         )
-        storage.update(t=0, dt=1.0)
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = storage.events_of_type(WaterOutput)
         assert len(events) == 0
 
     def test_update_resets_received_for_next_step(self):
         storage = make_storage(capacity=1000.0, initial_storage=0.0)
-        storage.receive(100.0, "source", t=0)
-        storage.update(t=0, dt=1.0)
+        storage.receive(100.0, "source", t=Timestep(0, Frequency.MONTHLY))
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
-        storage.update(t=1, dt=1.0)
+        storage.update(t=Timestep(1, Frequency.MONTHLY))
 
         stored_events = storage.events_of_type(WaterStored)
         t1_stored = [e for e in stored_events if e.t == 1]
@@ -558,8 +555,8 @@ class TestStorageUpdate:
             losses={EVAPORATION: 10.0},
             release_amount=50.0,
         )
-        storage.receive(50.0, "source", t=0)
-        storage.update(t=0, dt=1.0)
+        storage.receive(50.0, "source", t=Timestep(0, Frequency.MONTHLY))
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         assert storage.storage == 90.0
 
@@ -580,8 +577,8 @@ class TestStorageUpdate:
             },
             release_amount=release_amt,
         )
-        storage.receive(received, "source", t=0)
-        storage.update(t=0, dt=1.0)
+        storage.receive(received, "source", t=Timestep(0, Frequency.MONTHLY))
+        storage.update(t=Timestep(0, Frequency.MONTHLY))
 
         expected_storage = initial + received - evap_loss - seep_loss - release_amt
         assert storage.storage == pytest.approx(expected_storage)

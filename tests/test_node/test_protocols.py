@@ -1,10 +1,11 @@
 from taqsim.node.protocols import Consumes, Generates, Loses, Receives, Stores
+from taqsim.time import Frequency, Timestep
 
 
 class TestGeneratesProtocol:
     def test_class_with_generate_satisfies_protocol(self):
         class FakeSource:
-            def generate(self, t: int, dt: float) -> float:
+            def generate(self, t: Timestep) -> float:
                 return 100.0
 
         assert isinstance(FakeSource(), Generates)
@@ -17,17 +18,17 @@ class TestGeneratesProtocol:
 
     def test_generate_returns_float(self):
         class ValidSource:
-            def generate(self, t: int, dt: float) -> float:
+            def generate(self, t: Timestep) -> float:
                 return 50.5
 
         source = ValidSource()
-        assert source.generate(0, 1.0) == 50.5
+        assert source.generate(Timestep(0, Frequency.MONTHLY)) == 50.5
 
 
 class TestReceivesProtocol:
     def test_class_with_receive_satisfies_protocol(self):
         class FakeReceiver:
-            def receive(self, amount: float, source_id: str, t: int, dt: float) -> float:
+            def receive(self, amount: float, source_id: str, t: Timestep) -> float:
                 return amount
 
         assert isinstance(FakeReceiver(), Receives)
@@ -40,11 +41,11 @@ class TestReceivesProtocol:
 
     def test_receive_returns_float(self):
         class ValidReceiver:
-            def receive(self, amount: float, source_id: str, t: int, dt: float) -> float:
+            def receive(self, amount: float, source_id: str, t: Timestep) -> float:
                 return amount * 0.9
 
         receiver = ValidReceiver()
-        assert receiver.receive(100.0, "source", 0, 1.0) == 90.0
+        assert receiver.receive(100.0, "source", Timestep(0, Frequency.MONTHLY)) == 90.0
 
 
 class TestStoresProtocol:
@@ -58,7 +59,7 @@ class TestStoresProtocol:
             def capacity(self) -> float:
                 return 100.0
 
-            def store(self, amount: float, t: int, dt: float) -> tuple[float, float]:
+            def store(self, amount: float, t: Timestep) -> tuple[float, float]:
                 return (amount, 0.0)
 
         assert isinstance(HasStorage(), Stores)
@@ -69,7 +70,7 @@ class TestStoresProtocol:
             def capacity(self) -> float:
                 return 100.0
 
-            def store(self, amount: float, t: int, dt: float) -> tuple[float, float]:
+            def store(self, amount: float, t: Timestep) -> tuple[float, float]:
                 return (amount, 0.0)
 
         assert not isinstance(NoStorage(), Stores)
@@ -80,7 +81,7 @@ class TestStoresProtocol:
             def storage(self) -> float:
                 return 0.0
 
-            def store(self, amount: float, t: int, dt: float) -> tuple[float, float]:
+            def store(self, amount: float, t: Timestep) -> tuple[float, float]:
                 return (amount, 0.0)
 
         assert not isinstance(NoCapacity(), Stores)
@@ -107,13 +108,13 @@ class TestStoresProtocol:
             def capacity(self) -> float:
                 return 100.0
 
-            def store(self, amount: float, t: int, dt: float) -> tuple[float, float]:
+            def store(self, amount: float, t: Timestep) -> tuple[float, float]:
                 stored = min(amount, self.capacity - self.storage)
                 overflow = max(0.0, amount - stored)
                 return (stored, overflow)
 
         store = ValidStore()
-        stored, overflow = store.store(60.0, 0, 1.0)
+        stored, overflow = store.store(60.0, Timestep(0, Frequency.MONTHLY))
         assert stored == 50.0
         assert overflow == 10.0
 
@@ -121,7 +122,7 @@ class TestStoresProtocol:
 class TestLosesProtocol:
     def test_class_with_lose_satisfies_protocol(self):
         class HasLoss:
-            def lose(self, t: int, dt: float) -> float:
+            def lose(self, t: Timestep) -> float:
                 return 5.0
 
         assert isinstance(HasLoss(), Loses)
@@ -134,17 +135,17 @@ class TestLosesProtocol:
 
     def test_lose_returns_float(self):
         class ValidLoss:
-            def lose(self, t: int, dt: float) -> float:
+            def lose(self, t: Timestep) -> float:
                 return 2.5
 
         loser = ValidLoss()
-        assert loser.lose(0, 1.0) == 2.5
+        assert loser.lose(Timestep(0, Frequency.MONTHLY)) == 2.5
 
 
 class TestConsumesProtocol:
     def test_class_with_consume_satisfies_protocol(self):
         class HasConsumption:
-            def consume(self, available: float, t: int, dt: float) -> tuple[float, float]:
+            def consume(self, available: float, t: Timestep) -> tuple[float, float]:
                 consumed = min(available, 10.0)
                 remaining = available - consumed
                 return (consumed, remaining)
@@ -159,13 +160,13 @@ class TestConsumesProtocol:
 
     def test_consume_returns_tuple(self):
         class ValidConsumer:
-            def consume(self, available: float, t: int, dt: float) -> tuple[float, float]:
+            def consume(self, available: float, t: Timestep) -> tuple[float, float]:
                 consumed = min(available, 25.0)
                 remaining = available - consumed
                 return (consumed, remaining)
 
         consumer = ValidConsumer()
-        consumed, remaining = consumer.consume(100.0, 0, 1.0)
+        consumed, remaining = consumer.consume(100.0, Timestep(0, Frequency.MONTHLY))
         assert consumed == 25.0
         assert remaining == 75.0
 
@@ -181,13 +182,13 @@ class TestProtocolCombinations:
             def capacity(self) -> float:
                 return 100.0
 
-            def generate(self, t: int, dt: float) -> float:
+            def generate(self, t: Timestep) -> float:
                 return 10.0
 
-            def receive(self, amount: float, source_id: str, t: int, dt: float) -> float:
+            def receive(self, amount: float, source_id: str, t: Timestep) -> float:
                 return amount
 
-            def store(self, amount: float, t: int, dt: float) -> tuple[float, float]:
+            def store(self, amount: float, t: Timestep) -> tuple[float, float]:
                 return (amount, 0.0)
 
         node = MultiCapable()
@@ -197,7 +198,7 @@ class TestProtocolCombinations:
 
     def test_partial_implementation_does_not_satisfy_other_protocols(self):
         class OnlyGenerates:
-            def generate(self, t: int, dt: float) -> float:
+            def generate(self, t: Timestep) -> float:
                 return 10.0
 
         node = OnlyGenerates()

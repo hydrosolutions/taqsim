@@ -68,9 +68,7 @@ class Trace:
     def get(self, t: int, default: float = 0.0) -> float:
         return self._data.get(t, default)
 
-    def align(
-        self, other: Trace, fill_self: float = 0.0, fill_other: float = 0.0
-    ) -> tuple[Trace, Trace]:
+    def align(self, other: Trace, fill_self: float = 0.0, fill_other: float = 0.0) -> tuple[Trace, Trace]:
         all_t = set(self._data.keys()) | set(other._data.keys())
         return (
             Trace(_data={t: self._data.get(t, fill_self) for t in all_t}),
@@ -116,11 +114,9 @@ class Trace:
     def __truediv__(self, other: Trace | float) -> Trace:
         if isinstance(other, Trace):
             all_t = set(self._data.keys()) | set(other._data.keys())
-            return Trace(_data={
-                t: self._data.get(t, 0.0) / other._data[t]
-                for t in all_t
-                if other._data.get(t, 0.0) != 0.0
-            })
+            return Trace(
+                _data={t: self._data.get(t, 0.0) / other._data[t] for t in all_t if other._data.get(t, 0.0) != 0.0}
+            )
         return Trace(_data={t: v / other for t, v in self._data.items()})
 
     def __rtruediv__(self, other: float) -> Trace:

@@ -8,6 +8,7 @@ from taqsim.edge import Edge
 from taqsim.geo import haversine
 from taqsim.node import BaseNode, Demand, PassThrough, Receives, Sink, Source, Splitter, Storage
 from taqsim.node.events import WaterDistributed, WaterOutput
+from taqsim.time import Frequency, Timestep
 
 from .validation import ValidationError
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class WaterSystem:
-    dt: float = 1
+    frequency: Frequency
 
     _nodes: dict[str, BaseNode] = field(default_factory=dict, init=False, repr=False)
     _edges: dict[str, Edge] = field(default_factory=dict, init=False, repr=False)
@@ -141,15 +142,16 @@ class WaterSystem:
             self.validate()
         self._validate_time_varying_lengths(timesteps)
 
-        for t in range(timesteps):
+        for i in range(timesteps):
+            t = Timestep(index=i, frequency=self.frequency)
             for node_id in nx.topological_sort(self._graph):
                 node = self._nodes[node_id]
-                node.update(t, self.dt)
+                node.update(t)
                 self._route_output(node_id, t)
 
-    def _route_output(self, node_id: str, t: int) -> None:
+    def _route_output(self, node_id: str, t: Timestep) -> None:
         node = self._nodes[node_id]
-        events = node.events_at(t)
+        events = node.events_at(t.index)
 
         # Handle WaterOutput events (single-output nodes: Source, Storage, Demand, PassThrough)
         output_events = [e for e in events if isinstance(e, WaterOutput)]
@@ -166,13 +168,13 @@ class WaterSystem:
             edge_id = self._get_edge_to(node_id, event.target_id)  # target_id is now a node ID
             self._deliver_to_edge(edge_id, event.amount, t)
 
-    def _deliver_to_edge(self, edge_id: str, amount: float, t: int) -> None:
+    def _deliver_to_edge(self, edge_id: str, amount: float, t: Timestep) -> None:
         if edge_id not in self._edges:
             raise ValueError(f"Edge '{edge_id}' not found in system")
 
         edge = self._edges[edge_id]
         edge.receive(amount, t)
-        delivered = edge.update(t, self.dt)
+        delivered = edge.update(t)
 
         # Route to target node
         target_node = self._nodes[edge.target]
@@ -479,7 +481,7 @@ class WaterSystem:
         """Create a new system with updated strategy parameters."""
         import copy
 
-        new_system = WaterSystem(dt=self.dt)
+        new_system = WaterSystem(frequency=self.frequency)
 
         # Clone nodes with updated strategies
         for node_id, node in self._nodes.items():

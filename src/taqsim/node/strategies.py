@@ -5,11 +5,12 @@ from taqsim.common import LossReason
 if TYPE_CHECKING:
     from taqsim.node.splitter import Splitter
     from taqsim.node.storage import Storage
+    from taqsim.time import Timestep
 
 
 @runtime_checkable
 class ReleaseRule(Protocol):
-    def release(self, node: "Storage", inflow: float, t: int, dt: float) -> float: ...
+    def release(self, node: "Storage", inflow: float, t: "Timestep") -> float: ...
 
 
 @runtime_checkable
@@ -24,13 +25,13 @@ class SplitRule(Protocol):
         Keys must be valid node IDs that the splitter connects to.
 
     Example:
-        def split(self, node: Splitter, amount: float, t: int) -> dict[str, float]:
+        def split(self, node: Splitter, amount: float, t: Timestep) -> dict[str, float]:
             return {"irrigation": amount * 0.6, "thermal": amount * 0.4}
     """
 
-    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]: ...
+    def split(self, node: "Splitter", amount: float, t: "Timestep") -> dict[str, float]: ...
 
 
 @runtime_checkable
 class LossRule(Protocol):
-    def calculate(self, node: "Storage", t: int, dt: float) -> dict[LossReason, float]: ...
+    def calculate(self, node: "Storage", t: "Timestep") -> dict[LossReason, float]: ...

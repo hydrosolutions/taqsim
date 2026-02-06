@@ -3,6 +3,7 @@ import pytest
 from taqsim.node import WaterReceived
 from taqsim.node.events import WaterGenerated
 from taqsim.system import ValidationError, WaterSystem
+from taqsim.time import Frequency, Timestep
 
 from .conftest import (
     FakeEdgeLossRule,
@@ -15,26 +16,26 @@ from .conftest import (
 
 
 class TestWaterSystemInit:
-    def test_creates_with_default_dt(self):
-        system = WaterSystem()
-        assert system.dt == 1
+    def test_creates_with_frequency(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        assert system.frequency == Frequency.MONTHLY
 
-    def test_creates_with_custom_dt(self):
-        system = WaterSystem(dt=86400.0)
-        assert system.dt == 86400.0
+    def test_creates_with_custom_frequency(self):
+        system = WaterSystem(frequency=Frequency.DAILY)
+        assert system.frequency == Frequency.DAILY
 
     def test_starts_with_empty_nodes(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         assert system.nodes == {}
 
     def test_starts_with_empty_edges(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         assert system.edges == {}
 
 
 class TestAddNode:
     def test_adds_source_node(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source(id="src1")
         system.add_node(source)
 
@@ -42,7 +43,7 @@ class TestAddNode:
         assert system.nodes["src1"] is source
 
     def test_adds_sink_node(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         sink = make_sink(id="snk1")
         system.add_node(sink)
 
@@ -50,7 +51,7 @@ class TestAddNode:
         assert system.nodes["snk1"] is sink
 
     def test_raises_on_duplicate_node_id(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source(id="node1")
         system.add_node(source)
 
@@ -58,7 +59,7 @@ class TestAddNode:
             system.add_node(make_sink(id="node1"))
 
     def test_invalidates_after_add(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
         edge = make_edge(source="source", target="sink")
@@ -77,7 +78,7 @@ class TestAddNode:
 
 class TestAddEdge:
     def test_adds_edge(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         edge = make_edge(id="e1", source="a", target="b")
         system.add_edge(edge)
 
@@ -85,7 +86,7 @@ class TestAddEdge:
         assert system.edges["e1"] is edge
 
     def test_raises_on_duplicate_edge_id(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         edge1 = make_edge(id="edge1", source="a", target="b")
         edge2 = make_edge(id="edge1", source="c", target="d")
 
@@ -95,7 +96,7 @@ class TestAddEdge:
             system.add_edge(edge2)
 
     def test_invalidates_after_add(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
         edge = make_edge(source="source", target="sink")
@@ -114,7 +115,7 @@ class TestAddEdge:
 
 class TestValidation:
     def test_validates_simple_network(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(make_source())
         system.add_node(make_sink())
         system.add_edge(make_edge(source="source", target="sink"))
@@ -123,7 +124,7 @@ class TestValidation:
         assert system._validated is True
 
     def test_fails_on_missing_source_node(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(make_sink())
         system.add_edge(make_edge(source="nonexistent", target="sink"))
 
@@ -131,7 +132,7 @@ class TestValidation:
             system.validate()
 
     def test_fails_on_missing_target_node(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(make_source())
         system.add_edge(make_edge(source="source", target="nonexistent"))
 
@@ -139,7 +140,7 @@ class TestValidation:
             system.validate()
 
     def test_fails_on_cycle(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         splitter1 = make_splitter(id="s1")
         splitter2 = make_splitter(id="s2")
         sink = make_sink()
@@ -157,7 +158,7 @@ class TestValidation:
             system.validate()
 
     def test_fails_on_disconnected_nodes(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(make_source(id="src1"))
         system.add_node(make_sink(id="snk1"))
         system.add_node(make_source(id="src2"))  # disconnected
@@ -170,7 +171,7 @@ class TestValidation:
             system.validate()
 
     def test_fails_on_source_with_incoming_edge(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         splitter = make_splitter()
         sink = make_sink()
@@ -188,7 +189,7 @@ class TestValidation:
             system.validate()
 
     def test_fails_on_sink_with_outgoing_edge(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
         other_sink = make_sink(id="sink2")
@@ -204,7 +205,7 @@ class TestValidation:
             system.validate()
 
     def test_fails_on_non_splitter_with_multiple_outputs(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink1 = make_sink(id="sink1")
         sink2 = make_sink(id="sink2")
@@ -221,7 +222,7 @@ class TestValidation:
             system.validate()
 
     def test_allows_splitter_with_multiple_outputs(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         splitter = make_splitter()
         sink1 = make_sink(id="sink1")
@@ -240,7 +241,7 @@ class TestValidation:
         assert system._validated is True
 
     def test_fails_on_node_without_path_to_sink(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         storage = make_storage(id="storage")
         sink = make_sink()
@@ -257,7 +258,7 @@ class TestValidation:
             system.validate()
 
     def test_populates_targets_on_validate(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
 
@@ -273,7 +274,7 @@ class TestValidation:
 
 class TestSimulation:
     def test_runs_for_given_timesteps(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
         edge = make_edge(source="source", target="sink")
@@ -290,7 +291,7 @@ class TestSimulation:
         assert [e.t for e in gen_events] == [0, 1, 2]
 
     def test_validates_if_not_validated(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
         edge = make_edge(source="source", target="sink")
@@ -304,7 +305,7 @@ class TestSimulation:
         assert system._validated is True
 
     def test_routes_water_through_network(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
         edge = make_edge(source="source", target="sink")
@@ -321,7 +322,7 @@ class TestSimulation:
         assert received_events[0].t == 0
 
     def test_processes_in_topological_order(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         storage = make_storage()
         sink = make_sink()
@@ -345,7 +346,7 @@ class TestSimulation:
         assert len(sink_recv) == 1
 
     def test_splitter_distributes_to_multiple_targets(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         splitter = make_splitter()
         sink1 = make_sink(id="sink1")
@@ -372,7 +373,7 @@ class TestSimulation:
     def test_edge_losses_reduce_delivered_amount(self):
         from taqsim.common import SEEPAGE
 
-        system = WaterSystem(dt=1.0)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
 
@@ -399,10 +400,10 @@ class TestSplitterRouting:
         """SplitRule returning node IDs routes water correctly."""
 
         class ProportionalSplit:
-            def split(self, node, amount: float, t: int) -> dict[str, float]:
+            def split(self, node, amount: float, t: Timestep) -> dict[str, float]:
                 return {"sink1": amount * 0.6, "sink2": amount * 0.4}
 
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         splitter = make_splitter(split_rule=ProportionalSplit())
         sink1 = make_sink(id="sink1")
@@ -431,7 +432,7 @@ class TestSplitterRouting:
 
     def test_splitter_node_targets_are_node_ids(self):
         """After validation, node.targets contains downstream node IDs."""
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         splitter = make_splitter()
         sink1 = make_sink(id="sink1")
@@ -455,10 +456,10 @@ class TestSplitterRouting:
         """SplitRule returning invalid node ID raises ValueError."""
 
         class BadSplit:
-            def split(self, node, amount: float, t: int) -> dict[str, float]:
+            def split(self, node, amount: float, t: Timestep) -> dict[str, float]:
                 return {"nonexistent_node": amount}
 
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         splitter = make_splitter(split_rule=BadSplit())
         sink = make_sink()
@@ -475,7 +476,7 @@ class TestSplitterRouting:
 
     def test_single_output_node_routes_via_node_id(self):
         """Single-output nodes route correctly with node ID targets."""
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         source = make_source()
         sink = make_sink()
 

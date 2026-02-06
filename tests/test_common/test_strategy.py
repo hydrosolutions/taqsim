@@ -10,6 +10,7 @@ from taqsim.constraints import (
     Ordered,
     SumToOne,
 )
+from taqsim.time import Frequency, Timestep
 
 
 class TestStrategy:
@@ -656,6 +657,7 @@ class TestCyclicalDeclaration:
             __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
             __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
             __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
             rate: tuple[float, ...] = (50.0, 60.0, 70.0)
 
         s = ValidCyclical()
@@ -685,6 +687,7 @@ class TestCyclicalDeclaration:
             }
             __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
             __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"low": Frequency.MONTHLY, "high": Frequency.MONTHLY}
             low: tuple[float, ...] = (10.0, 20.0, 30.0)
             high: tuple[float, ...] = (50.0, 60.0, 70.0)
 
@@ -704,6 +707,7 @@ class TestCyclicalValuesAtTimestep:
             __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
             __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
             __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
             rate: tuple[float, ...] = (10.0, 20.0, 30.0)
 
         s = CyclicalStrategy()
@@ -738,6 +742,7 @@ class TestCyclicalValuesAtTimestep:
             }
             __time_varying__: ClassVar[tuple[str, ...]] = ("cyclical_rate", "linear_rate")
             __cyclical__: ClassVar[tuple[str, ...]] = ("cyclical_rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"cyclical_rate": Frequency.MONTHLY}
             cyclical_rate: tuple[float, ...] = (10.0, 20.0, 30.0)  # 3 values, cycles
             linear_rate: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0)  # 6 values, direct
 
@@ -757,6 +762,7 @@ class TestCyclicalValuesAtTimestep:
             __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
             __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
             __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
             rate: tuple[float, ...] = (10.0, 20.0, 30.0)
 
         s = CyclicalStrategy()
@@ -781,6 +787,7 @@ class TestCyclicalConstraintValidation:
             __constraints__: ClassVar[tuple] = (SumToOne(params=("r1", "r2")),)
             __time_varying__: ClassVar[tuple[str, ...]] = ("r1", "r2")
             __cyclical__: ClassVar[tuple[str, ...]] = ("r1", "r2")
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"r1": Frequency.MONTHLY, "r2": Frequency.MONTHLY}
             r1: tuple[float, ...] = (0.6, 0.5, 0.4)
             r2: tuple[float, ...] = (0.4, 0.5, 0.6)
 
@@ -802,6 +809,7 @@ class TestCyclicalConstraintValidation:
             __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
             __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
             __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"low": Frequency.MONTHLY, "high": Frequency.MONTHLY}
             low: tuple[float, ...] = (10.0, 20.0, 30.0)
             high: tuple[float, ...] = (50.0, 60.0, 70.0)
 
@@ -823,6 +831,7 @@ class TestCyclicalConstraintValidation:
             __constraints__: ClassVar[tuple] = (Ordered(low="low", high="high"),)
             __time_varying__: ClassVar[tuple[str, ...]] = ("low", "high")
             __cyclical__: ClassVar[tuple[str, ...]] = ("low", "high")
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"low": Frequency.MONTHLY, "high": Frequency.MONTHLY}
             low: tuple[float, ...] = (10.0, 20.0, 30.0)
             high: tuple[float, ...] = (50.0, 60.0, 70.0)
 
@@ -907,3 +916,166 @@ class TestStrategyMetadata:
 
         strategy = MetadataStrategy()
         assert isinstance(strategy.metadata(), Mapping)
+
+
+class TestCyclicalFreqDeclaration:
+    """Tests for __cyclical_freq__ class variable declaration and validation."""
+
+    def test_cyclical_without_cyclical_freq_raises(self):
+        """Strategy with __cyclical__ but no __cyclical_freq__ raises TypeError."""
+        with pytest.raises(TypeError, match="__cyclical_freq__ is required"):
+
+            @dataclass(frozen=True)
+            class MissingFreq(Strategy):
+                __params__: ClassVar[tuple[str, ...]] = ("rate",)
+                __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+                __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+                rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+    def test_cyclical_freq_keys_not_matching_cyclical_raises(self):
+        """Strategy with __cyclical_freq__ keys not matching __cyclical__ raises TypeError."""
+        with pytest.raises(TypeError, match="__cyclical_freq__ keys must match __cyclical__"):
+
+            @dataclass(frozen=True)
+            class MismatchedFreq(Strategy):
+                __params__: ClassVar[tuple[str, ...]] = ("rate", "threshold")
+                __time_varying__: ClassVar[tuple[str, ...]] = ("rate", "threshold")
+                __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+                __cyclical_freq__: ClassVar[dict[str, Frequency]] = {
+                    "rate": Frequency.MONTHLY,
+                    "threshold": Frequency.MONTHLY,
+                }
+                rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+                threshold: tuple[float, ...] = (0.1, 0.2, 0.3)
+
+    def test_non_frequency_value_in_cyclical_freq_raises(self):
+        """Strategy with non-Frequency value in __cyclical_freq__ raises TypeError."""
+        with pytest.raises(TypeError, match="must be a Frequency"):
+
+            @dataclass(frozen=True)
+            class BadFreqType(Strategy):
+                __params__: ClassVar[tuple[str, ...]] = ("rate",)
+                __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+                __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+                __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": 12}  # type: ignore[dict-item]
+                rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+    def test_valid_cyclical_freq_constructs_fine(self):
+        """Strategy with valid __cyclical_freq__ constructs without error."""
+
+        @dataclass(frozen=True)
+        class ValidFreq(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = ValidFreq()
+        assert s.rate == (10.0, 20.0, 30.0)
+
+    def test_cyclical_freq_method_returns_declared_dict(self):
+        """cyclical_freq() method returns the declared __cyclical_freq__ dict."""
+
+        @dataclass(frozen=True)
+        class FreqStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = FreqStrategy()
+        assert s.cyclical_freq() == {"rate": Frequency.MONTHLY}
+
+
+class TestParamAt:
+    """Tests for param_at() method with Timestep-aware parameter access."""
+
+    def test_scalar_param_returns_value_regardless_of_timestep(self):
+        """Scalar param returns its value regardless of timestep."""
+
+        @dataclass(frozen=True)
+        class ScalarStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            rate: float = 42.0
+
+        s = ScalarStrategy()
+        assert s.param_at("rate", Timestep(0, Frequency.MONTHLY)) == 42.0
+        assert s.param_at("rate", Timestep(5, Frequency.DAILY)) == 42.0
+        assert s.param_at("rate", Timestep(100, Frequency.YEARLY)) == 42.0
+
+    def test_non_cyclical_time_varying_uses_direct_index(self):
+        """Non-cyclical time-varying param returns value[t.index]."""
+
+        @dataclass(frozen=True)
+        class TVStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0, 40.0, 50.0, 60.0)
+
+        s = TVStrategy()
+        assert s.param_at("rate", Timestep(0, Frequency.MONTHLY)) == 10.0
+        assert s.param_at("rate", Timestep(3, Frequency.MONTHLY)) == 40.0
+        assert s.param_at("rate", Timestep(5, Frequency.MONTHLY)) == 60.0
+
+    def test_cyclical_same_frequency_uses_modulo(self):
+        """Cyclical param with same frequency as timestep uses modulo indexing."""
+
+        @dataclass(frozen=True)
+        class CyclicalStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = CyclicalStrategy()
+        # param_freq=MONTHLY=12, t.frequency=MONTHLY=12
+        # idx = (5 * 12 // 12) % 3 = 5 % 3 = 2
+        assert s.param_at("rate", Timestep(5, Frequency.MONTHLY)) == 30.0
+
+    def test_cross_frequency_daily_timestep_monthly_param(self):
+        """Daily timestep with monthly cyclical param uses cross-frequency conversion."""
+
+        @dataclass(frozen=True)
+        class MonthlyCyclical(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("rate",)
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {"rate": (0.0, 100.0)}
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
+            rate: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0)
+
+        s = MonthlyCyclical()
+        # param_freq=MONTHLY=12, t.frequency=DAILY=365
+        # idx = (30 * 12 // 365) % 12 = (360 // 365) % 12 = 0 % 12 = 0
+        assert s.param_at("rate", Timestep(30, Frequency.DAILY)) == 1.0
+
+    def test_param_at_mixed_scalar_and_cyclical(self):
+        """param_at works for strategy with both scalar and cyclical params."""
+
+        @dataclass(frozen=True)
+        class MixedStrategy(Strategy):
+            __params__: ClassVar[tuple[str, ...]] = ("base", "rate")
+            __bounds__: ClassVar[dict[str, tuple[float, float]]] = {
+                "base": (0.0, 100.0),
+                "rate": (0.0, 100.0),
+            }
+            __time_varying__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical__: ClassVar[tuple[str, ...]] = ("rate",)
+            __cyclical_freq__: ClassVar[dict[str, Frequency]] = {"rate": Frequency.MONTHLY}
+            base: float = 50.0
+            rate: tuple[float, ...] = (10.0, 20.0, 30.0)
+
+        s = MixedStrategy()
+        t = Timestep(5, Frequency.MONTHLY)
+        # Scalar param always returns its value
+        assert s.param_at("base", t) == 50.0
+        # Cyclical: idx = (5 * 12 // 12) % 3 = 5 % 3 = 2
+        assert s.param_at("rate", t) == 30.0

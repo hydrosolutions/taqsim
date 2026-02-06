@@ -4,6 +4,7 @@ from taqsim import Objective, WaterSystem
 from taqsim.optimization import optimize
 from taqsim.optimization.result import OptimizeResult
 from taqsim.system import ValidationError
+from taqsim.time import Frequency
 
 
 class TestOptimizeBasic:
@@ -111,9 +112,7 @@ class TestOptimizeObjectives:
         bounds = minimal_water_system.param_bounds()
         rate_lo, _ = bounds["dam.release_rule.rate"]
 
-        best_solution = min(
-            result.solutions, key=lambda s: s.scores[simple_minimize_objective.name]
-        )
+        best_solution = min(result.solutions, key=lambda s: s.scores[simple_minimize_objective.name])
         assert best_solution.scores[simple_minimize_objective.name] <= 50.0
         assert best_solution.parameters["dam.release_rule.rate"] >= rate_lo
 
@@ -133,9 +132,7 @@ class TestOptimizeObjectives:
         bounds = minimal_water_system.param_bounds()
         _, rate_hi = bounds["dam.release_rule.rate"]
 
-        best_solution = max(
-            result.solutions, key=lambda s: s.scores[simple_maximize_objective.name]
-        )
+        best_solution = max(result.solutions, key=lambda s: s.scores[simple_maximize_objective.name])
         assert best_solution.scores[simple_maximize_objective.name] >= 50.0
         assert best_solution.parameters["dam.release_rule.rate"] <= rate_hi
 
@@ -212,7 +209,7 @@ class TestOptimizeValidation:
         self,
         simple_minimize_objective: Objective,
     ) -> None:
-        system = WaterSystem(dt=1.0)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         with pytest.raises(ValidationError, match="must be validated"):
             optimize(
                 system,

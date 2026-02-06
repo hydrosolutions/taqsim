@@ -5,13 +5,14 @@ import pytest
 from taqsim.node.events import WaterDistributed, WaterReceived
 from taqsim.node.protocols import Receives
 from taqsim.node.splitter import Splitter
+from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
     pass
 
 
 class FakeEqualSplitRule:
-    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
         targets = node.targets
         if not targets:
             return {}
@@ -23,7 +24,7 @@ class FakeFixedSplitRule:
     def __init__(self, ratios: dict[str, float]):
         self._ratios = ratios
 
-    def split(self, node: "Splitter", amount: float, t: int) -> dict[str, float]:
+    def split(self, node: "Splitter", amount: float, t: Timestep) -> dict[str, float]:
         return {target: amount * self._ratios.get(target, 0) for target in node.targets}
 
 
@@ -58,13 +59,13 @@ class TestSplitterReceive:
     def test_receive_returns_amount(self):
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
-        result = splitter.receive(amount=100.0, source_id="source_a", t=0)
+        result = splitter.receive(amount=100.0, source_id="source_a", t=Timestep(0, Frequency.MONTHLY))
         assert result == 100.0
 
     def test_receive_records_event(self):
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
-        splitter.receive(amount=50.0, source_id="upstream", t=5)
+        splitter.receive(amount=50.0, source_id="upstream", t=Timestep(5, Frequency.MONTHLY))
         assert len(splitter.events) == 1
         event = splitter.events[0]
         assert isinstance(event, WaterReceived)
@@ -76,9 +77,9 @@ class TestSplitterReceive:
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1"])
-        splitter.receive(amount=30.0, source_id="a", t=0)
-        splitter.receive(amount=20.0, source_id="b", t=0)
-        splitter.update(t=0, dt=1.0)
+        splitter.receive(amount=30.0, source_id="a", t=Timestep(0, Frequency.MONTHLY))
+        splitter.receive(amount=20.0, source_id="b", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 1
         assert distributed[0].amount == 50.0
@@ -89,14 +90,14 @@ class TestSplitterDistribute:
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1", "t2"])
-        allocation = splitter.distribute(amount=100.0, t=0)
+        allocation = splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
         assert allocation == {"t1": 50.0, "t2": 50.0}
 
     def test_distribute_records_events(self):
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1", "t2"])
-        splitter.distribute(amount=100.0, t=0)
+        splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 2
 
@@ -104,7 +105,7 @@ class TestSplitterDistribute:
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["target_a", "target_b"])
-        splitter.distribute(amount=80.0, t=3)
+        splitter.distribute(amount=80.0, t=Timestep(3, Frequency.MONTHLY))
         distributed = splitter.events_of_type(WaterDistributed)
         target_ids = {e.target_id for e in distributed}
         assert target_ids == {"target_a", "target_b"}
@@ -112,28 +113,28 @@ class TestSplitterDistribute:
     def test_distribute_empty_targets_returns_empty(self):
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
-        allocation = splitter.distribute(amount=100.0, t=0)
+        allocation = splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
         assert allocation == {}
 
     def test_distribute_zero_amount_returns_empty(self):
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1"])
-        allocation = splitter.distribute(amount=0.0, t=0)
+        allocation = splitter.distribute(amount=0.0, t=Timestep(0, Frequency.MONTHLY))
         assert allocation == {}
 
     def test_distribute_negative_amount_returns_empty(self):
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1"])
-        allocation = splitter.distribute(amount=-10.0, t=0)
+        allocation = splitter.distribute(amount=-10.0, t=Timestep(0, Frequency.MONTHLY))
         assert allocation == {}
 
     def test_distribute_with_fixed_ratios(self):
         strategy = FakeFixedSplitRule(ratios={"t1": 0.7, "t2": 0.3})
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1", "t2"])
-        allocation = splitter.distribute(amount=100.0, t=0)
+        allocation = splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
         assert allocation["t1"] == pytest.approx(70.0)
         assert allocation["t2"] == pytest.approx(30.0)
 
@@ -143,8 +144,8 @@ class TestSplitterUpdate:
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1"])
-        splitter.receive(amount=100.0, source_id="source", t=0)
-        splitter.update(t=0, dt=1.0)
+        splitter.receive(amount=100.0, source_id="source", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 1
         assert distributed[0].amount == 100.0
@@ -153,9 +154,9 @@ class TestSplitterUpdate:
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1"])
-        splitter.receive(amount=100.0, source_id="source", t=0)
-        splitter.update(t=0, dt=1.0)
-        splitter.update(t=1, dt=1.0)
+        splitter.receive(amount=100.0, source_id="source", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(1, Frequency.MONTHLY))
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 1
 
@@ -163,11 +164,11 @@ class TestSplitterUpdate:
         strategy = FakeEqualSplitRule()
         splitter = Splitter(id="splitter_1", split_rule=strategy)
         splitter._set_targets(["t1"])
-        splitter.receive(amount=50.0, source_id="s", t=0)
-        splitter.update(t=0, dt=1.0)
+        splitter.receive(amount=50.0, source_id="s", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
 
-        splitter.receive(amount=30.0, source_id="s", t=1)
-        splitter.update(t=1, dt=1.0)
+        splitter.receive(amount=30.0, source_id="s", t=Timestep(1, Frequency.MONTHLY))
+        splitter.update(t=Timestep(1, Frequency.MONTHLY))
 
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 2

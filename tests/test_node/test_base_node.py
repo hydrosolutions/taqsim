@@ -2,6 +2,7 @@ import pytest
 
 from taqsim.node.base import BaseNode
 from taqsim.node.events import WaterGenerated, WaterReceived, WaterStored
+from taqsim.time import Frequency, Timestep
 
 
 class TestBaseNodeInit:
@@ -163,12 +164,12 @@ class TestUpdateNotImplemented:
     def test_raises_not_implemented(self):
         node = BaseNode(id="test")
         with pytest.raises(NotImplementedError, match="Subclasses must implement"):
-            node.update(t=0, dt=1.0)
+            node.update(t=Timestep(0, Frequency.MONTHLY))
 
     def test_raises_not_implemented_with_different_params(self):
         node = BaseNode(id="test")
         with pytest.raises(NotImplementedError, match="Subclasses must implement"):
-            node.update(t=10, dt=3600.0)
+            node.update(t=Timestep(10, Frequency.MONTHLY))
 
 
 class TestBaseNodeInheritance:
@@ -178,20 +179,20 @@ class TestBaseNodeInheritance:
                 super().__init__(id=id)
                 self.updated = False
 
-            def update(self, t: int, dt: float) -> None:
+            def update(self, t: Timestep) -> None:
                 self.updated = True
 
         node = ConcreteNode(id="concrete")
-        node.update(t=0, dt=1.0)
+        node.update(t=Timestep(0, Frequency.MONTHLY))
         assert node.updated is True
 
     def test_subclass_inherits_event_methods(self):
         class ConcreteNode(BaseNode):
-            def update(self, t: int, dt: float) -> None:
+            def update(self, t: Timestep) -> None:
                 self.record(WaterGenerated(amount=50.0, t=t))
 
         node = ConcreteNode(id="concrete")
-        node.update(t=3, dt=1.0)
+        node.update(t=Timestep(3, Frequency.MONTHLY))
 
         assert len(node.events) == 1
         assert node.events[0].t == 3

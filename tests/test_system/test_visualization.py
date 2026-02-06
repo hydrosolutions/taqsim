@@ -7,13 +7,14 @@ from taqsim.edge import Edge
 from taqsim.node import Sink, Source
 from taqsim.node.timeseries import TimeSeries
 from taqsim.system import WaterSystem
+from taqsim.time import Frequency
 
 from .conftest import FakeEdgeLossRule
 
 
 def make_simple_system_with_locations() -> WaterSystem:
     """Create a simple Source -> Sink system with locations."""
-    system = WaterSystem()
+    system = WaterSystem(frequency=Frequency.MONTHLY)
     system.add_node(Source(id="source", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
     system.add_node(Sink(id="sink", location=(31.78, 35.22)))
     system.add_edge(Edge(id="e1", source="source", target="sink", capacity=100.0, loss_rule=FakeEdgeLossRule()))
@@ -34,7 +35,7 @@ class TestEdgeLength:
         assert system.edge_length("nonexistent") is None
 
     def test_edge_length_returns_none_for_missing_source_location(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))  # no location
         system.add_node(Sink(id="t", location=(31.78, 35.22)))
         system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
@@ -42,7 +43,7 @@ class TestEdgeLength:
         assert system.edge_length("e") is None
 
     def test_edge_length_returns_none_for_missing_target_location(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
         system.add_node(Sink(id="t"))  # no location
         system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
@@ -58,7 +59,7 @@ class TestEdgeLengths:
         assert lengths["e1"] > 0
 
     def test_excludes_edges_without_locations(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s1", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
         system.add_node(Sink(id="t", location=(31.78, 35.22)))
         system.add_edge(Edge(id="e1", source="s1", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
@@ -68,7 +69,7 @@ class TestEdgeLengths:
         assert "e1" in lengths
 
     def test_empty_for_no_located_nodes(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))
         system.add_node(Sink(id="t"))
         system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
@@ -78,7 +79,7 @@ class TestEdgeLengths:
 
 class TestVisualize:
     def test_raises_if_no_nodes_have_location(self):
-        system = WaterSystem()
+        system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))
         system.add_node(Sink(id="t"))
         system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))

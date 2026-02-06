@@ -54,6 +54,7 @@ from .objective import (
 )
 from .optimization import OptimizeResult, Solution, make_repair, optimize
 from .system import WaterSystem
+from .time import Frequency, Timestep
 
 __all__ = [
     # Common
@@ -104,6 +105,9 @@ __all__ = [
     "lift",
     "maximize",
     "minimize",
+    # Time
+    "Frequency",
+    "Timestep",
 ]
 
 __version__ = "0.3.0"

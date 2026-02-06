@@ -1,20 +1,26 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .base import BaseNode
 from .events import WaterGenerated, WaterOutput
 from .timeseries import TimeSeries
+
+if TYPE_CHECKING:
+    from taqsim.time import Timestep
 
 
 @dataclass
 class Source(BaseNode):
     inflow: TimeSeries
 
-    def generate(self, t: int, dt: float) -> float:
-        amount = self.inflow[t] * dt
-        self.record(WaterGenerated(amount=amount, t=t))
+    def generate(self, t: Timestep) -> float:
+        amount = self.inflow[t]
+        self.record(WaterGenerated(amount=amount, t=t.index))
         return amount
 
-    def update(self, t: int, dt: float) -> None:
-        generated = self.generate(t, dt)
+    def update(self, t: Timestep) -> None:
+        generated = self.generate(t)
         if generated > 0:
-            self.record(WaterOutput(amount=generated, t=t))
+            self.record(WaterOutput(amount=generated, t=t.index))
