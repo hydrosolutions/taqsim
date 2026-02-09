@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 import pytest
 
 from taqsim import Edge, Objective, Sink, Source, Storage, Strategy, TimeSeries, WaterSystem
-from taqsim.testing import NoEdgeLoss, NoLoss
+from taqsim.testing import NoLoss
 from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
@@ -32,11 +32,6 @@ def fake_loss_rule() -> NoLoss:
 
 
 @pytest.fixture
-def fake_edge_loss_rule() -> NoEdgeLoss:
-    return NoEdgeLoss()
-
-
-@pytest.fixture
 def minimal_water_system() -> WaterSystem:
     system = WaterSystem(frequency=Frequency.MONTHLY)
 
@@ -52,8 +47,8 @@ def minimal_water_system() -> WaterSystem:
     )
     system.add_node(Sink(id="sink"))
 
-    system.add_edge(Edge(id="e1", source="src", target="dam", capacity=1000.0, loss_rule=NoEdgeLoss()))
-    system.add_edge(Edge(id="e2", source="dam", target="sink", capacity=1000.0, loss_rule=NoEdgeLoss()))
+    system.add_edge(Edge(id="e1", source="src", target="dam"))
+    system.add_edge(Edge(id="e2", source="dam", target="sink"))
 
     system.validate()
     return system

@@ -1,4 +1,5 @@
-from taqsim.node import Demand, PassThrough, Source, Splitter, Storage, TimeSeries
+from taqsim.node import Demand, PassThrough, Reach, Source, Splitter, Storage, TimeSeries
+from taqsim.node.strategies import NoReachLoss, NoRouting
 from taqsim.time import Frequency, Timestep
 
 # Use fixtures from conftest.py for fake strategies
@@ -92,3 +93,25 @@ class TestPassThroughReset:
 
         assert pt._received_this_step == 0.0
         assert len(pt.events) == 0
+
+
+class TestReachReset:
+    """Tests for Reach.reset()."""
+
+    def test_reset_clears_events_and_state(self):
+        reach = Reach(
+            id="canal",
+            routing_model=NoRouting(),
+            loss_rule=NoReachLoss(),
+        )
+
+        reach.receive(100.0, "upstream", t=Timestep(0, Frequency.MONTHLY))
+        reach.update(t=Timestep(0, Frequency.MONTHLY))
+
+        assert len(reach.events) > 0
+
+        reach.reset()
+
+        assert len(reach.events) == 0
+        assert reach._received_this_step == 0.0
+        assert reach.water_in_transit == 0.0

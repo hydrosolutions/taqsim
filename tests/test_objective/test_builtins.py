@@ -24,11 +24,6 @@ class FakeLossRule:
         return {}
 
 
-class FakeEdgeLossRule:
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[str, float]:
-        return {}
-
-
 @pytest.fixture
 def simple_system() -> WaterSystem:
     system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -43,20 +38,8 @@ def simple_system() -> WaterSystem:
     )
     sink = Sink(id="outlet")
 
-    edge1 = Edge(
-        id="e1",
-        source="source",
-        target="reservoir",
-        capacity=1000.0,
-        loss_rule=FakeEdgeLossRule(),
-    )
-    edge2 = Edge(
-        id="e2",
-        source="reservoir",
-        target="outlet",
-        capacity=1000.0,
-        loss_rule=FakeEdgeLossRule(),
-    )
+    edge1 = Edge(id="e1", source="source", target="reservoir")
+    edge2 = Edge(id="e2", source="reservoir", target="outlet")
 
     system.add_node(source)
     system.add_node(storage)

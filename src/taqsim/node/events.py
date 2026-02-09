@@ -84,6 +84,24 @@ class WaterPassedThrough:
     t: int
 
 
+@dataclass(frozen=True, slots=True)
+class WaterEnteredReach:
+    amount: float
+    t: int
+
+
+@dataclass(frozen=True, slots=True)
+class WaterExitedReach:
+    amount: float
+    t: int
+
+
+@dataclass(frozen=True, slots=True)
+class WaterInTransit:
+    amount: float
+    t: int
+
+
 NodeEvent = (
     WaterGenerated
     | WaterReceived
@@ -96,4 +114,7 @@ NodeEvent = (
     | DeficitRecorded
     | WaterOutput
     | WaterPassedThrough
+    | WaterEnteredReach
+    | WaterExitedReach
+    | WaterInTransit
 )

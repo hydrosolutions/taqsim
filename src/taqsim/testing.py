@@ -3,8 +3,8 @@ from datetime import date
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason, Strategy
-from taqsim.edge import Edge, NoEdgeLoss
-from taqsim.node import Demand, NoLoss, PassThrough, Sink, Source, Splitter, Storage
+from taqsim.edge import Edge
+from taqsim.node import Demand, NoLoss, NoReachLoss, NoRouting, PassThrough, Reach, Sink, Source, Splitter, Storage
 from taqsim.node.timeseries import TimeSeries
 from taqsim.system import WaterSystem
 from taqsim.time import Frequency, Timestep
@@ -78,10 +78,10 @@ class ConstantLoss:
 
 
 @dataclass(frozen=True)
-class ProportionalEdgeLoss:
+class ProportionalReachLoss:
     loss_fraction: float = 0.1
 
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[LossReason, float]:
+    def calculate(self, reach: "Reach", flow: float, t: Timestep) -> dict[LossReason, float]:
         return {SEEPAGE: flow * self.loss_fraction}
 
 
@@ -95,10 +95,11 @@ __all__ = [
     "FixedSplit",
     # Physical model rules
     "ConstantLoss",
-    "ProportionalEdgeLoss",
+    "ProportionalReachLoss",
     # Core no-ops (re-exported for convenience)
     "NoLoss",
-    "NoEdgeLoss",
+    "NoReachLoss",
+    "NoRouting",
     # Factory functions
     "make_source",
     "make_sink",
@@ -106,6 +107,7 @@ __all__ = [
     "make_demand",
     "make_splitter",
     "make_passthrough",
+    "make_reach",
     "make_edge",
     "make_system",
 ]
@@ -155,14 +157,21 @@ def make_passthrough(id: str = "passthrough", **overrides: Any) -> PassThrough:
     return PassThrough(id=id, **overrides)
 
 
+def make_reach(
+    id: str = "reach",
+    **overrides: Any,
+) -> Reach:
+    overrides.setdefault("routing_model", NoRouting())
+    overrides.setdefault("loss_rule", NoReachLoss())
+    return Reach(id=id, **overrides)
+
+
 def make_edge(
     id: str,
     source: str,
     target: str,
     **overrides: Any,
 ) -> Edge:
-    overrides.setdefault("capacity", 1000.0)
-    overrides.setdefault("loss_rule", NoEdgeLoss())
     return Edge(id=id, source=source, target=target, **overrides)
 
 

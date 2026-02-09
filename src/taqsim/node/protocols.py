@@ -33,3 +33,11 @@ class Loses(Protocol):
 @runtime_checkable
 class Consumes(Protocol):
     def consume(self, amount: float, t: "Timestep") -> tuple[float, float]: ...
+
+
+@runtime_checkable
+class Routes(Protocol):
+    @property
+    def water_in_transit(self) -> float: ...
+
+    def route(self, inflow: float, t: "Timestep") -> float: ...

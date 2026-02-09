@@ -8,7 +8,6 @@ from taqsim.system import ValidationError, WaterSystem
 from taqsim.time import Frequency, Timestep
 
 from .conftest import (
-    FakeEdgeLossRule,
     make_edge,
     make_sink,
     make_source,
@@ -379,28 +378,6 @@ class TestSimulation:
 
         assert len(sink1_recv) == 1
         assert len(sink2_recv) == 1
-
-    def test_edge_losses_reduce_delivered_amount(self):
-        from taqsim.common import SEEPAGE
-
-        system = WaterSystem(frequency=Frequency.MONTHLY)
-        source = make_source()
-        sink = make_sink()
-
-        # Edge with 50% loss
-        loss_rule = FakeEdgeLossRule(losses={SEEPAGE: 50.0})
-        edge = make_edge(source="source", target="sink", loss_rule=loss_rule)
-
-        system.add_node(source)
-        system.add_node(sink)
-        system.add_edge(edge)
-
-        system.simulate(timesteps=1)
-
-        # Sink should receive 50 (100 - 50 loss)
-        received_events = sink.events_of_type(WaterReceived)
-        assert len(received_events) == 1
-        assert received_events[0].amount == 50.0
 
 
 class TestSplitterRouting:

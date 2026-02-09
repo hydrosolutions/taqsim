@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 import pytest
 
@@ -8,11 +8,6 @@ from taqsim.common import Strategy
 from taqsim.constraints import ConstraintSpec, Ordered, SumToOne
 from taqsim.testing import NoLoss
 from taqsim.time import Frequency, Timestep
-
-from .conftest import FakeEdgeLossRule
-
-if TYPE_CHECKING:
-    pass
 
 
 # Create proper strategy classes for testing
@@ -96,14 +91,6 @@ class SimpleLoss:
         return {}
 
 
-@dataclass(frozen=True)
-class SimpleEdgeLoss:
-    """Physical model - NOT a Strategy."""
-
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict:
-        return {}
-
-
 def build_test_system() -> WaterSystem:
     """Build a simple test system with strategies."""
     system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -127,10 +114,10 @@ def build_test_system() -> WaterSystem:
     system.add_node(Sink(id="city"))
     system.add_node(Sink(id="farm"))
 
-    system.add_edge(Edge(id="e1", source="river", target="dam", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e2", source="dam", target="junction", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e3", source="junction", target="city", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e4", source="junction", target="farm", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+    system.add_edge(Edge(id="e1", source="river", target="dam"))
+    system.add_edge(Edge(id="e2", source="dam", target="junction"))
+    system.add_edge(Edge(id="e3", source="junction", target="city"))
+    system.add_edge(Edge(id="e4", source="junction", target="farm"))
 
     system.validate()
     return system
@@ -317,7 +304,7 @@ class TestParamBounds:
                 loss_rule=SimpleLoss(),
             )
         )
-        system.add_edge(Edge(id="e1", source="src", target="tank", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="src", target="tank"))
 
         with pytest.raises(ValueError, match="Missing bounds"):
             system.param_bounds()
@@ -393,11 +380,11 @@ class TestConstraintSpecs:
         system.add_node(Sink(id="farm"))
         system.add_node(Sink(id="env"))
 
-        system.add_edge(Edge(id="e1", source="river", target="dam", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="e2", source="dam", target="junction", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="e3", source="junction", target="city", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="e4", source="junction", target="farm", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="e5", source="junction", target="env", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="river", target="dam"))
+        system.add_edge(Edge(id="e2", source="dam", target="junction"))
+        system.add_edge(Edge(id="e3", source="junction", target="city"))
+        system.add_edge(Edge(id="e4", source="junction", target="farm"))
+        system.add_edge(Edge(id="e5", source="junction", target="env"))
 
         specs = system.constraint_specs()
 
@@ -423,8 +410,8 @@ class TestConstraintSpecs:
         )
         system.add_node(Sink(id="sink"))
 
-        system.add_edge(Edge(id="e1", source="river", target="tank", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="e2", source="tank", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="river", target="tank"))
+        system.add_edge(Edge(id="e2", source="tank", target="sink"))
 
         specs = system.constraint_specs()
 
@@ -492,7 +479,7 @@ class TestParamSchemaTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         schema = system.param_schema()
         paths = [s.path for s in schema]
@@ -514,7 +501,7 @@ class TestParamSchemaTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         schema = system.param_schema()
         schema_dict = {s.path: s.value for s in schema}
@@ -539,7 +526,7 @@ class TestToVectorTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         vector = system.to_vector()
         assert vector == [10.0, 20.0, 30.0]
@@ -556,7 +543,7 @@ class TestToVectorTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         vector = system.to_vector()
         # base (1) + multiplier (3) = 4
@@ -578,7 +565,7 @@ class TestWithVectorTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         new_system = system.with_vector([40.0, 50.0, 60.0])
         new_strategy = new_system.nodes["dam"].release_policy
@@ -596,7 +583,7 @@ class TestWithVectorTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         vector = system.to_vector()
         new_system = system.with_vector(vector)
@@ -618,7 +605,7 @@ class TestBoundsVectorTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         bounds = system.bounds_vector()
         assert bounds == [(0.0, 100.0), (0.0, 100.0), (0.0, 100.0)]
@@ -635,7 +622,7 @@ class TestBoundsVectorTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         assert len(system.bounds_vector()) == len(system.to_vector())
 
@@ -655,7 +642,7 @@ class TestValidateTimeVaryingLengths:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
         system.validate()
 
         # Should not raise - 3 values, 3 timesteps
@@ -675,7 +662,7 @@ class TestValidateTimeVaryingLengths:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
         system.validate()
 
         # Should raise - 3 values, 5 timesteps
@@ -764,7 +751,7 @@ class TestValidateTimeVaryingLengthsCyclical:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
         system.validate()
 
         # Should not raise - cyclical params are not length-validated
@@ -784,7 +771,7 @@ class TestValidateTimeVaryingLengthsCyclical:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
         system.validate()
 
         # Should raise - 3 values, 10 timesteps needed
@@ -803,7 +790,7 @@ class TestValidateTimeVaryingLengthsCyclical:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
         system.validate()
 
         # Should not raise - base is cyclical (skips validation), multiplier has 10 values
@@ -821,7 +808,7 @@ class TestValidateTimeVaryingLengthsCyclical:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
         system.validate()
 
         # Should not raise regardless of simulation length - all params are cyclical

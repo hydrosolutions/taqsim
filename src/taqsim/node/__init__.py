@@ -7,7 +7,10 @@ from .events import (
     NodeEvent,
     WaterConsumed,
     WaterDistributed,
+    WaterEnteredReach,
+    WaterExitedReach,
     WaterGenerated,
+    WaterInTransit,
     WaterLost,
     WaterOutput,
     WaterPassedThrough,
@@ -22,13 +25,24 @@ from .protocols import (
     Generates,
     Loses,
     Receives,
+    Routes,
     Stores,
 )
+from .reach import Reach
 from .sink import Sink
 from .source import Source
 from .splitter import Splitter
 from .storage import Storage
-from .strategies import LossRule, NoLoss, ReleasePolicy, SplitPolicy
+from .strategies import (
+    LossRule,
+    NoLoss,
+    NoReachLoss,
+    NoRouting,
+    ReachLossRule,
+    ReleasePolicy,
+    RoutingModel,
+    SplitPolicy,
+)
 from .timeseries import TimeSeries
 
 __all__ = [
@@ -48,6 +62,9 @@ __all__ = [
     "WaterLost",
     "WaterOutput",
     "WaterPassedThrough",
+    "WaterEnteredReach",
+    "WaterExitedReach",
+    "WaterInTransit",
     "WaterReceived",
     "WaterReleased",
     "WaterSpilled",
@@ -57,11 +74,16 @@ __all__ = [
     "Generates",
     "Loses",
     "Receives",
+    "Routes",
     "Stores",
     # Strategies
     "LossRule",
     "NoLoss",
+    "NoReachLoss",
+    "NoRouting",
+    "ReachLossRule",
     "ReleasePolicy",
+    "RoutingModel",
     "SplitPolicy",
     "TimeSeries",
     # Base
@@ -69,6 +91,7 @@ __all__ = [
     # Nodes
     "Demand",
     "PassThrough",
+    "Reach",
     "Sink",
     "Source",
     "Splitter",

@@ -9,15 +9,13 @@ from taqsim.node.timeseries import TimeSeries
 from taqsim.system import WaterSystem
 from taqsim.time import Frequency
 
-from .conftest import FakeEdgeLossRule
-
 
 def make_simple_system_with_locations() -> WaterSystem:
     """Create a simple Source -> Sink system with locations."""
     system = WaterSystem(frequency=Frequency.MONTHLY)
     system.add_node(Source(id="source", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
     system.add_node(Sink(id="sink", location=(31.78, 35.22)))
-    system.add_edge(Edge(id="e1", source="source", target="sink", capacity=100.0, loss_rule=FakeEdgeLossRule()))
+    system.add_edge(Edge(id="e1", source="source", target="sink"))
     system.validate()
     return system
 
@@ -38,7 +36,7 @@ class TestEdgeLength:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))  # no location
         system.add_node(Sink(id="t", location=(31.78, 35.22)))
-        system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e", source="s", target="t"))
         system.validate()
         assert system.edge_length("e") is None
 
@@ -46,7 +44,7 @@ class TestEdgeLength:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
         system.add_node(Sink(id="t"))  # no location
-        system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e", source="s", target="t"))
         system.validate()
         assert system.edge_length("e") is None
 
@@ -62,7 +60,7 @@ class TestEdgeLengths:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s1", inflow=TimeSeries([100.0] * 12), location=(31.77, 35.21)))
         system.add_node(Sink(id="t", location=(31.78, 35.22)))
-        system.add_edge(Edge(id="e1", source="s1", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e1", source="s1", target="t"))
         system.validate()
         lengths = system.edge_lengths()
         # Only e1 has both endpoints with locations
@@ -72,7 +70,7 @@ class TestEdgeLengths:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))
         system.add_node(Sink(id="t"))
-        system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e", source="s", target="t"))
         system.validate()
         assert system.edge_lengths() == {}
 
@@ -82,7 +80,7 @@ class TestVisualize:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))
         system.add_node(Sink(id="t"))
-        system.add_edge(Edge(id="e", source="s", target="t", capacity=100.0, loss_rule=FakeEdgeLossRule()))
+        system.add_edge(Edge(id="e", source="s", target="t"))
         system.validate()
 
         with pytest.raises(ValueError, match="No nodes have locations"):

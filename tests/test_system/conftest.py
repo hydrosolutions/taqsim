@@ -2,11 +2,10 @@ from typing import Any
 
 import pytest
 
-from taqsim.common import LossReason
 from taqsim.edge import Edge
 from taqsim.node import Sink, Source, Splitter, Storage
 from taqsim.node.timeseries import TimeSeries
-from taqsim.testing import NoEdgeLoss, NoLoss
+from taqsim.testing import NoLoss
 from taqsim.time import Timestep
 
 
@@ -27,14 +26,6 @@ class FakeReleasePolicy:
         return node.storage * self.fraction
 
 
-class FakeEdgeLossRule:
-    def __init__(self, losses: dict[LossReason, float] | None = None):
-        self._losses = losses if losses is not None else {}
-
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict[LossReason, float]:
-        return self._losses
-
-
 @pytest.fixture
 def fake_split_policy() -> FakeSplitPolicy:
     return FakeSplitPolicy()
@@ -48,11 +39,6 @@ def fake_release_policy() -> FakeReleasePolicy:
 @pytest.fixture
 def fake_loss_rule() -> NoLoss:
     return NoLoss()
-
-
-@pytest.fixture
-def fake_edge_loss_rule() -> NoEdgeLoss:
-    return NoEdgeLoss()
 
 
 @pytest.fixture
@@ -140,19 +126,13 @@ def make_edge(
     id: str = "edge",
     source: str = "source",
     target: str = "sink",
-    capacity: float = 1000.0,
-    loss_rule: FakeEdgeLossRule | None = None,
     tags: frozenset[str] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> Edge:
-    if loss_rule is None:
-        loss_rule = FakeEdgeLossRule()
     return Edge(
         id=id,
         source=source,
         target=target,
-        capacity=capacity,
-        loss_rule=loss_rule,
         tags=tags or frozenset(),
         metadata=metadata or {},
     )

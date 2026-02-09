@@ -56,14 +56,6 @@ class SimpleLoss:
         return {}
 
 
-@dataclass(frozen=True)
-class SimpleEdgeLoss:
-    """Physical model - NOT a Strategy."""
-
-    def calculate(self, edge: "Edge", flow: float, t: Timestep) -> dict:
-        return {}
-
-
 def build_constrained_system() -> WaterSystem:
     """Build a system with constraints for testing repair."""
     system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -88,11 +80,11 @@ def build_constrained_system() -> WaterSystem:
     system.add_node(Sink(id="farm"))
     system.add_node(Sink(id="env"))
 
-    system.add_edge(Edge(id="e1", source="river", target="dam", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e2", source="dam", target="junction", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e3", source="junction", target="city", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e4", source="junction", target="farm", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-    system.add_edge(Edge(id="e5", source="junction", target="env", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+    system.add_edge(Edge(id="e1", source="river", target="dam"))
+    system.add_edge(Edge(id="e2", source="dam", target="junction"))
+    system.add_edge(Edge(id="e3", source="junction", target="city"))
+    system.add_edge(Edge(id="e4", source="junction", target="farm"))
+    system.add_edge(Edge(id="e5", source="junction", target="env"))
 
     system.validate()
     return system
@@ -224,7 +216,7 @@ class TestMakeRepairTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         repair = make_repair(system)
 
@@ -249,9 +241,9 @@ class TestMakeRepairTimeVarying:
         system.add_node(splitter)
         system.add_node(sink_a)
         system.add_node(sink_b)
-        system.add_edge(Edge(id="e1", source="src", target="split", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="a", source="split", target="sink_a", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="b", source="split", target="sink_b", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="src", target="split"))
+        system.add_edge(Edge(id="a", source="split", target="sink_a"))
+        system.add_edge(Edge(id="b", source="split", target="sink_b"))
 
         repair = make_repair(system)
 
@@ -273,7 +265,7 @@ class TestMakeRepairTimeVarying:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         repair = make_repair(system)
 
@@ -298,9 +290,9 @@ class TestMakeRepairTimeVarying:
         system.add_node(splitter)
         system.add_node(sink_a)
         system.add_node(sink_b)
-        system.add_edge(Edge(id="e1", source="src", target="split", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="a", source="split", target="sink_a", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="b", source="split", target="sink_b", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="src", target="split"))
+        system.add_edge(Edge(id="a", source="split", target="sink_a"))
+        system.add_edge(Edge(id="b", source="split", target="sink_b"))
 
         repair = make_repair(system)
 
@@ -358,7 +350,7 @@ class TestMakeRepairCyclical:
         system = WaterSystem(frequency=Frequency.MONTHLY)
         system.add_node(storage)
         system.add_node(sink)
-        system.add_edge(Edge(id="e1", source="dam", target="sink", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="dam", target="sink"))
 
         repair = make_repair(system)
 
@@ -385,9 +377,9 @@ class TestMakeRepairCyclical:
         system.add_node(splitter)
         system.add_node(sink_a)
         system.add_node(sink_b)
-        system.add_edge(Edge(id="e1", source="src", target="split", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="a", source="split", target="sink_a", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
-        system.add_edge(Edge(id="b", source="split", target="sink_b", capacity=1000.0, loss_rule=SimpleEdgeLoss()))
+        system.add_edge(Edge(id="e1", source="src", target="split"))
+        system.add_edge(Edge(id="a", source="split", target="sink_a"))
+        system.add_edge(Edge(id="b", source="split", target="sink_b"))
 
         repair = make_repair(system)
 

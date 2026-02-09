@@ -14,7 +14,6 @@ Core modules:
 """
 
 from .common import (
-    CAPACITY_EXCEEDED,
     EVAPORATION,
     INEFFICIENCY,
     OVERFLOW,
@@ -31,17 +30,26 @@ from .constraints import (
     Ordered,
     SumToOne,
 )
-from .edge import Edge, EdgeEvent, EdgeLossRule, NoEdgeLoss, WaterDelivered, WaterLost, WaterReceived
+from .edge import Edge
 from .node import (
     BaseNode,
     Demand,
     NoLoss,
+    NoReachLoss,
+    NoRouting,
     PassThrough,
+    Reach,
+    ReachLossRule,
+    Routes,
+    RoutingModel,
     Sink,
     Source,
     Splitter,
     Storage,
     TimeSeries,
+    WaterEnteredReach,
+    WaterExitedReach,
+    WaterInTransit,
 )
 from .objective import (
     Direction,
@@ -60,7 +68,6 @@ from .time import Frequency, Timestep, time_index
 __all__ = [
     # Common
     "LossReason",
-    "CAPACITY_EXCEEDED",
     "EVAPORATION",
     "INEFFICIENCY",
     "OVERFLOW",
@@ -87,16 +94,21 @@ __all__ = [
     "Demand",
     "Splitter",
     "PassThrough",
+    "Reach",
     "Sink",
     "TimeSeries",
+    # Reach Strategies
+    "RoutingModel",
+    "ReachLossRule",
+    "NoReachLoss",
+    "NoRouting",
+    "Routes",
+    # Reach Events
+    "WaterEnteredReach",
+    "WaterExitedReach",
+    "WaterInTransit",
     # Edges
     "Edge",
-    "EdgeEvent",
-    "EdgeLossRule",
-    "NoEdgeLoss",
-    "WaterReceived",
-    "WaterLost",
-    "WaterDelivered",
     # System
     "WaterSystem",
     # Objectives

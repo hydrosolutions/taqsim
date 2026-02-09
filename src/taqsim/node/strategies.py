@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from taqsim.common import LossReason
 
 if TYPE_CHECKING:
+    from taqsim.node.reach import Reach
     from taqsim.node.splitter import Splitter
     from taqsim.node.storage import Storage
     from taqsim.time import Timestep
@@ -42,3 +43,33 @@ class LossRule(Protocol):
 class NoLoss:
     def calculate(self, node: "Storage", t: "Timestep") -> dict[LossReason, float]:
         return {}
+
+
+@runtime_checkable
+class RoutingModel(Protocol):
+    def initial_state(self, reach: "Reach") -> Any: ...
+    def route(self, reach: "Reach", inflow: float, state: Any, t: "Timestep") -> tuple[float, Any]: ...
+    def storage(self, state: Any) -> float: ...
+
+
+@runtime_checkable
+class ReachLossRule(Protocol):
+    def calculate(self, reach: "Reach", flow: float, t: "Timestep") -> dict[LossReason, float]: ...
+
+
+@dataclass(frozen=True)
+class NoReachLoss:
+    def calculate(self, reach: "Reach", flow: float, t: "Timestep") -> dict[LossReason, float]:
+        return {}
+
+
+@dataclass(frozen=True)
+class NoRouting:
+    def initial_state(self, reach: "Reach") -> None:
+        return None
+
+    def route(self, reach: "Reach", inflow: float, state: None, t: "Timestep") -> tuple[float, None]:
+        return (inflow, None)
+
+    def storage(self, state: None) -> float:
+        return 0.0

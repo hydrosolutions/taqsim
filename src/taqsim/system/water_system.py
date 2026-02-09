@@ -7,7 +7,7 @@ import networkx as nx
 from taqsim.common import ParamSpec
 from taqsim.edge import Edge
 from taqsim.geo import haversine
-from taqsim.node import BaseNode, Demand, PassThrough, Receives, Sink, Source, Splitter, Storage
+from taqsim.node import BaseNode, Demand, PassThrough, Reach, Receives, Sink, Source, Splitter, Storage
 from taqsim.node.events import WaterDistributed, WaterOutput
 from taqsim.time import Frequency, Timestep, time_index
 
@@ -170,13 +170,11 @@ class WaterSystem:
             raise ValueError(f"Edge '{edge_id}' not found in system")
 
         edge = self._edges[edge_id]
-        edge.receive(amount, t)
-        delivered = edge.update(t)
 
-        # Route to target node
+        # Edge is pure topology — pass amount directly to target node
         target_node = self._nodes[edge.target]
         if isinstance(target_node, Receives):
-            target_node.receive(delivered, edge.id, t)
+            target_node.receive(amount, edge.id, t)
 
     @property
     def nodes(self) -> dict[str, BaseNode]:
@@ -352,8 +350,6 @@ class WaterSystem:
         """
         for node in self._nodes.values():
             node.reset()
-        for edge in self._edges.values():
-            edge.reset()
 
     def _flatten_param(self, path: str, value: float | tuple[float, ...]) -> list[ParamSpec]:
         """Create ParamSpec(s) for a scalar or time-varying parameter."""
@@ -426,6 +422,7 @@ class WaterSystem:
             Sink: {"color": "gray", "marker": "v", "label": "Sink"},
             Splitter: {"color": "purple", "marker": "D", "label": "Splitter"},
             PassThrough: {"color": "cyan", "marker": "h", "label": "PassThrough"},
+            Reach: {"color": "brown", "marker": "p", "label": "Reach"},
         }
 
         fig, ax = plt.subplots(figsize=figsize)

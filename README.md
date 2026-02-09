@@ -14,7 +14,7 @@ This repository is part of an ongoing project and actively maintained.
 
 ## Features
 
-- **Six node types**: Source, Storage, Demand, Sink, Splitter, PassThrough
+- **Seven node types**: Source, Storage, Demand, Sink, Splitter, PassThrough, Reach
 - **Configurable behavior**: Pluggable strategies for release rules, loss calculations, and flow splitting
 - **Event sourcing**: Every water movement recorded as queryable events
 - **Validation**: Automatic network structure validation (acyclic, connected, proper terminals)
@@ -41,11 +41,6 @@ uv sync
 ```python
 from taqsim import WaterSystem, Source, Demand, Sink, Edge, TimeSeries
 
-# Simple loss rule that applies no losses
-class NoLoss:
-    def calculate(self, flow, capacity, t, dt):
-        return {}
-
 # Define nodes
 source = Source(id="river", inflow=TimeSeries([100.0] * 12))
 farm = Demand(id="farm", requirement=TimeSeries([30.0] * 12))
@@ -58,8 +53,8 @@ system.add_node(farm)
 system.add_node(outlet)
 
 # Connect with edges
-system.add_edge(Edge(id="e1", source="river", target="farm", capacity=200, loss_rule=NoLoss()))
-system.add_edge(Edge(id="e2", source="farm", target="outlet", capacity=200, loss_rule=NoLoss()))
+system.add_edge(Edge(id="e1", source="river", target="farm"))
+system.add_edge(Edge(id="e2", source="farm", target="outlet"))
 
 # Simulate
 system.simulate(timesteps=12)
