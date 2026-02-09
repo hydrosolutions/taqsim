@@ -59,7 +59,7 @@ class Demand(BaseNode):
     def update(self, t: Timestep) -> None:
         consumed, remaining = self.consume(self._received_this_step, t)
         if remaining > 0:
-            self.record(WaterOutput(amount=remaining, t=t.index))
+            self.record_output(WaterOutput(amount=remaining, t=t.index))
         self._received_this_step = 0.0
 
     def reset(self) -> None:

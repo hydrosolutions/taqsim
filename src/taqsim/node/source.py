@@ -23,4 +23,4 @@ class Source(BaseNode):
     def update(self, t: Timestep) -> None:
         generated = self.generate(t)
         if generated > 0:
-            self.record(WaterOutput(amount=generated, t=t.index))
+            self.record_output(WaterOutput(amount=generated, t=t.index))

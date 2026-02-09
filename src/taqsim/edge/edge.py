@@ -104,3 +104,15 @@ class Edge:
         """
         self.clear_events()
         self._received_this_step = 0.0
+
+    def _fresh_copy(self) -> "Edge":
+        return Edge(
+            id=self.id,
+            source=self.source,
+            target=self.target,
+            capacity=self.capacity,
+            loss_rule=self.loss_rule,
+            targets=self.targets,
+            tags=self.tags,
+            metadata=self.metadata,
+        )

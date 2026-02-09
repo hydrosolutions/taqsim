@@ -30,7 +30,7 @@ class PassThrough(BaseNode):
             else:
                 passed = amount
             self.record(WaterPassedThrough(amount=passed, t=t.index))
-            self.record(WaterOutput(amount=passed, t=t.index))
+            self.record_output(WaterOutput(amount=passed, t=t.index))
         self._received_this_step = 0.0
 
     def reset(self) -> None:

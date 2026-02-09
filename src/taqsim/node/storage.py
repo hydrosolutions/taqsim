@@ -105,7 +105,7 @@ class Storage(BaseNode):
         # 4. Record output (released + spilled goes downstream)
         total_outflow = released + spilled
         if total_outflow > 0:
-            self.record(WaterOutput(amount=total_outflow, t=t.index))
+            self.record_output(WaterOutput(amount=total_outflow, t=t.index))
 
         self._received_this_step = 0.0
 

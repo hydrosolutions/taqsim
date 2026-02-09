@@ -26,7 +26,7 @@ class Splitter(BaseNode):
             return {}
         allocation = self.split_policy.split(self, amount, t)  # type: ignore[union-attr]
         for target_id, alloc_amount in allocation.items():
-            self.record(WaterDistributed(amount=alloc_amount, target_id=target_id, t=t.index))
+            self.record_output(WaterDistributed(amount=alloc_amount, target_id=target_id, t=t.index))
         return allocation
 
     def update(self, t: Timestep) -> None:

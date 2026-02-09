@@ -144,31 +144,26 @@ class WaterSystem:
             self.validate()
         self._validate_time_varying_lengths(timesteps)
 
+        topo_order = tuple(nx.topological_sort(self._graph))
         for i in range(timesteps):
             t = Timestep(index=i, frequency=self.frequency)
-            for node_id in nx.topological_sort(self._graph):
+            for node_id in topo_order:
                 node = self._nodes[node_id]
                 node.update(t)
                 self._route_output(node_id, t)
 
     def _route_output(self, node_id: str, t: Timestep) -> None:
         node = self._nodes[node_id]
-        events = node.events_at(t.index)
-
-        # Handle WaterOutput events (single-output nodes: Source, Storage, Demand, PassThrough)
-        output_events = [e for e in events if isinstance(e, WaterOutput)]
-        for event in output_events:
-            if not node.targets:
-                continue
-            target_node_id = node.targets[0]  # Now a node ID
-            edge_id = self._get_edge_to(node_id, target_node_id)
-            self._deliver_to_edge(edge_id, event.amount, t)
-
-        # Handle WaterDistributed events (Splitter with multiple targets)
-        distributed_events = [e for e in events if isinstance(e, WaterDistributed)]
-        for event in distributed_events:
-            edge_id = self._get_edge_to(node_id, event.target_id)  # target_id is now a node ID
-            self._deliver_to_edge(edge_id, event.amount, t)
+        for event in node.take_step_outputs():
+            if isinstance(event, WaterOutput):
+                if not node.targets:
+                    continue
+                target_node_id = node.targets[0]
+                edge_id = self._get_edge_to(node_id, target_node_id)
+                self._deliver_to_edge(edge_id, event.amount, t)
+            elif isinstance(event, WaterDistributed):
+                edge_id = self._get_edge_to(node_id, event.target_id)
+                self._deliver_to_edge(edge_id, event.amount, t)
 
     def _deliver_to_edge(self, edge_id: str, amount: float, t: Timestep) -> None:
         if edge_id not in self._edges:
@@ -486,34 +481,28 @@ class WaterSystem:
 
     def _clone_with_updates(self, updates: dict[str, dict[str, float]]) -> "WaterSystem":
         """Create a new system with updated strategy parameters."""
-        import copy
-
         new_system = WaterSystem(frequency=self.frequency, start_date=self.start_date)
 
         # Clone nodes with updated strategies
         for node_id, node in self._nodes.items():
-            new_node = copy.deepcopy(node)
-            new_node.reset()  # Clear events and state
-
-            # Apply strategy updates
+            overrides: dict[str, object] = {}
             for strategy_name, strategy in node.strategies().items():
                 key = f"{node_id}.{strategy_name}"
                 if key in updates:
-                    new_strategy = strategy.with_params(**updates[key])
-                    setattr(new_node, strategy_name, new_strategy)
+                    overrides[strategy_name] = strategy.with_params(**updates[key])
 
+            new_node = node._fresh_copy(**overrides)
             new_system._nodes[node_id] = new_node
             new_system._graph.add_node(node_id)
 
         # Clone edges
         for edge_id, edge in self._edges.items():
-            new_edge = copy.deepcopy(edge)
-            new_edge.reset()
-            new_system._edges[edge_id] = new_edge
+            new_system._edges[edge_id] = edge._fresh_copy()
 
         # Rebuild graph edges
         for edge in new_system._edges.values():
             new_system._graph.add_edge(edge.source, edge.target, edge_id=edge.id)
 
-        new_system._validated = False
+        new_system._set_targets()
+        new_system._validated = True
         return new_system

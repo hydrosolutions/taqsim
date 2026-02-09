@@ -18,6 +18,7 @@ class BaseNode:
     metadata: dict[str, Any] = field(default_factory=dict, kw_only=True)
     events: list[NodeEvent] = field(default_factory=list, init=False, repr=False)
     _targets: list[str] = field(default_factory=list, init=False, repr=False)
+    _step_outputs: list[NodeEvent] = field(default_factory=list, init=False, repr=False)
 
     @property
     def targets(self) -> list[str]:
@@ -28,6 +29,15 @@ class BaseNode:
 
     def record(self, event: NodeEvent) -> None:
         self.events.append(event)
+
+    def record_output(self, event: NodeEvent) -> None:
+        self.record(event)
+        self._step_outputs.append(event)
+
+    def take_step_outputs(self) -> list[NodeEvent]:
+        outputs = self._step_outputs
+        self._step_outputs = []
+        return outputs
 
     def events_at(self, t: int) -> list[NodeEvent]:
         return [e for e in self.events if e.t == t]
@@ -61,3 +71,12 @@ class BaseNode:
         additional state, calling super().reset() first.
         """
         self.clear_events()
+        self._step_outputs = []
+
+    def _fresh_copy(self, **overrides: Any) -> "BaseNode":
+        init_kwargs: dict[str, Any] = {}
+        for f in fields(self):
+            if f.init:
+                name = f.name
+                init_kwargs[name] = overrides.get(name, getattr(self, name))
+        return type(self)(**init_kwargs)

@@ -304,6 +304,33 @@ class TestEdgeTrace:
         assert trace[0] == 8.0
 
 
+class TestEdgeFreshCopy:
+    def test_creates_new_instance(self):
+        edge = make_edge()
+        copy = edge._fresh_copy()
+        assert copy is not edge
+        assert type(copy) is Edge
+
+    def test_shares_immutable_config(self):
+        edge = make_edge()
+        copy = edge._fresh_copy()
+        assert copy.id == edge.id
+        assert copy.source == edge.source
+        assert copy.target == edge.target
+        assert copy.capacity == edge.capacity
+        assert copy.loss_rule is edge.loss_rule
+        assert copy.tags is edge.tags
+
+    def test_fresh_copy_has_empty_events(self):
+        edge = make_edge()
+        edge.receive(50.0, t=Timestep(0, Frequency.MONTHLY))
+        assert len(edge.events) > 0
+
+        copy = edge._fresh_copy()
+        assert copy.events == []
+        assert copy._received_this_step == 0.0
+
+
 class TestEdgeProtocolCompliance:
     def test_edge_has_record_method(self):
         edge = make_edge()

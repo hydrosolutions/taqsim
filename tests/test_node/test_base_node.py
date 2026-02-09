@@ -237,6 +237,98 @@ class TestBaseNodeMetadata:
         assert "key" not in n2.metadata
 
 
+class TestRecordOutput:
+    def test_appends_to_both_events_and_step_outputs(self):
+        node = BaseNode(id="test")
+        event = WaterGenerated(amount=100.0, t=0)
+        node.record_output(event)
+        assert len(node.events) == 1
+        assert node.events[0] is event
+        assert len(node._step_outputs) == 1
+        assert node._step_outputs[0] is event
+
+    def test_record_only_appends_to_events(self):
+        node = BaseNode(id="test")
+        event = WaterGenerated(amount=100.0, t=0)
+        node.record(event)
+        assert len(node.events) == 1
+        assert node._step_outputs == []
+
+
+class TestTakeStepOutputs:
+    def test_returns_and_clears_step_outputs(self):
+        node = BaseNode(id="test")
+        e1 = WaterGenerated(amount=100.0, t=0)
+        e2 = WaterGenerated(amount=50.0, t=0)
+        node.record_output(e1)
+        node.record_output(e2)
+
+        outputs = node.take_step_outputs()
+        assert len(outputs) == 2
+        assert outputs[0] is e1
+        assert outputs[1] is e2
+        assert node._step_outputs == []
+
+    def test_returns_empty_list_when_no_outputs(self):
+        node = BaseNode(id="test")
+        outputs = node.take_step_outputs()
+        assert outputs == []
+
+    def test_events_preserved_after_take(self):
+        node = BaseNode(id="test")
+        node.record_output(WaterGenerated(amount=100.0, t=0))
+        node.take_step_outputs()
+        assert len(node.events) == 1
+
+
+class TestFreshCopy:
+    def test_creates_new_instance_of_same_type(self):
+        from taqsim.node import Source
+        from taqsim.node.timeseries import TimeSeries
+
+        source = Source(id="src", inflow=TimeSeries([100.0]))
+        copy = source._fresh_copy()
+        assert type(copy) is Source
+        assert copy is not source
+
+    def test_shares_immutable_fields_by_identity(self):
+        from taqsim.node import Source
+        from taqsim.node.timeseries import TimeSeries
+
+        inflow = TimeSeries([100.0])
+        source = Source(id="src", inflow=inflow)
+        copy = source._fresh_copy()
+        assert copy.inflow is source.inflow
+
+    def test_fresh_copy_has_empty_events(self):
+        from taqsim.node import Source
+        from taqsim.node.timeseries import TimeSeries
+
+        source = Source(id="src", inflow=TimeSeries([100.0]))
+        source.record(WaterGenerated(amount=100.0, t=0))
+        copy = source._fresh_copy()
+        assert copy.events == []
+
+    def test_accepts_overrides(self):
+        from taqsim.node import Source
+        from taqsim.node.timeseries import TimeSeries
+
+        original_inflow = TimeSeries([100.0])
+        new_inflow = TimeSeries([200.0])
+        source = Source(id="src", inflow=original_inflow)
+        copy = source._fresh_copy(inflow=new_inflow)
+        assert copy.inflow is new_inflow
+
+
+class TestResetClearsStepOutputs:
+    def test_reset_clears_step_outputs(self):
+        node = BaseNode(id="test")
+        node.record_output(WaterGenerated(amount=100.0, t=0))
+        assert len(node._step_outputs) == 1
+        node.reset()
+        assert node._step_outputs == []
+
+
 class TestBaseNodeInheritanceTags:
     """Verify all node subclasses inherit tags and metadata."""
 

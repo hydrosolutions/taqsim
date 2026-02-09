@@ -1,5 +1,6 @@
-import pytest
 from datetime import date
+
+import pytest
 
 from taqsim.node import WaterReceived
 from taqsim.node.events import WaterGenerated
@@ -501,6 +502,69 @@ class TestSplitterRouting:
         assert received_events[0].amount == 100.0  # Default source inflow
 
 
+class TestCloneIsolation:
+    """Tests for _clone_with_updates (Bug #2: lightweight cloning)."""
+
+    def test_clone_does_not_share_mutable_state(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        sink = make_sink()
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(make_edge(source="source", target="sink"))
+        system.validate()
+
+        clone = system.with_vector(system.to_vector())
+        clone.simulate(timesteps=3)
+
+        # Original should have no events
+        assert len(system.nodes["source"].events) == 0
+        assert len(system.nodes["sink"].events) == 0
+
+    def test_clone_shares_immutable_fields_by_identity(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        sink = make_sink()
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(make_edge(source="source", target="sink"))
+        system.validate()
+
+        clone = system.with_vector(system.to_vector())
+        assert clone.nodes["source"].inflow is system.nodes["source"].inflow
+
+
+class TestCloneSkipsValidation:
+    """Tests for Bug #5: cloned systems should be pre-validated."""
+
+    def test_cloned_system_is_validated(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        sink = make_sink()
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(make_edge(source="source", target="sink"))
+        system.validate()
+
+        clone = system.with_vector(system.to_vector())
+        assert clone._validated is True
+
+    def test_cloned_system_simulates_without_revalidation(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        sink = make_sink()
+        system.add_node(source)
+        system.add_node(sink)
+        system.add_edge(make_edge(source="source", target="sink"))
+        system.validate()
+
+        clone = system.with_vector(system.to_vector())
+        # Should run without calling validate() internally
+        clone.simulate(timesteps=3)
+        gen_events = clone.nodes["source"].events_of_type(WaterGenerated)
+        assert len(gen_events) == 3
+
+
 class TestWaterSystemTimeIndex:
     def test_raises_when_start_date_is_none(self):
         system = WaterSystem(frequency=Frequency.MONTHLY)
@@ -576,6 +640,7 @@ class TestStartDatePreservation:
 class TestMakeSystemStartDate:
     def test_make_system_passes_start_date(self):
         from taqsim.testing import make_system as testing_make_system
+
         system = testing_make_system(
             make_source(),
             make_sink(),
@@ -586,6 +651,7 @@ class TestMakeSystemStartDate:
 
     def test_make_system_defaults_start_date_to_none(self):
         from taqsim.testing import make_system as testing_make_system
+
         system = testing_make_system(
             make_source(),
             make_sink(),
