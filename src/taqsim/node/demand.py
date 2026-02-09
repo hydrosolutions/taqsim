@@ -26,7 +26,7 @@ class Demand(BaseNode):
         self._received_this_step += amount
         return amount
 
-    def consume(self, available: float, t: Timestep) -> tuple[float, float]:
+    def _consume(self, available: float, t: Timestep) -> tuple[float, float]:
         required = self.requirement[t]
 
         # How much we need to withdraw to meet the full requirement
@@ -57,7 +57,7 @@ class Demand(BaseNode):
         return (withdrawal, returned + excess)
 
     def update(self, t: Timestep) -> None:
-        consumed, remaining = self.consume(self._received_this_step, t)
+        consumed, remaining = self._consume(self._received_this_step, t)
         if remaining > 0:
             self.record_output(WaterOutput(amount=remaining, t=t.index))
         self._received_this_step = 0.0

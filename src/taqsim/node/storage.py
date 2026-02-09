@@ -50,7 +50,7 @@ class Storage(BaseNode):
         self._received_this_step += amount
         return amount
 
-    def store(self, amount: float, t: Timestep) -> tuple[float, float]:
+    def _store(self, amount: float, t: Timestep) -> tuple[float, float]:
         available_space = self.capacity - self._current_storage
         stored = min(amount, available_space)
         spilled = amount - stored
@@ -63,7 +63,7 @@ class Storage(BaseNode):
 
         return (stored, spilled)
 
-    def lose(self, t: Timestep) -> float:
+    def _lose(self, t: Timestep) -> float:
         losses = self.loss_rule.calculate(self, t)
         total_loss = sum(losses.values())
 
@@ -79,7 +79,7 @@ class Storage(BaseNode):
 
         return total_loss
 
-    def release(self, inflow: float, t: Timestep) -> float:
+    def _release(self, inflow: float, t: Timestep) -> float:
         raw_release = self.release_policy.release(self, inflow, t)
         available = max(0.0, self._current_storage - self.dead_storage)
         actual_release = max(0.0, min(raw_release, available))
@@ -94,13 +94,13 @@ class Storage(BaseNode):
         inflow = self._received_this_step
 
         # 1. Store (handles spillway)
-        stored, spilled = self.store(inflow, t)
+        stored, spilled = self._store(inflow, t)
 
         # 2. Losses
-        self.lose(t)
+        self._lose(t)
 
         # 3. Release
-        released = self.release(inflow, t)
+        released = self._release(inflow, t)
 
         # 4. Record output (released + spilled goes downstream)
         total_outflow = released + spilled

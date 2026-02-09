@@ -15,12 +15,12 @@ if TYPE_CHECKING:
 class Source(BaseNode):
     inflow: TimeSeries
 
-    def generate(self, t: Timestep) -> float:
+    def _generate(self, t: Timestep) -> float:
         amount = self.inflow[t]
         self.record(WaterGenerated(amount=amount, t=t.index))
         return amount
 
     def update(self, t: Timestep) -> None:
-        generated = self.generate(t)
+        generated = self._generate(t)
         if generated > 0:
             self.record_output(WaterOutput(amount=generated, t=t.index))

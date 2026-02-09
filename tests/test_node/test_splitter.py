@@ -1,14 +1,9 @@
-from typing import TYPE_CHECKING
-
 import pytest
 
 from taqsim.node.events import WaterDistributed, WaterReceived
 from taqsim.node.protocols import Receives
 from taqsim.node.splitter import Splitter
 from taqsim.time import Frequency, Timestep
-
-if TYPE_CHECKING:
-    pass
 
 
 class FakeEqualSplitPolicy:
@@ -90,14 +85,21 @@ class TestSplitterDistribute:
         strategy = FakeEqualSplitPolicy()
         splitter = Splitter(id="splitter_1", split_policy=strategy)
         splitter._set_targets(["t1", "t2"])
-        allocation = splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
-        assert allocation == {"t1": 50.0, "t2": 50.0}
+        splitter.receive(amount=100.0, source_id="src", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
+
+        distributed = splitter.events_of_type(WaterDistributed)
+        assert len(distributed) == 2
+        amounts = {e.target_id: e.amount for e in distributed}
+        assert amounts == {"t1": 50.0, "t2": 50.0}
 
     def test_distribute_records_events(self):
         strategy = FakeEqualSplitPolicy()
         splitter = Splitter(id="splitter_1", split_policy=strategy)
         splitter._set_targets(["t1", "t2"])
-        splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
+        splitter.receive(amount=100.0, source_id="src", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
+
         distributed = splitter.events_of_type(WaterDistributed)
         assert len(distributed) == 2
 
@@ -105,38 +107,42 @@ class TestSplitterDistribute:
         strategy = FakeEqualSplitPolicy()
         splitter = Splitter(id="splitter_1", split_policy=strategy)
         splitter._set_targets(["target_a", "target_b"])
-        splitter.distribute(amount=80.0, t=Timestep(3, Frequency.MONTHLY))
+        splitter.receive(amount=80.0, source_id="src", t=Timestep(3, Frequency.MONTHLY))
+        splitter.update(t=Timestep(3, Frequency.MONTHLY))
+
         distributed = splitter.events_of_type(WaterDistributed)
         target_ids = {e.target_id for e in distributed}
         assert target_ids == {"target_a", "target_b"}
 
-    def test_distribute_empty_targets_returns_empty(self):
+    def test_distribute_empty_targets_no_events(self):
         strategy = FakeEqualSplitPolicy()
         splitter = Splitter(id="splitter_1", split_policy=strategy)
-        allocation = splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
-        assert allocation == {}
+        splitter.receive(amount=100.0, source_id="src", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
 
-    def test_distribute_zero_amount_returns_empty(self):
+        distributed = splitter.events_of_type(WaterDistributed)
+        assert len(distributed) == 0
+
+    def test_distribute_zero_amount_no_events(self):
         strategy = FakeEqualSplitPolicy()
         splitter = Splitter(id="splitter_1", split_policy=strategy)
         splitter._set_targets(["t1"])
-        allocation = splitter.distribute(amount=0.0, t=Timestep(0, Frequency.MONTHLY))
-        assert allocation == {}
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
 
-    def test_distribute_negative_amount_returns_empty(self):
-        strategy = FakeEqualSplitPolicy()
-        splitter = Splitter(id="splitter_1", split_policy=strategy)
-        splitter._set_targets(["t1"])
-        allocation = splitter.distribute(amount=-10.0, t=Timestep(0, Frequency.MONTHLY))
-        assert allocation == {}
+        distributed = splitter.events_of_type(WaterDistributed)
+        assert len(distributed) == 0
 
     def test_distribute_with_fixed_ratios(self):
         strategy = FakeFixedSplitPolicy(ratios={"t1": 0.7, "t2": 0.3})
         splitter = Splitter(id="splitter_1", split_policy=strategy)
         splitter._set_targets(["t1", "t2"])
-        allocation = splitter.distribute(amount=100.0, t=Timestep(0, Frequency.MONTHLY))
-        assert allocation["t1"] == pytest.approx(70.0)
-        assert allocation["t2"] == pytest.approx(30.0)
+        splitter.receive(amount=100.0, source_id="src", t=Timestep(0, Frequency.MONTHLY))
+        splitter.update(t=Timestep(0, Frequency.MONTHLY))
+
+        distributed = splitter.events_of_type(WaterDistributed)
+        amounts = {e.target_id: e.amount for e in distributed}
+        assert amounts["t1"] == pytest.approx(70.0)
+        assert amounts["t2"] == pytest.approx(30.0)
 
 
 class TestSplitterUpdate:

@@ -4,15 +4,15 @@
 
 Seven node types compose the water system. Each combines specific capabilities. Nodes process water and record events but **do not know their targets** — topology is derived from edges by `WaterSystem`.
 
-| Node | Generates | Receives | Stores | Loses | Consumes | Routes | Output Event |
-|------|-----------|----------|--------|-------|----------|--------|--------------|
-| Source | ✓ | | | | | | WaterOutput |
-| PassThrough | | ✓ | | | | | WaterOutput |
-| Splitter | | ✓ | | | | | WaterDistributed |
-| Demand | | ✓ | | | ✓ | | WaterOutput |
-| Storage | | ✓ | ✓ | ✓ | | | WaterOutput |
-| Reach | | ✓ | | ✓ | | ✓ | WaterOutput |
-| Sink | | ✓ | | | | | (terminal) |
+| Node        | Receives | Pipeline (private)                    | Output Event     |
+|-------------|----------|---------------------------------------|------------------|
+| Source      |          | `_generate`                           | WaterOutput      |
+| PassThrough | yes      | (pass-through)                        | WaterOutput      |
+| Splitter    | yes      | `_distribute` (via split_policy)      | WaterDistributed |
+| Demand      | yes      | `_consume`                            | WaterOutput      |
+| Storage     | yes      | `_store`, `_lose`, `_release`         | WaterOutput      |
+| Reach       | yes      | route, lose, transit snapshot         | WaterOutput      |
+| Sink        | yes      | (terminal)                            | —                |
 
 ---
 
@@ -20,9 +20,9 @@ Seven node types compose the water system. Each combines specific capabilities. 
 
 Water entry point. Generates inflow from a TimeSeries.
 
-### Capabilities
+### Pipeline
 
-- **Generates**: Produces water from `inflow` TimeSeries
+- `_generate`: Produces water from `inflow` TimeSeries
 
 ### Parameters
 
@@ -166,10 +166,10 @@ splitter = Splitter(
 
 Consumption node. Receives water, consumes requirement, passes remainder downstream.
 
-### Capabilities
+### Pipeline
 
-- **Receives**: Accepts water from upstream
-- **Consumes**: Removes water to meet requirement
+- **Receives**: Accepts water from upstream via `receive()`
+- `_consume`: Withdraws water to meet requirement
 
 ### Parameters
 
@@ -252,11 +252,12 @@ city = Demand(
 
 Reservoir node. Receives, stores, loses, releases, and outputs water.
 
-### Capabilities
+### Pipeline
 
-- **Receives**: Accepts water from upstream
-- **Stores**: Buffers water up to capacity
-- **Loses**: Physical losses (evaporation, seepage)
+- **Receives**: Accepts water from upstream via `receive()`
+- `_store`: Buffers water up to capacity
+- `_lose`: Physical losses (evaporation, seepage)
+- `_release`: Controlled release via release_policy
 
 ### Parameters
 
@@ -344,11 +345,11 @@ print(reservoir.storage)  # 5000.0
 
 Transport node. Models physical transport processes: routing delay, attenuation, and transit losses. Water enters the reach, is routed through (potentially with delay), losses are applied to the routed outflow, and the net outflow continues downstream.
 
-### Capabilities
+### Pipeline
 
-- **Receives**: Accepts water from upstream
-- **Routes**: Transforms inflow through a routing model (delay, attenuation)
-- **Loses**: Transit losses applied to routed outflow
+- **Receives**: Accepts water from upstream via `receive()`
+- Route: Transforms inflow through routing_model (delay, attenuation)
+- Lose: Transit losses applied to routed outflow via loss_rule
 
 ### Parameters
 

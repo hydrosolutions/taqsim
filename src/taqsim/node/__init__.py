@@ -21,12 +21,7 @@ from .events import (
 )
 from .passthrough import PassThrough
 from .protocols import (
-    Consumes,
-    Generates,
-    Loses,
     Receives,
-    Routes,
-    Stores,
 )
 from .reach import Reach
 from .sink import Sink
@@ -70,12 +65,7 @@ __all__ = [
     "WaterSpilled",
     "WaterStored",
     # Protocols
-    "Consumes",
-    "Generates",
-    "Loses",
     "Receives",
-    "Routes",
-    "Stores",
     # Strategies
     "LossRule",
     "NoLoss",

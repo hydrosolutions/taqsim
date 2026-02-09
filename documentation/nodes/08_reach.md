@@ -118,7 +118,7 @@ class NoReachLoss:
         return {}
 ```
 
-## Protocols
+## Strategy Protocols
 
 ### RoutingModel
 

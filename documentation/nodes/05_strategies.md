@@ -370,8 +370,6 @@ loss = ZeroLoss()
 source = Source(
     id="river",
     inflow=TimeSeries(values=[10.0, 15.0]),
-    targets=["dam"],
-    split_policy=split
 )
 
 storage = Storage(
@@ -379,8 +377,6 @@ storage = Storage(
     capacity=1000.0,
     release_policy=release,
     loss_rule=loss,
-    split_policy=split,
-    targets=["downstream"]
 )
 ```
 

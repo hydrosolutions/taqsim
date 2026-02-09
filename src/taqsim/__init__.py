@@ -40,7 +40,6 @@ from .node import (
     PassThrough,
     Reach,
     ReachLossRule,
-    Routes,
     RoutingModel,
     Sink,
     Source,
@@ -102,7 +101,6 @@ __all__ = [
     "ReachLossRule",
     "NoReachLoss",
     "NoRouting",
-    "Routes",
     # Reach Events
     "WaterEnteredReach",
     "WaterExitedReach",

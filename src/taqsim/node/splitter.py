@@ -21,7 +21,7 @@ class Splitter(BaseNode):
         self._received_this_step += amount
         return amount
 
-    def distribute(self, amount: float, t: Timestep) -> dict[str, float]:
+    def _distribute(self, amount: float, t: Timestep) -> dict[str, float]:
         if not self.targets or amount <= 0:
             return {}
         allocation = self.split_policy.split(self, amount, t)  # type: ignore[union-attr]
@@ -30,7 +30,7 @@ class Splitter(BaseNode):
         return allocation
 
     def update(self, t: Timestep) -> None:
-        self.distribute(self._received_this_step, t)
+        self._distribute(self._received_this_step, t)
         self._received_this_step = 0.0
 
     def reset(self) -> None:

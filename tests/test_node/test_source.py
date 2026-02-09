@@ -1,5 +1,4 @@
 from taqsim.node.events import WaterGenerated, WaterOutput
-from taqsim.node.protocols import Generates
 from taqsim.node.source import Source
 from taqsim.time import Frequency, Timestep
 
@@ -30,21 +29,25 @@ class TestSourceGenerate:
         ts = FakeTimeSeries({0: 10.0, 1: 20.0, 2: 15.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=Timestep(0, Frequency.MONTHLY))
-        assert result == 10.0
+        source.update(t=Timestep(0, Frequency.MONTHLY))
+        events = source.events_of_type(WaterGenerated)
+        assert len(events) == 1
+        assert events[0].amount == 10.0
 
     def test_returns_inflow_for_different_frequency(self):
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=Timestep(0, Frequency.DAILY))
-        assert result == 10.0
+        source.update(t=Timestep(0, Frequency.DAILY))
+        events = source.events_of_type(WaterGenerated)
+        assert len(events) == 1
+        assert events[0].amount == 10.0
 
     def test_records_water_generated_event(self):
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        source.generate(t=Timestep(0, Frequency.MONTHLY))
+        source.update(t=Timestep(0, Frequency.MONTHLY))
 
         events = source.events_of_type(WaterGenerated)
         assert len(events) == 1
@@ -55,15 +58,19 @@ class TestSourceGenerate:
         ts = FakeTimeSeries({5: 100.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=Timestep(5, Frequency.MONTHLY))
-        assert result == 100.0
+        source.update(t=Timestep(5, Frequency.MONTHLY))
+        events = source.events_of_type(WaterGenerated)
+        assert len(events) == 1
+        assert events[0].amount == 100.0
 
     def test_returns_zero_for_missing_timestep(self):
         ts = FakeTimeSeries({0: 10.0})
         source = Source(id="src1", inflow=ts)
 
-        result = source.generate(t=Timestep(999, Frequency.MONTHLY))
-        assert result == 0.0
+        source.update(t=Timestep(999, Frequency.MONTHLY))
+        events = source.events_of_type(WaterGenerated)
+        assert len(events) == 1
+        assert events[0].amount == 0.0
 
 
 class TestSourceUpdate:
@@ -116,18 +123,3 @@ class TestSourceUpdate:
         assert [e.amount for e in generated] == [10.0, 20.0, 30.0]
         assert len(outputs) == 3
         assert [e.amount for e in outputs] == [10.0, 20.0, 30.0]
-
-
-class TestSourceProtocolCompliance:
-    def test_satisfies_generates_protocol(self):
-        ts = FakeTimeSeries({0: 10.0})
-        source = Source(id="src1", inflow=ts)
-
-        assert isinstance(source, Generates)
-
-    def test_generates_method_signature_matches_protocol(self):
-        ts = FakeTimeSeries({0: 10.0})
-        source = Source(id="src1", inflow=ts)
-
-        result = source.generate(t=Timestep(0, Frequency.MONTHLY))
-        assert isinstance(result, float)
