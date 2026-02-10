@@ -15,6 +15,7 @@ The simulation engine is intentionally "dumb." It routes water through a network
 | **Exposes parameters** | All tunable values discoverable via `param_schema()` |
 | **Provides traces** | Converts event streams to time-indexed series |
 | **Stores annotations** | Tags and metadata attached to any component |
+| **Validates auxiliary data** | Ensures physical models receive the external data they need |
 
 ## What Taqsim Does NOT Do
 
@@ -124,6 +125,24 @@ critical_nodes = [n for n in system.nodes.values() if "critical" in n.tags]
 
 See: [Tags and Metadata](common/03_tags_metadata.md)
 
+### 5. Auxiliary Data
+
+Physical models access external data (temperature, PET, area curves) through the node they're attached to:
+
+```python
+# The model declares what it needs...
+class EvapLoss:
+    required_auxiliary = frozenset({"temperature"})
+
+# ...taqsim validates it at system setup...
+# MissingAuxiliaryDataError if "temperature" not in node.auxiliary_data
+
+# ...and the model reads it during simulation
+temp = node.auxiliary_data["temperature"][t.index]
+```
+
+See: [Tags and Metadata](common/03_tags_metadata.md) for `auxiliary_data` vs `metadata`
+
 ## Why This Matters
 
 ### For Users
@@ -146,3 +165,4 @@ See: [Tags and Metadata](common/03_tags_metadata.md)
 | "Events are logging" | No, events ARE the state. There's no hidden internal state. |
 | "Traces are reports" | No, traces are queryable data. Reporting is external. |
 | "Metadata affects simulation" | No, metadata is opaque. Simulation ignores it entirely. |
+| "auxiliary_data is metadata" | No, `auxiliary_data` is actively used by physical models. `metadata` is opaque. |

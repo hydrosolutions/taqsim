@@ -1,12 +1,19 @@
+from __future__ import annotations
+
 from datetime import date
+from typing import TYPE_CHECKING
 
 import pytest
 
+from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node import WaterReceived
 from taqsim.node.events import WaterGenerated, WaterLost
-from taqsim.system import ValidationError, WaterSystem
-from taqsim.testing import ProportionalReachLoss, make_reach
+from taqsim.system import MissingAuxiliaryDataError, ValidationError, WaterSystem
+from taqsim.testing import NoRouting, ProportionalReachLoss, make_reach
 from taqsim.time import Frequency, Timestep
+
+if TYPE_CHECKING:
+    from taqsim.node import Reach, Storage
 
 from .conftest import (
     make_edge,
@@ -709,3 +716,178 @@ class TestReachIntegration:
         amounts = [e.amount for e in received]
         # t=0: nothing exits (buffered), t=1: 100 released, t=2: 100 released
         assert amounts == [100.0, 100.0]
+
+
+# --- Fake models for auxiliary_data tests ---
+
+
+class FakeLossRuleWithAux:
+    required_auxiliary: frozenset[str] = frozenset({"surface_area", "pan_coefficient"})
+
+    def calculate(self, node: Storage, t: Timestep) -> dict:
+        return {}
+
+
+class FakeLossRuleNoAux:
+    def calculate(self, node: Storage, t: Timestep) -> dict:
+        return {}
+
+
+class FakeLossRuleEmptyAux:
+    required_auxiliary: frozenset[str] = frozenset()
+
+    def calculate(self, node: Storage, t: Timestep) -> dict:
+        return {}
+
+
+class FakeLossRuleMultipleKeys:
+    required_auxiliary: frozenset[str] = frozenset({"area_curve", "pan_coefficient", "wind_speed"})
+
+    def calculate(self, node: Storage, t: Timestep) -> dict:
+        return {}
+
+
+class AuxReadingLossRule:
+    required_auxiliary: frozenset[str] = frozenset({"evap_rate"})
+
+    def calculate(self, node: Storage, t: Timestep) -> dict[LossReason, float]:
+        rate = node.auxiliary_data["evap_rate"]
+        return {EVAPORATION: node.storage * rate}
+
+
+class AuxReadingReachLoss:
+    required_auxiliary: frozenset[str] = frozenset({"loss_factor"})
+
+    def calculate(self, reach: Reach, flow: float, t: Timestep) -> dict[LossReason, float]:
+        factor = reach.auxiliary_data["loss_factor"]
+        return {SEEPAGE: flow * factor}
+
+
+class TestAuxiliaryDataValidation:
+    def test_passes_when_no_model_declares_required_auxiliary(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        system.add_node(make_sink())
+        system.add_edge(make_edge(source="source", target="sink"))
+        system.validate()  # Should not raise
+
+    def test_passes_when_required_auxiliary_is_satisfied(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        storage = make_storage(
+            loss_rule=FakeLossRuleWithAux(),
+            auxiliary_data={"surface_area": 100.0, "pan_coefficient": 0.7},
+        )
+        system.add_node(storage)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+        system.validate()  # Should not raise
+
+    def test_fails_when_required_auxiliary_key_is_missing(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        storage = make_storage(loss_rule=FakeLossRuleWithAux())
+        system.add_node(storage)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+        with pytest.raises(MissingAuxiliaryDataError):
+            system.validate()
+
+    def test_error_message_includes_node_id_and_field_and_missing_keys(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        storage = make_storage(loss_rule=FakeLossRuleWithAux())
+        system.add_node(storage)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+        with pytest.raises(MissingAuxiliaryDataError, match="storage") as exc_info:
+            system.validate()
+        msg = str(exc_info.value)
+        assert "loss_rule" in msg
+        assert "FakeLossRuleWithAux" in msg
+        assert "pan_coefficient" in msg
+        assert "surface_area" in msg
+
+    def test_reports_multiple_missing_keys_together(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        storage = make_storage(
+            loss_rule=FakeLossRuleMultipleKeys(),
+            auxiliary_data={"pan_coefficient": 0.7},
+        )
+        system.add_node(storage)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+        with pytest.raises(MissingAuxiliaryDataError) as exc_info:
+            system.validate()
+        assert exc_info.value.missing_keys == frozenset({"area_curve", "wind_speed"})
+
+    def test_passes_with_empty_required_auxiliary_frozenset(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        storage = make_storage(loss_rule=FakeLossRuleEmptyAux())
+        system.add_node(storage)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+        system.validate()  # Should not raise
+
+    def test_passes_when_model_lacks_required_auxiliary_attribute(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        storage = make_storage(loss_rule=FakeLossRuleNoAux())
+        system.add_node(storage)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+        system.validate()  # Should not raise
+
+
+class TestAuxiliaryDataIntegration:
+    def test_storage_loss_rule_reads_from_auxiliary_data(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        storage = make_storage(
+            loss_rule=AuxReadingLossRule(),
+            auxiliary_data={"evap_rate": 0.1},
+        )
+        sink = make_sink()
+        system.add_node(source)
+        system.add_node(storage)
+        system.add_node(sink)
+        system.add_edge(make_edge(id="e1", source="source", target="storage"))
+        system.add_edge(make_edge(id="e2", source="storage", target="sink"))
+
+        system.simulate(timesteps=1)
+
+        loss_events = storage.events_of_type(WaterLost)
+        assert len(loss_events) > 0
+        assert any(e.reason == EVAPORATION for e in loss_events)
+
+    def test_reach_loss_rule_reads_from_auxiliary_data(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        from taqsim.node import Reach
+
+        reach = Reach(
+            id="reach",
+            routing_model=NoRouting(),
+            loss_rule=AuxReadingReachLoss(),
+            auxiliary_data={"loss_factor": 0.2},
+        )
+        sink = make_sink()
+        system.add_node(source)
+        system.add_node(reach)
+        system.add_node(sink)
+        system.add_edge(make_edge(id="e1", source="source", target="reach"))
+        system.add_edge(make_edge(id="e2", source="reach", target="sink"))
+
+        system.simulate(timesteps=1)
+
+        loss_events = reach.events_of_type(WaterLost)
+        assert len(loss_events) > 0
+        assert any(e.reason == SEEPAGE for e in loss_events)

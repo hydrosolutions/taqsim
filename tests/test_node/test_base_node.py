@@ -374,3 +374,40 @@ class TestBaseNodeInheritanceTags:
         sink = Sink(id="test", tags=frozenset({"terminal"}), metadata={"type": "ocean"})
         assert sink.tags == frozenset({"terminal"})
         assert sink.metadata == {"type": "ocean"}
+
+
+class TestBaseNodeAuxiliaryData:
+    def test_default_auxiliary_data_is_empty_dict(self):
+        node = BaseNode(id="x")
+        assert node.auxiliary_data == {}
+
+    def test_auxiliary_data_accepted_via_keyword(self):
+        node = BaseNode(id="x", auxiliary_data={"pet": 5.5, "area": [1, 2, 3]})
+        assert node.auxiliary_data == {"pet": 5.5, "area": [1, 2, 3]}
+
+    def test_auxiliary_data_preserved_on_reset(self):
+        node = BaseNode(id="x", auxiliary_data={"k": 1})
+        node.record(WaterGenerated(amount=10.0, t=0))
+        node.reset()
+        assert node.auxiliary_data == {"k": 1}
+        assert node.events == []
+
+    def test_auxiliary_data_included_in_fresh_copy(self):
+        from taqsim.node import Source
+        from taqsim.node.timeseries import TimeSeries
+
+        source = Source(id="src", inflow=TimeSeries([100.0]), auxiliary_data={"temp": 25.0})
+        copy = source._fresh_copy()
+        assert copy.auxiliary_data == {"temp": 25.0}
+
+    def test_auxiliary_data_holds_heterogeneous_values(self):
+        from taqsim.node.timeseries import TimeSeries
+
+        def double(x: float) -> float:
+            return x * 2
+
+        ts = TimeSeries([1.0, 2.0])
+        node = BaseNode(id="x", auxiliary_data={"ts": ts, "rate": 0.5, "fn": double})
+        assert node.auxiliary_data["ts"] is ts
+        assert node.auxiliary_data["rate"] == 0.5
+        assert node.auxiliary_data["fn"](3) == 6

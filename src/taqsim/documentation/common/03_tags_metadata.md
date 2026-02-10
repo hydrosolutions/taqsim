@@ -190,3 +190,31 @@ Taqsim intentionally does **not** interpret tags or metadata:
 - The simulation engine treats them as opaque storage
 - Intelligence layers (optimization, visualization, reporting) give them meaning
 - This allows different use cases without modifying core Taqsim code
+
+## Auxiliary Data vs Metadata
+
+`BaseNode` provides both `metadata` and `auxiliary_data`. They serve different purposes:
+
+| Aspect | `metadata` | `auxiliary_data` |
+|--------|-----------|-----------------|
+| **Purpose** | Annotations for intelligence layers | External data for physical models |
+| **Used by simulation?** | No — opaque to taqsim core | Yes — read by loss rules, routing models |
+| **Validation** | None | `required_auxiliary` checked at system validation |
+| **Typical values** | Labels, administrative data, priorities | Time series (PET, temperature), area curves, coefficients |
+| **Who reads it?** | External analysis, optimization, visualization | Physical models during `calculate()` / `route()` |
+
+### When to use which
+
+- **metadata**: Information *about* a node that doesn't affect simulation (e.g., owner, year built, watershed name)
+- **auxiliary_data**: Data *for* a node's physical models (e.g., temperature series, pan evaporation, surface area curves)
+
+```python
+storage = Storage(
+    id="reservoir",
+    capacity=5000.0,
+    release_policy=policy,
+    loss_rule=temp_loss,
+    metadata={"owner": "NWC", "year_built": 1985},       # opaque annotations
+    auxiliary_data={"temperature": [25, 28, 30, 27]},     # used by temp_loss.calculate()
+)
+```

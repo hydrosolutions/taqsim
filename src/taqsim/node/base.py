@@ -16,6 +16,7 @@ class BaseNode:
     location: tuple[float, float] | None = field(default=None, kw_only=True)  # (lat, lon) in WGS84
     tags: frozenset[str] = field(default_factory=frozenset, kw_only=True)
     metadata: dict[str, Any] = field(default_factory=dict, kw_only=True)
+    auxiliary_data: dict[str, Any] = field(default_factory=dict, kw_only=True)
     events: list[NodeEvent] = field(default_factory=list, init=False, repr=False)
     _targets: list[str] = field(default_factory=list, init=False, repr=False)
     _step_outputs: list[NodeEvent] = field(default_factory=list, init=False, repr=False)

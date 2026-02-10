@@ -18,6 +18,7 @@ Reach separates transport physics from connectivity. Edges define topology (whic
 | `routing_model` | `RoutingModel` | Yes | Physical routing model (delay, attenuation) |
 | `loss_rule` | `ReachLossRule` | Yes | Transit loss calculation |
 | `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
+| `auxiliary_data` | `dict[str, Any]` | No | External data for physical models (default: {}) |
 
 Both `routing_model` and `loss_rule` are required. Construction raises `ValueError` if either is `None`.
 

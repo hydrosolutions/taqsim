@@ -58,6 +58,31 @@ Every node (except Sinks) must have a path to at least one Sink.
 # Error: Node 'orphan_reservoir' has no path to any Sink
 ```
 
+### 7. Auxiliary Data Requirements
+
+Physical models can declare required auxiliary data keys via a `required_auxiliary` class variable. During validation, `WaterSystem` checks that each node provides the keys its models need.
+
+```python
+# A loss rule that requires temperature data
+@dataclass(frozen=True)
+class EvaporationLoss:
+    required_auxiliary: ClassVar[frozenset[str]] = frozenset({"temperature"})
+
+    def calculate(self, node: Storage, t: Timestep) -> dict[LossReason, float]:
+        temp = node.auxiliary_data["temperature"][t.index]
+        return {EVAPORATION: node.storage * temp * 0.001}
+
+# This passes validation:
+storage = Storage(id="lake", ..., loss_rule=EvaporationLoss(), auxiliary_data={"temperature": temps})
+
+# This fails validation:
+storage = Storage(id="lake", ..., loss_rule=EvaporationLoss())
+# MissingAuxiliaryDataError: Node 'lake': loss_rule (EvaporationLoss) requires
+#     auxiliary_data keys {temperature} but they are missing
+```
+
+Raises `MissingAuxiliaryDataError` (subclass of `ValidationError`).
+
 ## ValidationError
 
 All validation errors raise `ValidationError` with a descriptive message:

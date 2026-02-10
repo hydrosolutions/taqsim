@@ -102,7 +102,10 @@ class WaterSystem:
         if errors:
             raise ValidationError("\n".join(errors))
 
-        # 8. Populate targets via _set_targets()
+        # 8. Validate auxiliary data requirements
+        self._validate_auxiliary_data()
+
+        # 9. Populate targets via _set_targets()
         self._set_targets()
 
         self._validated = True
@@ -370,6 +373,27 @@ class WaterSystem:
                             continue  # Skip validation for cyclical params
                         path = f"{node_id}.{strategy_name}.{param_name}"
                         raise InsufficientLengthError(path, len(value), timesteps)
+
+    def _validate_auxiliary_data(self) -> None:
+        """Validate that nodes provide auxiliary_data required by their physical models."""
+        from dataclasses import fields as dc_fields
+
+        from taqsim.system.validation import MissingAuxiliaryDataError
+
+        for node in self._nodes.values():
+            for f in dc_fields(node):
+                value = getattr(node, f.name)
+                required: frozenset[str] | None = getattr(value, "required_auxiliary", None)
+                if required is None:
+                    continue
+                missing = required - node.auxiliary_data.keys()
+                if missing:
+                    raise MissingAuxiliaryDataError(
+                        node_id=node.id,
+                        field_name=f.name,
+                        model_type=type(value).__name__,
+                        missing_keys=frozenset(missing),
+                    )
 
     def edge_length(self, edge_id: str) -> float | None:
         """Compute geodesic length of an edge in meters.

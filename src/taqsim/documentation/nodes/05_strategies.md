@@ -47,6 +47,35 @@ class FixedRelease(Strategy):
 
 `LossRule`, `RoutingModel`, and `ReachLossRule` implementations do **not** inherit from `Strategy`. They are physical models representing infrastructure, not operational policies. Only `ReleasePolicy` and `SplitPolicy` are optimizable.
 
+### required_auxiliary Convention
+
+Physical models that need external data (temperature, PET, area curves) declare their requirements via a `required_auxiliary` class variable:
+
+```python
+from dataclasses import dataclass
+from typing import ClassVar
+from taqsim.common import EVAPORATION, LossReason
+
+@dataclass(frozen=True)
+class EvaporationLoss:
+    required_auxiliary: ClassVar[frozenset[str]] = frozenset({"temperature", "surface_area"})
+    base_rate: float = 0.01
+
+    def calculate(self, node: "Storage", t: "Timestep") -> dict[LossReason, float]:
+        temp = node.auxiliary_data["temperature"][t.index]
+        area = node.auxiliary_data["surface_area"]
+        return {EVAPORATION: area * self.base_rate * temp}
+```
+
+| Element | Purpose |
+|---------|---------|
+| `required_auxiliary` | `ClassVar[frozenset[str]]` declaring required `auxiliary_data` keys |
+| `node.auxiliary_data` | Dict on node containing the actual data values |
+
+`WaterSystem.validate()` checks that every node provides the keys its models require. Missing keys raise `MissingAuxiliaryDataError` at validation time, not at simulation time.
+
+Models without `required_auxiliary` are backward compatible — validation simply skips them.
+
 ## Protocol Definitions
 
 ### ReleasePolicy

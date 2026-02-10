@@ -50,6 +50,7 @@ All nodes extend `BaseNode` which provides:
 class BaseNode:
     id: str
     location: tuple[float, float] | None  # (lat, lon) in WGS84
+    auxiliary_data: dict[str, Any]         # external data for physical models
     events: list[NodeEvent]               # append-only event log (not in __init__)
     _targets: list[str]                   # downstream node IDs (not in __init__)
 
@@ -143,3 +144,32 @@ source = Source(
 Taqsim stores these as opaque data; intelligence layers interpret them.
 
 See [Tags and Metadata](../common/03_tags_metadata.md) for details.
+
+## Auxiliary Data
+
+Nodes support an `auxiliary_data: dict[str, Any]` field for providing external data that physical models need at runtime. Unlike `metadata` (opaque annotations for intelligence layers), `auxiliary_data` is actively used by the simulation engine.
+
+```python
+storage = Storage(
+    id="lake",
+    capacity=5000.0,
+    release_policy=my_policy,
+    loss_rule=evap_model,
+    auxiliary_data={"temperature": [25.0, 28.0, 30.0], "surface_area": 12.5},
+)
+```
+
+Physical models access auxiliary data via the node reference they already receive:
+```python
+temp = node.auxiliary_data["temperature"][t.index]
+```
+
+Models declare their requirements via `required_auxiliary`:
+```python
+@dataclass(frozen=True)
+class EvaporationLoss:
+    required_auxiliary: ClassVar[frozenset[str]] = frozenset({"temperature"})
+    ...
+```
+
+See [Tags and Metadata](../common/03_tags_metadata.md) for the distinction between `metadata` and `auxiliary_data`.

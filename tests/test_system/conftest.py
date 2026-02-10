@@ -105,6 +105,7 @@ def make_storage(
     location: tuple[float, float] | None = None,
     tags: frozenset[str] | None = None,
     metadata: dict[str, Any] | None = None,
+    auxiliary_data: dict | None = None,
 ) -> Storage:
     if release_policy is None:
         release_policy = FakeReleasePolicy()
@@ -119,6 +120,7 @@ def make_storage(
         location=location,
         tags=tags or frozenset(),
         metadata=metadata or {},
+        auxiliary_data=auxiliary_data or {},
     )
 
 

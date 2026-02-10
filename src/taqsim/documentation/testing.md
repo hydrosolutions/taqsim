@@ -9,7 +9,7 @@ from taqsim.testing import (
     # Decision policies (Strategy subclasses — optimizable)
     FixedRelease, ProportionalRelease, EvenSplit, FixedSplit,
     # Physical model rules (frozen dataclasses — NOT Strategy)
-    ConstantLoss, ProportionalReachLoss,
+    ConstantLoss, ProportionalReachLoss, TemperatureDependentLoss,
     # Core no-ops (re-exported from taqsim)
     NoLoss, NoReachLoss, NoRouting,
     # Factory functions
@@ -95,6 +95,29 @@ Proportional loss on reach flow.
 ProportionalReachLoss(loss_fraction=0.1)
 # Returns {SEEPAGE: flow * 0.1}
 ```
+
+### TemperatureDependentLoss
+
+Evaporation loss that reads temperature from `node.auxiliary_data`. Demonstrates the `required_auxiliary` convention.
+
+```python
+TemperatureDependentLoss(base_rate=0.01)
+# required_auxiliary = frozenset({"temperature"})
+# Reads node.auxiliary_data["temperature"][t.index]
+# Adjusts evaporation rate based on temperature above 20°C
+```
+
+Usage with a storage node:
+
+```python
+storage = make_storage(
+    "reservoir",
+    loss_rule=TemperatureDependentLoss(base_rate=0.02),
+    auxiliary_data={"temperature": [18.0, 22.0, 28.0, 25.0]},
+)
+```
+
+Validation will raise `MissingAuxiliaryDataError` if `auxiliary_data` does not include `"temperature"`.
 
 ## Factory Functions
 

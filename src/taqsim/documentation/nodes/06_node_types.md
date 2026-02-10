@@ -270,6 +270,7 @@ Reservoir node. Receives, stores, loses, releases, and outputs water.
 | `release_policy` | `ReleasePolicy` | Yes | Release calculation |
 | `loss_rule` | `LossRule` | Yes | Loss calculation |
 | `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
+| `auxiliary_data` | `dict[str, Any]` | No | External data for physical models (default: {}) |
 
 ### Validation
 
@@ -359,6 +360,7 @@ Transport node. Models physical transport processes: routing delay, attenuation,
 | `routing_model` | `RoutingModel` | Yes | Routing physics (delay, attenuation) |
 | `loss_rule` | `ReachLossRule` | Yes | Transit loss calculation |
 | `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
+| `auxiliary_data` | `dict[str, Any]` | No | External data for physical models (default: {}) |
 
 ### Properties
 

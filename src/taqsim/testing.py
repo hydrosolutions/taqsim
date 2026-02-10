@@ -85,6 +85,18 @@ class ProportionalReachLoss:
         return {SEEPAGE: flow * self.loss_fraction}
 
 
+@dataclass(frozen=True)
+class TemperatureDependentLoss:
+    required_auxiliary: ClassVar[frozenset[str]] = frozenset({"temperature"})
+    base_rate: float = 0.01
+
+    def calculate(self, node: "Storage", t: Timestep) -> dict[LossReason, float]:
+        temperatures = node.auxiliary_data["temperature"]
+        temp = temperatures[t.index]
+        adjusted_rate = self.base_rate * (1.0 + max(0.0, temp - 20.0) / 10.0)
+        return {EVAPORATION: node.storage * adjusted_rate}
+
+
 # --- Re-exports from core ---
 
 __all__ = [
@@ -96,6 +108,7 @@ __all__ = [
     # Physical model rules
     "ConstantLoss",
     "ProportionalReachLoss",
+    "TemperatureDependentLoss",
     # Core no-ops (re-exported for convenience)
     "NoLoss",
     "NoReachLoss",
