@@ -34,10 +34,10 @@ reach.water_in_transit  # 0.0 for NoRouting
 
 ## Update Pipeline
 
-Each timestep, the Reach processes water in five stages:
+Each timestep, the Reach processes water in six stages:
 
 ```
-receive -> enter -> route -> lose -> transit snapshot -> output
+receive -> enter -> route -> exit -> lose -> transit snapshot -> output
 ```
 
 ### 1. Receive
@@ -58,7 +58,11 @@ outflow, new_state = routing_model.route(reach, inflow, state, t)
 
 The routing model owns its internal state representation. Simple models (e.g., `NoRouting`) use `None` and return inflow as outflow immediately. Delay-based models maintain a buffer of in-transit volumes.
 
-### 4. Lose
+### 4. Exit
+
+The routed outflow is recorded as `WaterExitedReach(amount, t)` — the volume exiting the channel before transit losses are applied.
+
+### 5. Lose
 
 Transit losses are calculated against the routed outflow:
 
@@ -68,7 +72,7 @@ losses = loss_rule.calculate(reach, outflow, t)
 
 If total losses exceed outflow, they are scaled proportionally so net outflow is never negative. Each non-zero loss records a `WaterLost(amount, reason, t)` event.
 
-### 5. Transit Snapshot and Output
+### 6. Transit Snapshot and Output
 
 A `WaterInTransit(amount, t)` event captures the current volume in transit (from `routing_model.storage(state)`).
 
@@ -80,6 +84,7 @@ If net outflow (outflow minus losses) is positive, a `WaterOutput(amount, t)` ev
 |-------|--------|------|
 | `WaterReceived` | `amount, source_id, t` | Each delivery from upstream |
 | `WaterEnteredReach` | `amount, t` | Start of update (total inflow) |
+| `WaterExitedReach` | `amount, t` | Routed outflow before losses |
 | `WaterLost` | `amount, reason, t` | Per loss reason after routing |
 | `WaterInTransit` | `amount, t` | Snapshot of water in routing state |
 | `WaterOutput` | `amount, t` | Net outflow for downstream |

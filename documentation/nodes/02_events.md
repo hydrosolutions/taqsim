@@ -180,8 +180,9 @@ Within a timestep, events are recorded in `update()` execution order:
 6. WaterConsumed
 7. WaterPassedThrough (PassThrough nodes)
 8. WaterEnteredReach (Reach nodes)
-9. WaterInTransit (Reach nodes)
-10. WaterOutput (single-output nodes) / WaterDistributed (Splitter)
+9. WaterExitedReach (Reach nodes)
+10. WaterInTransit (Reach nodes)
+11. WaterOutput (single-output nodes) / WaterDistributed (Splitter)
 
 ## Querying Events
 

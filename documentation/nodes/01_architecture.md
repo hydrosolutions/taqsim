@@ -80,7 +80,7 @@ All nodes implement `update(t: Timestep)` as their sole public processing method
 - **Storage**: `_store` → `_lose` → `_release` → WaterOutput
 - **Demand**: `_consume` → WaterOutput
 - **Splitter**: `_distribute` → WaterDistributed
-- **Reach**: route → lose → transit snapshot → WaterOutput
+- **Reach**: route → exit → lose → transit snapshot → WaterOutput
 - **PassThrough**: pass-through → WaterOutput
 - **Sink**: no-op
 

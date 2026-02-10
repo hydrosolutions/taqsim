@@ -6,6 +6,7 @@ from taqsim.time import Timestep
 from .base import BaseNode
 from .events import (
     WaterEnteredReach,
+    WaterExitedReach,
     WaterInTransit,
     WaterLost,
     WaterOutput,
@@ -46,6 +47,7 @@ class Reach(BaseNode):
         # 2. Route — transform (state, inflow) -> (outflow, new_state)
         outflow, new_state = self.routing_model.route(self, inflow, self._routing_state, t)
         self._routing_state = new_state
+        self.record(WaterExitedReach(amount=outflow, t=t.index))
 
         # 3. Lose — calculate and apply losses to routed outflow
         losses = self.loss_rule.calculate(self, outflow, t)

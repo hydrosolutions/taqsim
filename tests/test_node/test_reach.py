@@ -6,6 +6,7 @@ import pytest
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
 from taqsim.node.events import (
     WaterEnteredReach,
+    WaterExitedReach,
     WaterInTransit,
     WaterLost,
     WaterOutput,
@@ -255,6 +256,18 @@ class TestReachMassBalance:
         assert output_total == 0.0
         assert reach.water_in_transit == 100.0
 
+    def test_exited_equals_losses_plus_output(self):
+        loss_rule = FakeReachLossRule(losses={EVAPORATION: 10.0, SEEPAGE: 5.0})
+        reach = make_reach(loss_rule=loss_rule)
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        exited = sum(e.amount for e in reach.events_of_type(WaterExitedReach))
+        losses = sum(e.amount for e in reach.events_of_type(WaterLost))
+        output = sum(e.amount for e in reach.events_of_type(WaterOutput))
+
+        assert exited == losses + output
+
 
 class TestReachReset:
     def test_reset_clears_events(self):
@@ -330,6 +343,7 @@ class TestReachEvents:
         assert event_types == [
             "WaterReceived",
             "WaterEnteredReach",
+            "WaterExitedReach",
             "WaterInTransit",
             "WaterOutput",
         ]
@@ -344,10 +358,53 @@ class TestReachEvents:
         assert event_types == [
             "WaterReceived",
             "WaterEnteredReach",
+            "WaterExitedReach",
             "WaterLost",
             "WaterInTransit",
             "WaterOutput",
         ]
+
+    def test_water_exited_reach_records_routed_outflow(self):
+        reach = make_reach()
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        events = reach.events_of_type(WaterExitedReach)
+        assert len(events) == 1
+        assert events[0].amount == 100.0
+
+    def test_water_exited_reach_amount_is_before_losses(self):
+        loss_rule = FakeReachLossRule(losses={EVAPORATION: 10.0})
+        reach = make_reach(loss_rule=loss_rule)
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        exited = reach.events_of_type(WaterExitedReach)
+        output = reach.events_of_type(WaterOutput)
+        assert exited[0].amount == 100.0
+        assert output[0].amount == 90.0
+
+    def test_water_exited_reach_zero_when_buffering_delays_all(self):
+        reach = make_reach(routing_model=BufferingRouting())
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        exited = reach.events_of_type(WaterExitedReach)
+        assert len(exited) == 1
+        assert exited[0].amount == 0.0
+
+    def test_water_exited_reach_emitted_when_buffered_water_released(self):
+        reach = make_reach(routing_model=BufferingRouting())
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        reach.receive(0.0, "src", T1)
+        reach.update(T1)
+
+        exited = reach.events_of_type(WaterExitedReach)
+        assert len(exited) == 2
+        assert exited[0].amount == 0.0  # step 0: nothing exits
+        assert exited[1].amount == 100.0  # step 1: buffered water released
 
 
 class TestReachMultipleTimesteps:

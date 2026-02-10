@@ -3,8 +3,9 @@ from datetime import date
 import pytest
 
 from taqsim.node import WaterReceived
-from taqsim.node.events import WaterGenerated
+from taqsim.node.events import WaterGenerated, WaterLost
 from taqsim.system import ValidationError, WaterSystem
+from taqsim.testing import ProportionalReachLoss, make_reach
 from taqsim.time import Frequency, Timestep
 
 from .conftest import (
@@ -635,3 +636,76 @@ class TestMakeSystemStartDate:
             make_edge(source="source", target="sink"),
         )
         assert system.start_date is None
+
+
+class TestReachIntegration:
+    def test_reach_passthrough_delivers_full_amount(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        reach = make_reach(id="reach")
+        sink = make_sink()
+
+        system.add_node(source)
+        system.add_node(reach)
+        system.add_node(sink)
+        system.add_edge(make_edge(id="e1", source="source", target="reach"))
+        system.add_edge(make_edge(id="e2", source="reach", target="sink"))
+
+        system.simulate(timesteps=1)
+
+        received = sink.events_of_type(WaterReceived)
+        assert len(received) == 1
+        assert received[0].amount == 100.0
+
+    def test_reach_losses_reduce_downstream_delivery(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        reach = make_reach(id="reach", loss_rule=ProportionalReachLoss(loss_fraction=0.1))
+        sink = make_sink()
+
+        system.add_node(source)
+        system.add_node(reach)
+        system.add_node(sink)
+        system.add_edge(make_edge(id="e1", source="source", target="reach"))
+        system.add_edge(make_edge(id="e2", source="reach", target="sink"))
+
+        system.simulate(timesteps=1)
+
+        received = sink.events_of_type(WaterReceived)
+        assert len(received) == 1
+        assert received[0].amount == 90.0
+
+        loss_events = reach.events_of_type(WaterLost)
+        assert len(loss_events) == 1
+        assert loss_events[0].amount == 10.0
+
+    def test_reach_buffering_delays_downstream_delivery(self):
+        class BufferingRouting:
+            def initial_state(self, reach):
+                return 0.0
+
+            def route(self, reach, inflow, state, t):
+                outflow = state
+                new_state = inflow
+                return (outflow, new_state)
+
+            def storage(self, state):
+                return state
+
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        source = make_source()
+        reach = make_reach(id="reach", routing_model=BufferingRouting())
+        sink = make_sink()
+
+        system.add_node(source)
+        system.add_node(reach)
+        system.add_node(sink)
+        system.add_edge(make_edge(id="e1", source="source", target="reach"))
+        system.add_edge(make_edge(id="e2", source="reach", target="sink"))
+
+        system.simulate(timesteps=3)
+
+        received = sink.events_of_type(WaterReceived)
+        amounts = [e.amount for e in received]
+        # t=0: nothing exits (buffered), t=1: 100 released, t=2: 100 released
+        assert amounts == [100.0, 100.0]
