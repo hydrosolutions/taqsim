@@ -196,6 +196,7 @@ def make_system(
     frequency: Frequency = Frequency.MONTHLY,
     start_date: date | None = None,
     validate: bool = True,
+    connections: list[tuple[str, str] | tuple[str, str, Reach]] | None = None,
 ) -> WaterSystem:
     system = WaterSystem(frequency=frequency, start_date=start_date)
     for component in components:
@@ -203,6 +204,12 @@ def make_system(
             system.add_edge(component)
         else:
             system.add_node(component)
+    if connections:
+        for conn in connections:
+            if len(conn) == 2:
+                system.connect(conn[0], conn[1])
+            else:
+                system.connect(conn[0], conn[1], via=conn[2])
     if validate:
         system.validate()
     return system

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 
@@ -40,6 +40,57 @@ class WaterSystem:
             raise ValueError(f"Edge '{edge.id}' already exists")
         self._edges[edge.id] = edge
         self._validated = False
+
+    def connect(
+        self,
+        source: str,
+        target: str,
+        *,
+        via: Reach | None = None,
+        tags: frozenset[str] = frozenset(),
+        metadata: dict[str, Any] | None = None,
+    ) -> "WaterSystem":
+        if not source:
+            raise ValueError("source cannot be empty")
+        if not target:
+            raise ValueError("target cannot be empty")
+        if source == target:
+            raise ValueError("source and target cannot be the same")
+        if via is not None and not isinstance(via, Reach):
+            raise TypeError("via must be a Reach node")
+
+        # Pre-check edge ID collisions
+        if via is None:
+            edge_id = f"{source}_to_{target}"
+            if edge_id in self._edges:
+                raise ValueError(f"Edge '{edge_id}' already exists")
+        else:
+            edge_id_1 = f"{source}_to_{via.id}"
+            edge_id_2 = f"{via.id}_to_{target}"
+            if edge_id_1 in self._edges:
+                raise ValueError(f"Edge '{edge_id_1}' already exists")
+            if edge_id_2 in self._edges:
+                raise ValueError(f"Edge '{edge_id_2}' already exists")
+
+        # Check via node identity if already registered
+        if via is not None and via.id in self._nodes and self._nodes[via.id] is not via:
+            raise ValueError(f"Node '{via.id}' already exists")
+
+        meta = metadata or {}
+
+        if via is None:
+            edge = Edge(id=f"{source}_to_{target}", source=source, target=target, tags=tags, metadata=meta)
+            self.add_edge(edge)
+        else:
+            # Add reach node (skip if already present with identity match)
+            if via.id not in self._nodes:
+                self.add_node(via)
+            edge1 = Edge(id=f"{source}_to_{via.id}", source=source, target=via.id, tags=tags, metadata=meta)
+            edge2 = Edge(id=f"{via.id}_to_{target}", source=via.id, target=target, tags=tags, metadata=meta)
+            self.add_edge(edge1)
+            self.add_edge(edge2)
+
+        return self
 
     def validate(self) -> None:
         errors: list[str] = []

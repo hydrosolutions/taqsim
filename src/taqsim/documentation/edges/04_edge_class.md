@@ -85,3 +85,5 @@ e2 = Edge(id="e2", source="canal", target="farm")
 ```
 
 The Reach node handles all transport physics. The edges just define connectivity.
+
+> **Tip**: Use `WaterSystem.connect()` to create edges (and optional Reach nodes) in a single call. See [WaterSystem Architecture](../system/01_architecture.md#connectsource-target--vianone-tagsfrozenset-metadatanone).

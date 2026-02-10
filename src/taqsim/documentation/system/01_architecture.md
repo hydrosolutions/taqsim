@@ -75,6 +75,29 @@ Registers an edge connecting two nodes. Edges are pure topology — they define 
 system.add_edge(Edge(id="e1", source="river", target="dam"))
 ```
 
+### connect(source, target, *, via=None, tags=frozenset(), metadata=None)
+
+Ergonomic API for connecting nodes. Returns `self` for fluent chaining.
+
+**Plain connection** — creates a single edge with auto-generated ID `"{source}_to_{target}"`:
+
+```python
+system.connect("river", "dam")
+```
+
+**Reach connection** — adds the reach node and creates two edges:
+
+```python
+system.connect("river", "dam", via=Reach(id="canal", routing_model=muskingum, loss_rule=seepage))
+# Creates: Edge("river_to_canal") and Edge("canal_to_dam")
+```
+
+**Fluent chaining:**
+
+```python
+system.connect("river", "dam").connect("dam", "turbine").connect("turbine", "outlet")
+```
+
 ### validate()
 
 Validates network structure and derives topology:
@@ -151,6 +174,30 @@ system.simulate(timesteps=12)
 
 # Analyze results via node events
 total_received = sum(e.amount for e in city.events_of_type(WaterReceived))
+```
+
+### Equivalent Using connect()
+
+```python
+from taqsim.node import Source, Storage, PassThrough, Splitter, Demand, Sink, TimeSeries, WaterReceived
+from taqsim.system import WaterSystem
+
+source = Source(id="river", inflow=TimeSeries([100.0] * 12))
+dam = Storage(id="dam", capacity=1000, release_policy=rule, loss_rule=losses)
+turbine = PassThrough(id="turbine")
+junction = Splitter(id="junction", split_policy=equal_split)
+farm = Demand(id="farm", requirement=TimeSeries([30.0] * 12))
+city = Sink(id="city")
+
+system = WaterSystem(frequency=Frequency.DAILY, start_date=date(2020, 1, 1))
+for node in [source, dam, turbine, junction, farm, city]:
+    system.add_node(node)
+
+system.connect("river", "dam").connect("dam", "turbine").connect("turbine", "junction")
+system.connect("junction", "farm").connect("junction", "city")
+
+system.validate()
+system.simulate(timesteps=12)
 ```
 
 ## Graph Structure
