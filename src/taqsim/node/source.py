@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Source(BaseNode):
-    inflow: TimeSeries
+    inflow: TimeSeries | None = None
 
     def _generate(self, t: Timestep) -> float:
         amount = self.inflow[t]

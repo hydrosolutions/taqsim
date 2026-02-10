@@ -83,6 +83,17 @@ storage = Storage(id="lake", ..., loss_rule=EvaporationLoss())
 
 Raises `MissingAuxiliaryDataError` (subclass of `ValidationError`).
 
+### 8. TimeSeries Requirements
+
+Source nodes must have `inflow` set, and Demand nodes must have `requirement` set before validation. This is especially relevant when loading from JSON, where these fields start as `None`.
+
+```python
+# Error: Source 'river': 'inflow' is required but not set
+# Error: Demand 'city': 'requirement' is required but not set
+```
+
+Multiple missing fields are reported together in a single `ValidationError`.
+
 ## ValidationError
 
 All validation errors raise `ValidationError` with a descriptive message:

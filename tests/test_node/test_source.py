@@ -123,3 +123,13 @@ class TestSourceUpdate:
         assert [e.amount for e in generated] == [10.0, 20.0, 30.0]
         assert len(outputs) == 3
         assert [e.amount for e in outputs] == [10.0, 20.0, 30.0]
+
+
+class TestSourceOptionalInflow:
+    def test_creates_with_none_inflow(self):
+        source = Source(id="src", inflow=None)
+        assert source.inflow is None
+
+    def test_default_inflow_is_none(self):
+        source = Source(id="src")
+        assert source.inflow is None

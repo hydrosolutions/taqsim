@@ -385,6 +385,26 @@ loss = NoReachLoss()
 # calculate returns {} — no losses
 ```
 
+### NoRelease
+
+Placeholder release policy that raises `RuntimeError` if called. Used by `WaterSystem.from_json()` on Storage nodes.
+
+```python
+from taqsim import NoRelease
+storage = Storage(id="dam", capacity=100, release_policy=NoRelease(), loss_rule=NoLoss())
+# storage.release_policy.release(...) -> RuntimeError
+```
+
+### NoSplit
+
+Placeholder split policy that raises `RuntimeError` if called. Used by `WaterSystem.from_json()` on Splitter nodes.
+
+```python
+from taqsim import NoSplit
+splitter = Splitter(id="junc", split_policy=NoSplit())
+# splitter.split_policy.split(...) -> RuntimeError
+```
+
 ## Usage
 
 ```python

@@ -37,7 +37,9 @@ from .node import (
     Demand,
     NoLoss,
     NoReachLoss,
+    NoRelease,
     NoRouting,
+    NoSplit,
     PassThrough,
     Reach,
     ReachLossRule,
@@ -89,6 +91,8 @@ __all__ = [
     # Nodes
     "BaseNode",
     "NoLoss",
+    "NoRelease",
+    "NoSplit",
     "Source",
     "Storage",
     "Demand",

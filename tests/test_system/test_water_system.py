@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
-from taqsim.node import WaterReceived
+from taqsim.node import Demand, Source, WaterReceived
 from taqsim.node.events import WaterGenerated, WaterLost
+from taqsim.node.timeseries import TimeSeries
 from taqsim.system import MissingAuxiliaryDataError, ValidationError, WaterSystem
 from taqsim.testing import NoRouting, ProportionalReachLoss, make_reach
 from taqsim.time import Frequency, Timestep
@@ -891,3 +892,69 @@ class TestAuxiliaryDataIntegration:
         loss_events = reach.events_of_type(WaterLost)
         assert len(loss_events) > 0
         assert any(e.reason == SEEPAGE for e in loss_events)
+
+
+class TestValidationTimeSeries:
+    def test_source_none_inflow_fails_validation(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(Source(id="river", inflow=None))
+        system.add_node(make_sink())
+        system.add_edge(make_edge(source="river", target="sink"))
+        with pytest.raises(ValidationError, match="'inflow' is required but not set"):
+            system.validate()
+
+    def test_demand_none_requirement_fails_validation(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        system.add_node(Demand(id="city", requirement=None))
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="city"))
+        system.add_edge(make_edge(id="e2", source="city", target="sink"))
+        with pytest.raises(ValidationError, match="'requirement' is required but not set"):
+            system.validate()
+
+    def test_passes_after_inflow_assigned(self):
+        source = Source(id="river", inflow=None)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(source)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(source="river", target="sink"))
+        # Assign inflow before validation
+        source.inflow = TimeSeries([50.0] * 12)
+        system.validate()  # Should not raise
+
+    def test_passes_after_requirement_assigned(self):
+        demand = Demand(id="city", requirement=None)
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(make_source())
+        system.add_node(demand)
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="source", target="city"))
+        system.add_edge(make_edge(id="e2", source="city", target="sink"))
+        # Assign requirement before validation
+        demand.requirement = TimeSeries([30.0] * 12)
+        system.validate()  # Should not raise
+
+    def test_error_identifies_node_id(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(Source(id="my_river", inflow=None))
+        system.add_node(make_sink())
+        system.add_edge(make_edge(source="my_river", target="sink"))
+        with pytest.raises(ValidationError, match="my_river"):
+            system.validate()
+
+    def test_multiple_missing_fields_reported(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        # Connected network: source -> demand -> sink, both with None timeseries
+        system.add_node(Source(id="river", inflow=None))
+        system.add_node(Demand(id="city", requirement=None))
+        system.add_node(make_sink())
+        system.add_edge(make_edge(id="e1", source="river", target="city"))
+        system.add_edge(make_edge(id="e2", source="city", target="sink"))
+        with pytest.raises(ValidationError) as exc_info:
+            system.validate()
+        msg = str(exc_info.value)
+        assert "river" in msg
+        assert "city" in msg
+        assert "inflow" in msg
+        assert "requirement" in msg

@@ -1,5 +1,7 @@
+import json
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -7,7 +9,22 @@ import networkx as nx
 from taqsim.common import ParamSpec
 from taqsim.edge import Edge
 from taqsim.geo import haversine
-from taqsim.node import BaseNode, Demand, PassThrough, Reach, Receives, Sink, Source, Splitter, Storage
+from taqsim.node import (
+    BaseNode,
+    Demand,
+    NoLoss,
+    NoReachLoss,
+    NoRelease,
+    NoRouting,
+    NoSplit,
+    PassThrough,
+    Reach,
+    Receives,
+    Sink,
+    Source,
+    Splitter,
+    Storage,
+)
 from taqsim.node.events import WaterDistributed, WaterOutput
 from taqsim.time import Frequency, Timestep, time_index
 
@@ -15,6 +32,106 @@ from .validation import ValidationError
 
 if TYPE_CHECKING:
     from taqsim.constraints import ConstraintSpec
+
+_FREQUENCY_MAP: dict[str, Frequency] = {
+    "daily": Frequency.DAILY,
+    "weekly": Frequency.WEEKLY,
+    "monthly": Frequency.MONTHLY,
+    "yearly": Frequency.YEARLY,
+}
+
+
+def _parse_common_fields(data: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {"id": data["id"]}
+    if "location" in data:
+        loc = data["location"]
+        fields["location"] = (loc[0], loc[1])
+    if "tags" in data:
+        fields["tags"] = frozenset(data["tags"])
+    if "metadata" in data:
+        fields["metadata"] = dict(data["metadata"])
+    if "auxiliary_data" in data:
+        fields["auxiliary_data"] = dict(data["auxiliary_data"])
+    return fields
+
+
+def _parse_source(data: dict[str, Any]) -> Source:
+    fields = _parse_common_fields(data)
+    return Source(inflow=None, **fields)
+
+
+def _parse_storage(data: dict[str, Any]) -> Storage:
+    fields = _parse_common_fields(data)
+    if "capacity" not in data:
+        raise ValueError(f"Storage '{data['id']}': 'capacity' is required")
+    fields["capacity"] = data["capacity"]
+    if "initial_storage" in data:
+        fields["initial_storage"] = data["initial_storage"]
+    if "dead_storage" in data:
+        fields["dead_storage"] = data["dead_storage"]
+    fields["release_policy"] = NoRelease()
+    fields["loss_rule"] = NoLoss()
+    return Storage(**fields)
+
+
+def _parse_demand(data: dict[str, Any]) -> Demand:
+    fields = _parse_common_fields(data)
+    if "consumption_fraction" in data:
+        fields["consumption_fraction"] = data["consumption_fraction"]
+    if "efficiency" in data:
+        fields["efficiency"] = data["efficiency"]
+    return Demand(requirement=None, **fields)
+
+
+def _parse_splitter(data: dict[str, Any]) -> Splitter:
+    fields = _parse_common_fields(data)
+    fields["split_policy"] = NoSplit()
+    return Splitter(**fields)
+
+
+def _parse_reach(data: dict[str, Any]) -> Reach:
+    fields = _parse_common_fields(data)
+    fields["routing_model"] = NoRouting()
+    fields["loss_rule"] = NoReachLoss()
+    return Reach(**fields)
+
+
+def _parse_passthrough(data: dict[str, Any]) -> PassThrough:
+    fields = _parse_common_fields(data)
+    if "capacity" in data:
+        fields["capacity"] = data["capacity"]
+    return PassThrough(**fields)
+
+
+def _parse_sink(data: dict[str, Any]) -> Sink:
+    fields = _parse_common_fields(data)
+    return Sink(**fields)
+
+
+def _parse_edge(data: dict[str, Any]) -> Edge:
+    edge_id = data.get("id")
+    if not edge_id:
+        raise ValueError("Edge is missing required field 'id'")
+    source = data.get("source")
+    if not source:
+        raise ValueError(f"Edge '{edge_id}': 'source' is required")
+    target = data.get("target")
+    if not target:
+        raise ValueError(f"Edge '{edge_id}': 'target' is required")
+    tags = frozenset(data.get("tags", []))
+    metadata = dict(data.get("metadata", {}))
+    return Edge(id=edge_id, source=source, target=target, tags=tags, metadata=metadata)
+
+
+_NODE_PARSERS: dict[str, Any] = {
+    "source": _parse_source,
+    "storage": _parse_storage,
+    "demand": _parse_demand,
+    "splitter": _parse_splitter,
+    "reach": _parse_reach,
+    "passthrough": _parse_passthrough,
+    "sink": _parse_sink,
+}
 
 
 @dataclass
@@ -27,6 +144,50 @@ class WaterSystem:
     _graph: nx.DiGraph = field(default_factory=nx.DiGraph, init=False, repr=False)
     _validated: bool = field(default=False, init=False, repr=False)
     _source_target_to_edge: dict[tuple[str, str], str] = field(default_factory=dict, init=False, repr=False)
+
+    @classmethod
+    def from_json(cls, source: str | Path) -> "WaterSystem":
+        if isinstance(source, Path):
+            raw = source.read_text(encoding="utf-8")
+        elif isinstance(source, str) and source.strip().startswith("{"):
+            raw = source
+        else:
+            raw = Path(source).read_text(encoding="utf-8")
+        data = json.loads(raw)
+
+        freq_str = data.get("frequency")
+        if not freq_str:
+            raise ValueError("JSON must include a 'frequency' field")
+        freq_key = freq_str.strip().lower()
+        if freq_key not in _FREQUENCY_MAP:
+            raise ValueError(f"Invalid frequency '{freq_str}'. Valid options: {', '.join(sorted(_FREQUENCY_MAP))}")
+        frequency = _FREQUENCY_MAP[freq_key]
+
+        start_date: date | None = None
+        if "start_date" in data:
+            try:
+                start_date = date.fromisoformat(data["start_date"])
+            except (ValueError, TypeError) as exc:
+                raise ValueError(f"Invalid start_date '{data['start_date']}': {exc}") from exc
+
+        system = cls(frequency=frequency, start_date=start_date)
+
+        for node_data in data.get("nodes", []):
+            node_type = node_data.get("type")
+            if not node_type:
+                raise ValueError(f"Node is missing required field 'type': {node_data}")
+            if "id" not in node_data:
+                raise ValueError(f"Node is missing required field 'id': {node_data}")
+            type_key = node_type.strip().lower()
+            parser = _NODE_PARSERS.get(type_key)
+            if parser is None:
+                raise ValueError(f"Unknown node type '{node_type}'. Valid types: {', '.join(sorted(_NODE_PARSERS))}")
+            system.add_node(parser(node_data))
+
+        for edge_data in data.get("edges", []):
+            system.add_edge(_parse_edge(edge_data))
+
+        return system
 
     def add_node(self, node: BaseNode) -> None:
         if node.id in self._nodes:
@@ -155,6 +316,11 @@ class WaterSystem:
 
         # 8. Validate auxiliary data requirements
         self._validate_auxiliary_data()
+
+        # 8b. Validate required TimeSeries fields
+        ts_errors = self._validate_timeseries()
+        if ts_errors:
+            raise ValidationError("\n".join(ts_errors))
 
         # 9. Populate targets via _set_targets()
         self._set_targets()
@@ -445,6 +611,15 @@ class WaterSystem:
                         model_type=type(value).__name__,
                         missing_keys=frozenset(missing),
                     )
+
+    def _validate_timeseries(self) -> list[str]:
+        errors: list[str] = []
+        for node_id, node in self._nodes.items():
+            if isinstance(node, Source) and node.inflow is None:
+                errors.append(f"Source '{node_id}': 'inflow' is required but not set")
+            if isinstance(node, Demand) and node.requirement is None:
+                errors.append(f"Demand '{node_id}': 'requirement' is required but not set")
+        return errors
 
     def edge_length(self, edge_id: str) -> float | None:
         """Compute geodesic length of an edge in meters.

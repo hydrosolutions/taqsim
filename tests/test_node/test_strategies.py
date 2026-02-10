@@ -1,12 +1,15 @@
+from dataclasses import FrozenInstanceError
 from typing import TYPE_CHECKING
 
+import pytest
+
 from taqsim.common import EVAPORATION, SEEPAGE, LossReason
+from taqsim.node import NoLoss, NoRelease, NoSplit, Splitter, Storage
 from taqsim.node.strategies import LossRule, ReleasePolicy, SplitPolicy
 from taqsim.time import Frequency, Timestep
 
 if TYPE_CHECKING:
-    from taqsim.node.splitter import Splitter
-    from taqsim.node.storage import Storage
+    pass
 
 
 class TestReleasePolicyProtocol:
@@ -146,3 +149,51 @@ class TestProtocolNonSatisfaction:
         assert not isinstance(instance, ReleasePolicy)
         assert not isinstance(instance, SplitPolicy)
         assert not isinstance(instance, LossRule)
+
+
+class TestNoRelease:
+    def test_satisfies_release_policy_protocol(self):
+        assert isinstance(NoRelease(), ReleasePolicy)
+
+    def test_is_frozen_dataclass(self):
+        nr = NoRelease()
+        with pytest.raises(FrozenInstanceError):
+            nr.x = 1
+
+    def test_raises_runtime_error(self):
+        nr = NoRelease()
+        node = Storage(id="dam", capacity=100.0, release_policy=nr, loss_rule=NoLoss())
+        t = Timestep(index=0, frequency=Frequency.MONTHLY)
+        with pytest.raises(RuntimeError, match="NoRelease is a placeholder"):
+            nr.release(node, 50.0, t)
+
+    def test_error_message_includes_node_id(self):
+        nr = NoRelease()
+        node = Storage(id="my_reservoir", capacity=100.0, release_policy=nr, loss_rule=NoLoss())
+        t = Timestep(index=0, frequency=Frequency.MONTHLY)
+        with pytest.raises(RuntimeError, match="my_reservoir"):
+            nr.release(node, 50.0, t)
+
+
+class TestNoSplit:
+    def test_satisfies_split_policy_protocol(self):
+        assert isinstance(NoSplit(), SplitPolicy)
+
+    def test_is_frozen_dataclass(self):
+        ns = NoSplit()
+        with pytest.raises(FrozenInstanceError):
+            ns.x = 1
+
+    def test_raises_runtime_error(self):
+        ns = NoSplit()
+        node = Splitter(id="junction", split_policy=ns)
+        t = Timestep(index=0, frequency=Frequency.MONTHLY)
+        with pytest.raises(RuntimeError, match="NoSplit is a placeholder"):
+            ns.split(node, 100.0, t)
+
+    def test_error_message_includes_node_id(self):
+        ns = NoSplit()
+        node = Splitter(id="my_junction", split_policy=ns)
+        t = Timestep(index=0, frequency=Frequency.MONTHLY)
+        with pytest.raises(RuntimeError, match="my_junction"):
+            ns.split(node, 100.0, t)

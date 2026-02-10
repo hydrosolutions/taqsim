@@ -73,3 +73,19 @@ class NoRouting:
 
     def storage(self, state: None) -> float:
         return 0.0
+
+
+@dataclass(frozen=True)
+class NoRelease:
+    def release(self, node: "Storage", inflow: float, t: "Timestep") -> float:
+        raise RuntimeError(
+            f"NoRelease is a placeholder on Storage '{node.id}' — assign a real release_policy before simulating"
+        )
+
+
+@dataclass(frozen=True)
+class NoSplit:
+    def split(self, node: "Splitter", amount: float, t: "Timestep") -> dict[str, float]:
+        raise RuntimeError(
+            f"NoSplit is a placeholder on Splitter '{node.id}' — assign a real split_policy before simulating"
+        )

@@ -480,3 +480,13 @@ class TestDemandEfficiencyWithConsumptionFraction:
         output = output_events[0].amount if output_events else 0.0
 
         assert received == pytest.approx(lost + consumed + output)
+
+
+class TestDemandOptionalRequirement:
+    def test_creates_with_none_requirement(self):
+        demand = Demand(id="city", requirement=None)
+        assert demand.requirement is None
+
+    def test_default_requirement_is_none(self):
+        demand = Demand(id="city")
+        assert demand.requirement is None

@@ -10,7 +10,7 @@ from .timeseries import TimeSeries
 
 @dataclass
 class Demand(BaseNode):
-    requirement: TimeSeries
+    requirement: TimeSeries | None = None
     consumption_fraction: float = 1.0
     efficiency: float = 1.0
     _received_this_step: float = field(default=0.0, init=False, repr=False)
