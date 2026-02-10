@@ -30,6 +30,7 @@ from .constraints import (
     Ordered,
     SumToOne,
 )
+from .docs import get_docs_path
 from .edge import Edge
 from .node import (
     BaseNode,
@@ -122,6 +123,8 @@ __all__ = [
     "Frequency",
     "Timestep",
     "time_index",
+    # Documentation
+    "get_docs_path",
 ]
 
 __version__ = "0.3.0"

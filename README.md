@@ -26,7 +26,7 @@ Taqsim follows a single rule: **expose everything, decide nothing**.
 
 The simulation engine routes water, records events, and exposes all state for external analysis. It never interprets data or makes policy decisions. Optimization, visualization, and decision support are separate concerns built on top of taqsim's transparent foundation.
 
-See [Design Philosophy](documentation/00_philosophy.md) for details.
+See [Design Philosophy](src/taqsim/documentation/00_philosophy.md) for details.
 
 ## Installation
 
@@ -68,10 +68,10 @@ deficits = farm.events_of_type(DeficitRecorded)
 
 ## Documentation
 
-- [Node Architecture](documentation/nodes/01_architecture.md)
-- [Node Types](documentation/nodes/06_node_types.md)
-- [Edge Architecture](documentation/edges/01_architecture.md)
-- [System Architecture](documentation/system/01_architecture.md)
+- [Node Architecture](src/taqsim/documentation/nodes/01_architecture.md)
+- [Node Types](src/taqsim/documentation/nodes/06_node_types.md)
+- [Edge Architecture](src/taqsim/documentation/edges/01_architecture.md)
+- [System Architecture](src/taqsim/documentation/system/01_architecture.md)
 
 ## Contact
 

@@ -31,6 +31,10 @@ Stay focused on the current task until completion. Delegate tasks to sub agents 
 
 `.context` contains git submodules of libraries used. Agents are **highly encouraged** to grep for implementation details of the files they work with to ensure consistency with library conventions.
 
+### Documentation as Package Data
+
+taqsim ships its `documentation/` directory inside the package. Downstream repos access docs via `taqsim.get_docs_path()` and sync them locally with a Makefile target. See `documentation/30_consuming_docs.md` for the full integration guide.
+
 ## Use Skills and Ask Questions
 
 Use all skills that make semantic sense for the task.
