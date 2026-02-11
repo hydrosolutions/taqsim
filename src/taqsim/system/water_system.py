@@ -93,6 +93,8 @@ def _parse_reach(data: dict[str, Any]) -> Reach:
     fields = _parse_common_fields(data)
     fields["routing_model"] = NoRouting()
     fields["loss_rule"] = NoReachLoss()
+    if "capacity" in data:
+        fields["capacity"] = data["capacity"]
     return Reach(**fields)
 
 

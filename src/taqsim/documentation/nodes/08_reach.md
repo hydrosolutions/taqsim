@@ -17,10 +17,12 @@ Reach separates transport physics from connectivity. Edges define topology (whic
 | `id` | `str` | Yes | Unique identifier |
 | `routing_model` | `RoutingModel` | Yes | Physical routing model (delay, attenuation) |
 | `loss_rule` | `ReachLossRule` | Yes | Transit loss calculation |
+| `capacity` | `float \| None` | No | Maximum flow capacity per timestep. None = unlimited (default) |
 | `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 | `auxiliary_data` | `dict[str, Any]` | No | External data for physical models (default: {}) |
 
 Both `routing_model` and `loss_rule` are required. Construction raises `ValueError` if either is `None`.
+When `capacity` is set, it must be positive (`ValueError` if <= 0).
 
 ## Properties
 
@@ -35,15 +37,23 @@ reach.water_in_transit  # 0.0 for NoRouting
 
 ## Update Pipeline
 
-Each timestep, the Reach processes water in six stages:
+Each timestep, the Reach processes water in seven stages:
 
 ```
-receive -> enter -> route -> exit -> lose -> transit snapshot -> output
+receive -> capacity check -> enter -> route -> exit -> lose -> transit snapshot -> output
 ```
 
 ### 1. Receive
 
 Water arrives via `receive(amount, source_id, t)`. Multiple upstream nodes may deliver water in a single timestep. Each delivery records a `WaterReceived` event and accumulates into `_received_this_step`.
+
+### 1b. Capacity Check
+
+If `capacity` is set and accumulated inflow exceeds it:
+- Excess is recorded as `WaterSpilled(amount=excess, t=t)`
+- Only the capped amount (equal to capacity) proceeds to routing
+
+If capacity is `None` or inflow is within capacity, all flow proceeds.
 
 ### 2. Enter
 
@@ -87,6 +97,7 @@ If net outflow (outflow minus losses) is positive, a `WaterOutput(amount, t)` ev
 | `WaterEnteredReach` | `amount, t` | Start of update (total inflow) |
 | `WaterExitedReach` | `amount, t` | Routed outflow before losses |
 | `WaterLost` | `amount, reason, t` | Per loss reason after routing |
+| `WaterSpilled` | `amount, t` | When inflow exceeds capacity (before routing) |
 | `WaterInTransit` | `amount, t` | Snapshot of water in routing state |
 | `WaterOutput` | `amount, t` | Net outflow for downstream |
 
@@ -168,6 +179,9 @@ outlet = Sink(id="outlet")
 
 # Edges define topology; Reach handles transport physics
 # source -> canal -> outlet
+
+# Canal with throughput limit
+canal = Reach(id="canal", routing_model=NoRouting(), loss_rule=NoReachLoss(), capacity=500.0)
 ```
 
 ## Reset

@@ -359,8 +359,23 @@ Transport node. Models physical transport processes: routing delay, attenuation,
 | `id` | `str` | Yes | Unique identifier |
 | `routing_model` | `RoutingModel` | Yes | Routing physics (delay, attenuation) |
 | `loss_rule` | `ReachLossRule` | Yes | Transit loss calculation |
+| `capacity` | `float \| None` | No | Maximum flow capacity per timestep. None = unlimited (default) |
 | `location` | `tuple[float, float]` | No | (lat, lon) in WGS84 |
 | `auxiliary_data` | `dict[str, Any]` | No | External data for physical models (default: {}) |
+
+### Capacity Limiting
+
+When `capacity` is set, the Reach node limits flow to the specified value before routing:
+
+- Flow up to capacity enters the routing model normally
+- Excess flow above capacity is recorded as `WaterSpilled`
+- Only flow within capacity is routed and continues downstream
+- Spill check happens BEFORE entering the channel (before routing and losses)
+
+**Use cases:**
+- **Canals**: Physical cross-section limits maximum flow
+- **Pipelines**: Throughput constrained by pipe diameter
+- **River channels**: Bankfull capacity before flooding
 
 ### Properties
 
@@ -371,6 +386,7 @@ Transport node. Models physical transport processes: routing delay, attenuation,
 - `WaterReceived(amount, source_id, t)` — when water arrives
 - `WaterEnteredReach(amount, t)` — total inflow entering the channel this timestep
 - `WaterLost(amount, reason, t)` — transit losses (per loss reason)
+- `WaterSpilled(amount, t)` — flow exceeding capacity (when capacity is set)
 - `WaterInTransit(amount, t)` — snapshot of water currently in transit after routing
 - `WaterOutput(amount, t)` — net outflow available for downstream
 
@@ -385,12 +401,13 @@ if total_loss > outflow:
 
 ### Update Cycle
 
-1. Record `WaterEnteredReach` for accumulated inflow
-2. Route: transform (state, inflow) into (outflow, new_state) via `routing_model.route()`
-3. Lose: calculate and apply transit losses via `loss_rule.calculate()`
-4. Record `WaterInTransit` snapshot
-5. Record `WaterOutput` for net outflow (outflow minus losses)
-6. Reset counter
+1. Capacity check: spill excess if over capacity
+2. Record `WaterEnteredReach` for capped inflow
+3. Route: transform (state, capped inflow) into (outflow, new_state) via `routing_model.route()`
+4. Lose: calculate and apply transit losses
+5. Record `WaterInTransit` snapshot
+6. Record `WaterOutput` for net outflow
+7. Reset counter
 
 ### Example
 
@@ -406,6 +423,20 @@ channel = Reach(
 
 # Check water currently in transit
 print(channel.water_in_transit)  # 0.0
+```
+
+### Example with Capacity
+
+```python
+from taqsim.node import Reach, NoRouting, NoReachLoss
+
+# Canal with max 500 m³/timestep throughput
+canal = Reach(
+    id="main_canal",
+    routing_model=NoRouting(),
+    loss_rule=NoReachLoss(),
+    capacity=500.0
+)
 ```
 
 ---

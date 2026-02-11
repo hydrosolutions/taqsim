@@ -95,6 +95,7 @@ Water that exceeds capacity and cannot be stored or processed.
 **Emitted by:**
 - `Storage` — when inflow exceeds available storage capacity (overflow)
 - `PassThrough` — when flow exceeds `capacity` parameter (if set)
+- `Reach` — when flow exceeds `capacity` parameter (if set)
 
 ```python
 WaterSpilled(amount=50.0, t=0)

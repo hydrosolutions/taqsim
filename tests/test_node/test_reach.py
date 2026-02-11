@@ -11,6 +11,7 @@ from taqsim.node.events import (
     WaterLost,
     WaterOutput,
     WaterReceived,
+    WaterSpilled,
 )
 from taqsim.node.protocols import Receives
 from taqsim.node.reach import Reach
@@ -463,3 +464,434 @@ class TestReachWithNoRouting:
         reach.receive(100.0, "src", T)
         reach.update(T)
         assert reach.water_in_transit == 0.0
+
+
+class TestReachCapacity:
+    """Tests for the optional capacity field on Reach."""
+
+    def _make(
+        self,
+        capacity: float | None = None,
+        routing_model: Any = None,
+        loss_rule: Any = None,
+    ) -> Reach:
+        if routing_model is None:
+            routing_model = PassThroughRouting()
+        if loss_rule is None:
+            loss_rule = FakeReachLossRule()
+        return Reach(
+            id="r",
+            routing_model=routing_model,
+            loss_rule=loss_rule,
+            capacity=capacity,
+        )
+
+    # --- Validation ---
+
+    def test_capacity_none_is_valid(self):
+        reach = make_reach()
+        assert reach.capacity is None
+
+    def test_capacity_positive_is_valid(self):
+        reach = self._make(capacity=100.0)
+        assert reach.capacity == 100.0
+
+    def test_capacity_zero_raises(self):
+        with pytest.raises(ValueError, match="capacity must be positive"):
+            self._make(capacity=0)
+
+    def test_capacity_negative_raises(self):
+        with pytest.raises(ValueError, match="capacity must be positive"):
+            self._make(capacity=-10)
+
+    # --- No capacity (unlimited) ---
+
+    def test_no_capacity_passes_all_flow(self):
+        reach = self._make()
+        reach.receive(200.0, "src", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 200.0
+
+    def test_no_capacity_emits_no_spill_events(self):
+        reach = self._make()
+        reach.receive(200.0, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 0
+
+    # --- Below capacity ---
+
+    def test_below_capacity_passes_all_flow(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(50.0, "src", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 50.0
+
+    def test_below_capacity_emits_no_spill_event(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(50.0, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 0
+
+    def test_below_capacity_multiple_sources(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(30.0, "A", T)
+        reach.receive(20.0, "B", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 50.0
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 0
+
+    # --- Equals capacity ---
+
+    def test_at_capacity_boundary_no_spill(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 100.0
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 0
+
+    # --- Exceeds capacity ---
+
+    def test_exceeds_capacity_limits_output(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 100.0
+
+    def test_exceeds_capacity_records_spill(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].amount == 50.0
+
+    def test_exceeds_capacity_correct_timestep(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(150.0, "src", T1)
+        reach.update(T1)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].t == T1.index
+
+    def test_exceeds_capacity_multiple_sources(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(80.0, "A", T)
+        reach.receive(70.0, "B", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 100.0
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].amount == 50.0
+
+    def test_exceeds_capacity_large_overflow(self):
+        reach = self._make(capacity=10.0)
+        reach.receive(1000.0, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].amount == 990.0
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 10.0
+
+    # --- Capacity + routing ---
+
+    def test_spy_sees_capped_inflow(self):
+        spy = SpyRouting()
+        reach = self._make(capacity=100.0, routing_model=spy)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        assert spy.inflows == [100.0]
+
+    def test_buffering_buffers_capped_amount(self):
+        reach = self._make(capacity=100.0, routing_model=BufferingRouting())
+
+        # Step 0: receive 150, capped to 100, buffered (output=0)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        outputs_s0 = reach.events_of_type(WaterOutput)
+        assert len(outputs_s0) == 0
+        assert reach.water_in_transit == 100.0
+
+        # Step 1: receive 0, release buffered 100
+        reach.receive(0.0, "src", T1)
+        reach.update(T1)
+
+        outputs_s1 = reach.events_of_type(WaterOutput)
+        assert len(outputs_s1) == 1
+        assert outputs_s1[0].amount == 100.0
+
+    def test_entered_reach_records_capped_amount(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        entered = reach.events_of_type(WaterEnteredReach)
+        assert len(entered) == 1
+        assert entered[0].amount == 100.0
+
+    # --- Capacity + losses ---
+
+    def test_losses_applied_to_capped_flow(self):
+        reach = self._make(
+            capacity=100.0,
+            loss_rule=FakeReachLossRule(losses={EVAPORATION: 10.0}),
+        )
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 90.0
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].amount == 50.0
+
+    def test_buffering_plus_losses_on_capped(self):
+        reach = self._make(
+            capacity=100.0,
+            routing_model=BufferingRouting(),
+            loss_rule=FakeReachLossRule(losses={EVAPORATION: 5.0}),
+        )
+
+        # Step 0: receive 150 → spill=50, entered=100, buffered=100, output=0
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].amount == 50.0
+
+        entered = reach.events_of_type(WaterEnteredReach)
+        assert entered[0].amount == 100.0
+
+        outputs_s0 = reach.events_of_type(WaterOutput)
+        assert len(outputs_s0) == 0
+
+        # Step 1: receive 0 → outflow=100, loss=5, output=95
+        reach.receive(0.0, "src", T1)
+        reach.update(T1)
+
+        outputs_s1 = reach.events_of_type(WaterOutput)
+        assert len(outputs_s1) == 1
+        assert outputs_s1[0].amount == 95.0
+
+    def test_loss_scaling_after_cap(self):
+        reach = self._make(
+            capacity=50.0,
+            loss_rule=FakeReachLossRule(losses={EVAPORATION: 80.0, SEEPAGE: 20.0}),
+        )
+        reach.receive(200.0, "src", T)
+        reach.update(T)
+
+        # Capacity caps inflow to 50; passthrough outflow=50
+        # Losses (80+20=100) exceed outflow (50), so scaled: evap=40, seep=10
+        loss_events = reach.events_of_type(WaterLost)
+        evap = next(e for e in loss_events if e.reason == EVAPORATION)
+        seep = next(e for e in loss_events if e.reason == SEEPAGE)
+        assert evap.amount == pytest.approx(40.0)
+        assert seep.amount == pytest.approx(10.0)
+
+        # All capped flow lost, no output
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 0
+
+    # --- Mass balance ---
+
+    def test_mass_balance_spilled_plus_entered_equals_received(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        spill_total = sum(e.amount for e in reach.events_of_type(WaterSpilled))
+        entered_total = sum(e.amount for e in reach.events_of_type(WaterEnteredReach))
+        received_total = sum(e.amount for e in reach.events_of_type(WaterReceived))
+
+        assert spill_total + entered_total == received_total
+
+    def test_mass_balance_with_losses(self):
+        reach = self._make(
+            capacity=100.0,
+            loss_rule=FakeReachLossRule(losses={EVAPORATION: 10.0}),
+        )
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        spill = sum(e.amount for e in reach.events_of_type(WaterSpilled))
+        entered = sum(e.amount for e in reach.events_of_type(WaterEnteredReach))
+        losses = sum(e.amount for e in reach.events_of_type(WaterLost))
+        output = sum(e.amount for e in reach.events_of_type(WaterOutput))
+
+        assert spill + entered == 150.0
+        assert output + losses == pytest.approx(100.0)
+
+    def test_mass_balance_multi_step_buffering(self):
+        reach = self._make(capacity=80.0, routing_model=BufferingRouting())
+
+        # Step 0: receive 100 → spill=20, entered=80, transit=80
+        reach.receive(100.0, "src", T)
+        reach.update(T)
+
+        spill_s0 = sum(e.amount for e in reach.events_of_type(WaterSpilled))
+        entered_s0 = sum(e.amount for e in reach.events_of_type(WaterEnteredReach))
+        assert spill_s0 == 20.0
+        assert entered_s0 == 80.0
+        assert reach.water_in_transit == 80.0
+
+        # Step 1: receive 0 → outflow=80
+        reach.receive(0.0, "src", T1)
+        reach.update(T1)
+
+        outputs = reach.events_of_type(WaterOutput)
+        assert len(outputs) == 1
+        assert outputs[0].amount == 80.0
+
+    # --- Multi-timestep ---
+
+    def test_capacity_enforced_each_step(self):
+        reach = self._make(capacity=100.0)
+
+        # Step 0: receive 150 → spill=50, output=100
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        spills_s0 = reach.events_of_type(WaterSpilled)
+        outputs_s0 = reach.events_of_type(WaterOutput)
+        assert len(spills_s0) == 1
+        assert spills_s0[0].amount == 50.0
+        assert outputs_s0[0].amount == 100.0
+
+        # Step 1: receive 80 → no spill, output=80
+        reach.receive(80.0, "src", T1)
+        reach.update(T1)
+
+        spills_s1 = reach.events_of_type(WaterSpilled)
+        outputs_s1 = reach.events_of_type(WaterOutput)
+        assert len(spills_s1) == 1  # still only the one from step 0
+        assert len(outputs_s1) == 2
+        assert outputs_s1[1].amount == 80.0
+
+    def test_capacity_spill_correct_timesteps(self):
+        reach = self._make(capacity=100.0)
+
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+        reach.receive(200.0, "src", T1)
+        reach.update(T1)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 2
+        assert spills[0].t == T.index
+        assert spills[1].t == T1.index
+
+    def test_capacity_no_accumulation_across_steps(self):
+        reach = self._make(capacity=50.0)
+
+        # Step 0: receive 30 → no spill
+        reach.receive(30.0, "src", T)
+        reach.update(T)
+
+        spills_s0 = reach.events_of_type(WaterSpilled)
+        assert len(spills_s0) == 0
+
+        # Step 1: receive 60 → spill=10 (not 40)
+        reach.receive(60.0, "src", T1)
+        reach.update(T1)
+
+        spills_s1 = reach.events_of_type(WaterSpilled)
+        assert len(spills_s1) == 1
+        assert spills_s1[0].amount == 10.0
+
+    # --- Event sequence ---
+
+    def test_event_sequence_with_spill_passthrough(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        event_types = [type(e).__name__ for e in reach.events]
+        assert event_types == [
+            "WaterReceived",
+            "WaterSpilled",
+            "WaterEnteredReach",
+            "WaterExitedReach",
+            "WaterInTransit",
+            "WaterOutput",
+        ]
+
+    def test_event_sequence_with_spill_and_losses(self):
+        reach = self._make(
+            capacity=100.0,
+            loss_rule=FakeReachLossRule(losses={EVAPORATION: 10.0}),
+        )
+        reach.receive(150.0, "src", T)
+        reach.update(T)
+
+        event_types = [type(e).__name__ for e in reach.events]
+        assert event_types == [
+            "WaterReceived",
+            "WaterSpilled",
+            "WaterEnteredReach",
+            "WaterExitedReach",
+            "WaterLost",
+            "WaterInTransit",
+            "WaterOutput",
+        ]
+
+    # --- Edge cases ---
+
+    def test_zero_flow_with_capacity(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(0.0, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 0
+
+    def test_very_small_overflow(self):
+        reach = self._make(capacity=100.0)
+        reach.receive(100.001, "src", T)
+        reach.update(T)
+
+        spills = reach.events_of_type(WaterSpilled)
+        assert len(spills) == 1
+        assert spills[0].amount == pytest.approx(0.001)
+
+    def test_fresh_copy_preserves_capacity(self):
+        reach = self._make(capacity=500.0)
+        copy = reach._fresh_copy()
+        assert copy.capacity == 500.0

@@ -15,7 +15,7 @@
     {"type": "storage", "id": "dam", "capacity": 500.0, "initial_storage": 200.0},
     {"type": "demand", "id": "city", "consumption_fraction": 0.8},
     {"type": "splitter", "id": "junction"},
-    {"type": "reach", "id": "canal"},
+    {"type": "reach", "id": "canal", "capacity": 2000.0},
     {"type": "passthrough", "id": "gauge", "capacity": 1000.0},
     {"type": "sink", "id": "ocean"}
   ],
@@ -54,7 +54,7 @@ All nodes support these optional fields alongside the required `type` and `id`:
 | `storage` | `id`, `capacity` | `initial_storage`, `dead_storage` | `release_policy=NoRelease()`, `loss_rule=NoLoss()` |
 | `demand` | `id` | `consumption_fraction`, `efficiency` | `requirement=None` |
 | `splitter` | `id` | — | `split_policy=NoSplit()` |
-| `reach` | `id` | — | `routing_model=NoRouting()`, `loss_rule=NoReachLoss()` |
+| `reach` | `id` | `capacity` | `routing_model=NoRouting()`, `loss_rule=NoReachLoss()` |
 | `passthrough` | `id` | `capacity` | — |
 | `sink` | `id` | — | — |
 

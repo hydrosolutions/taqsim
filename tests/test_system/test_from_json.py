@@ -56,7 +56,7 @@ def full_json_dict() -> dict:
                 "efficiency": 0.9,
             },
             {"type": "splitter", "id": "junction"},
-            {"type": "reach", "id": "canal"},
+            {"type": "reach", "id": "canal", "capacity": 2000.0},
             {"type": "passthrough", "id": "gauge", "capacity": 1000.0},
             {"type": "sink", "id": "ocean"},
         ],
@@ -158,6 +158,18 @@ class TestFromJsonNodes:
         d["nodes"].insert(1, {"type": "passthrough", "id": "gauge"})
         system = WaterSystem.from_json(as_json(d))
         assert isinstance(system.nodes["gauge"], PassThrough)
+
+    def test_parses_reach_with_capacity(self):
+        d = minimal_json_dict()
+        d["nodes"].insert(1, {"type": "reach", "id": "canal", "capacity": 500.0})
+        system = WaterSystem.from_json(as_json(d))
+        assert system.nodes["canal"].capacity == 500.0
+
+    def test_reach_capacity_defaults_to_none(self):
+        d = minimal_json_dict()
+        d["nodes"].insert(1, {"type": "reach", "id": "canal"})
+        system = WaterSystem.from_json(as_json(d))
+        assert system.nodes["canal"].capacity is None
 
     def test_parses_passthrough_with_capacity(self):
         d = minimal_json_dict()
@@ -352,6 +364,12 @@ class TestFromJsonErrors:
             ],
         }
         with pytest.raises(ValueError, match="already exists"):
+            WaterSystem.from_json(as_json(d))
+
+    def test_reach_negative_capacity_raises(self):
+        d = minimal_json_dict()
+        d["nodes"].insert(1, {"type": "reach", "id": "canal", "capacity": -10.0})
+        with pytest.raises(ValueError, match="capacity must be positive"):
             WaterSystem.from_json(as_json(d))
 
     def test_invalid_start_date_raises(self):
