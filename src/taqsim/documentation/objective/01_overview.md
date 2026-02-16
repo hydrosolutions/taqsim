@@ -16,7 +16,6 @@ class Objective:
     name: str                                    # Human-readable identifier
     direction: Literal["minimize", "maximize"]   # Optimization direction
     evaluate: Callable[[WaterSystem], float]     # Computes score from simulation
-    priority: int = 1                            # For multi-objective weighting
 ```
 
 ### Trace
@@ -56,7 +55,7 @@ Taqsim provides two objective registries: `minimize` and `maximize`.
 from taqsim.objective import minimize
 
 obj1 = minimize.spill("reservoir")
-obj2 = minimize.deficit("city_demand", priority=2)
+obj2 = minimize.deficit("city_demand")
 ```
 
 ### maximize (custom objectives)

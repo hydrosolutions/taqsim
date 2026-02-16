@@ -30,15 +30,6 @@ class TestObjective:
         with pytest.raises(FrozenInstanceError):
             obj.name = "new_name"
 
-    def test_default_priority_is_one(self) -> None:
-        obj = Objective(
-            name="priority_test",
-            direction="minimize",
-            evaluate=lambda s: 0.0,
-        )
-
-        assert obj.priority == 1
-
     def test_evaluate_calls_function(self) -> None:
         call_count = []
 

@@ -1,6 +1,6 @@
 [project]
 name = "taqsim"
-version = "0.1.3"
+version = "0.1.4"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -79,7 +79,7 @@ ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "
 # Bump My Version
 # -----------------------
 [tool.bumpversion]
-current_version = "0.1.3"
+current_version = "0.1.4"
 commit = false
 tag = false
 allow_dirty = true

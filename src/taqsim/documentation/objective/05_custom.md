@@ -11,7 +11,7 @@ An objective factory is a function that returns an `Objective`:
 ```python
 from taqsim.objective import Objective
 
-def my_objective(target_id: str, *, priority: int = 1) -> Objective:
+def my_objective(target_id: str) -> Objective:
     def evaluate(system):
         # Compute score from system state
         return score
@@ -20,7 +20,6 @@ def my_objective(target_id: str, *, priority: int = 1) -> Objective:
         name=f"{target_id}.my_metric",
         direction="minimize",  # or "maximize"
         evaluate=evaluate,
-        priority=priority,
     )
 ```
 
@@ -48,8 +47,6 @@ def hydropower(
     reservoir_id: str,
     turbine_id: str,
     efficiency: float = 0.85,
-    *,
-    priority: int = 1,
 ) -> Objective:
     def evaluate(system):
         reservoir = system.nodes[reservoir_id]
@@ -71,7 +68,6 @@ def hydropower(
         name=f"{turbine_id}.hydropower",
         direction="maximize",
         evaluate=evaluate,
-        priority=priority,
     )
 ```
 
@@ -97,7 +93,7 @@ Minimize deviation from a target storage level:
 ```python
 from taqsim.objective import Objective
 
-def storage_target(reservoir_id: str, target: float, *, priority: int = 1) -> Objective:
+def storage_target(reservoir_id: str, target: float) -> Objective:
     def evaluate(system):
         node = system.nodes[reservoir_id]
         final_storage = node.storage  # Derived from events
@@ -107,7 +103,6 @@ def storage_target(reservoir_id: str, target: float, *, priority: int = 1) -> Ob
         name=f"{reservoir_id}.storage_target",
         direction="minimize",
         evaluate=evaluate,
-        priority=priority,
     )
 ```
 
@@ -135,7 +130,7 @@ Trace enables functional transformations:
 from taqsim.objective import Objective
 from taqsim.node.events import WaterReleased
 
-def peak_flow_penalty(node_id: str, threshold: float, *, priority: int = 1) -> Objective:
+def peak_flow_penalty(node_id: str, threshold: float) -> Objective:
     def evaluate(system):
         node = system.nodes[node_id]
         releases = node.trace(WaterReleased)
@@ -149,7 +144,6 @@ def peak_flow_penalty(node_id: str, threshold: float, *, priority: int = 1) -> O
         name=f"{node_id}.peak_penalty",
         direction="minimize",
         evaluate=evaluate,
-        priority=priority,
     )
 ```
 
@@ -160,7 +154,7 @@ Edges also support the `.trace()` method for building objectives based on flow e
 ```python
 from taqsim.edge.events import WaterDelivered
 
-def channel_utilization(edge_id: str, capacity: float, *, priority: int = 1) -> Objective:
+def channel_utilization(edge_id: str, capacity: float) -> Objective:
     def evaluate(system):
         edge = system.edges[edge_id]
         transfers = edge.trace(WaterDelivered)
@@ -173,7 +167,6 @@ def channel_utilization(edge_id: str, capacity: float, *, priority: int = 1) -> 
         name=f"{edge_id}.utilization",
         direction="maximize",
         evaluate=evaluate,
-        priority=priority,
     )
 ```
 
@@ -185,7 +178,7 @@ Combine multiple event types:
 from taqsim.objective import Objective
 from taqsim.node.events import WaterReceived, DeficitRecorded
 
-def net_benefit(demand_id: str, *, priority: int = 1) -> Objective:
+def net_benefit(demand_id: str) -> Objective:
     def evaluate(system):
         node = system.nodes[demand_id]
 
@@ -201,7 +194,6 @@ def net_benefit(demand_id: str, *, priority: int = 1) -> Objective:
         name=f"{demand_id}.net_benefit",
         direction="maximize",
         evaluate=evaluate,
-        priority=priority,
     )
 ```
 
@@ -209,6 +201,5 @@ def net_benefit(demand_id: str, *, priority: int = 1) -> Objective:
 
 1. **Validate targets** - Check that nodes/edges exist before accessing
 2. **Use descriptive names** - Include target_id in the objective name
-3. **Accept priority** - Allow users to weight objectives
-4. **Document units** - Be clear about what the score represents
-5. **Keep evaluation pure** - Don't modify system state in evaluate
+3. **Document units** - Be clear about what the score represents
+4. **Keep evaluation pure** - Don't modify system state in evaluate

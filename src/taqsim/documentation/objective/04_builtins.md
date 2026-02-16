@@ -15,7 +15,6 @@ from taqsim.objective import minimize
 
 obj = minimize.spill("reservoir_1")
 obj = minimize.spill("city_intake")  # PassThrough with capacity
-obj = minimize.spill("reservoir_1", priority=2)
 ```
 
 **What it measures:** Sum of `WaterSpilled` event amounts at the specified node.
@@ -39,20 +38,6 @@ obj = minimize.deficit("city_demand")
 **What it measures:** Sum of `DeficitRecorded` event deficits at the specified node.
 
 **Use case:** Ensure demand nodes receive their required water. Deficits indicate supply fell short of requirements—this can be reduced by allocating more water to this demand.
-
-## Priority Parameter
-
-All built-in objectives accept a `priority` parameter for multi-objective weighting:
-
-```python
-objectives = [
-    minimize.deficit("municipal", priority=3),   # Highest priority
-    minimize.deficit("irrigation", priority=1),  # Lower priority
-    minimize.spill("dam", priority=2),
-]
-```
-
-Higher priority objectives carry more weight in optimization.
 
 ## Error Handling
 

@@ -13,4 +13,3 @@ class Objective:
     name: str
     direction: Direction
     evaluate: Callable[["WaterSystem"], float]
-    priority: int = 1
