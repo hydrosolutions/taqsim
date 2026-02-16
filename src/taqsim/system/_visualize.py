@@ -63,6 +63,8 @@ def visualize_system(
     edges: dict[str, Edge],
     *,
     show_reaches: bool = True,
+    show_reach_labels: bool = True,
+    edge_colors: dict[str, str] | None = None,
     save_to: str | Path | None = None,
     figsize: tuple[float, float] = (12, 8),
     title: str | None = None,
@@ -80,7 +82,7 @@ def visualize_system(
     fig, ax = plt.subplots(figsize=figsize)
 
     handles = _draw_nodes(graph, pos, active_nodes, ax)
-    _draw_edges(graph, pos, ax, collapsed_edges)
+    _draw_edges(graph, pos, ax, collapsed_edges, show_reach_labels=show_reach_labels, edge_colors=edge_colors)
     _draw_labels(graph, pos, ax)
 
     if title is not None:
@@ -211,44 +213,50 @@ def _draw_edges(
     pos: dict[str, tuple[float, float]],
     ax: plt.Axes,
     collapsed_edges: list[CollapsedEdge],
+    *,
+    show_reach_labels: bool = True,
+    edge_colors: dict[str, str] | None = None,
 ) -> None:
     nx.draw_networkx_edges(
         graph,
         pos,
         ax=ax,
-        edge_color="#cccccc",
+        edge_color="black",
         arrows=True,
         arrowsize=15,
         width=1.5,
     )
 
     if collapsed_edges:
-        collapsed_graph = nx.DiGraph()
+        color_map = edge_colors or {}
         for ce in collapsed_edges:
-            collapsed_graph.add_edge(ce.source, ce.target)
+            single = nx.DiGraph()
+            single.add_edge(ce.source, ce.target)
+            single_pos = {n: pos[n] for n in single.nodes() if n in pos}
+            nx.draw_networkx_edges(
+                single,
+                single_pos,
+                ax=ax,
+                edge_color=color_map.get(ce.reach_id, "black"),
+                arrows=True,
+                arrowsize=15,
+                width=1.5,
+            )
 
-        collapsed_pos = {n: pos[n] for n in collapsed_graph.nodes() if n in pos}
-
-        nx.draw_networkx_edges(
-            collapsed_graph,
-            collapsed_pos,
-            ax=ax,
-            edge_color="#8B4513",
-            style="dashed",
-            arrows=True,
-            arrowsize=15,
-            width=2.0,
-        )
-
-        labels = {(ce.source, ce.target): ce.reach_id for ce in collapsed_edges}
-        nx.draw_networkx_edge_labels(
-            collapsed_graph,
-            collapsed_pos,
-            edge_labels=labels,
-            ax=ax,
-            font_color="#8B4513",
-            font_size=8,
-        )
+        if show_reach_labels:
+            collapsed_graph = nx.DiGraph()
+            for ce in collapsed_edges:
+                collapsed_graph.add_edge(ce.source, ce.target)
+            collapsed_pos = {n: pos[n] for n in collapsed_graph.nodes() if n in pos}
+            labels = {(ce.source, ce.target): ce.reach_id for ce in collapsed_edges}
+            nx.draw_networkx_edge_labels(
+                collapsed_graph,
+                collapsed_pos,
+                edge_labels=labels,
+                ax=ax,
+                font_color="black",
+                font_size=8,
+            )
 
 
 def _draw_labels(

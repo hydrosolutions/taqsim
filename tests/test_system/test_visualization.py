@@ -376,3 +376,117 @@ class TestVisualizeEdgeCases:
         assert isinstance(fig, plt.Figure)
         assert isinstance(ax, plt.Axes)
         plt.close(fig)
+
+
+class TestShowReachLabels:
+    def test_default_shows_labels(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" in texts
+        plt.close(fig)
+
+    def test_false_hides_labels(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False, show_reach_labels=False)
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" not in texts
+        plt.close(fig)
+
+    def test_true_shows_labels(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False, show_reach_labels=True)
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" in texts
+        plt.close(fig)
+
+    def test_ignored_when_show_reaches_true(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=True, show_reach_labels=False)
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" in texts  # canal is a node label, not an edge label
+        plt.close(fig)
+
+
+class TestEdgeColors:
+    def test_default_is_black(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        edge_collections = [
+            c
+            for c in ax.get_children()
+            if hasattr(c, "get_edgecolor") and hasattr(c, "get_paths") and len(c.get_paths()) > 0
+        ]
+        assert len(edge_collections) > 0
+        plt.close(fig)
+
+    def test_custom_color_applied(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False, edge_colors={"canal": "red"})
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_missing_reach_defaults_to_black(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False, edge_colors={"nonexistent": "red"})
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_multiple_reaches_colored_independently(self):
+        system = make_system_with_multiple_reaches()
+        fig, ax = system.visualize(
+            show_reaches=False,
+            edge_colors={"canal1": "red", "canal2": "blue"},
+        )
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_partial_dict(self):
+        system = make_system_with_multiple_reaches()
+        fig, ax = system.visualize(show_reaches=False, edge_colors={"canal1": "green"})
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_ignored_when_show_reaches_true(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=True, edge_colors={"canal": "red"})
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_empty_dict_same_as_none(self):
+        system = make_system_with_reach()
+        fig1, ax1 = system.visualize(show_reaches=False, edge_colors={})
+        fig2, ax2 = system.visualize(show_reaches=False, edge_colors=None)
+        assert isinstance(fig1, plt.Figure)
+        assert isinstance(fig2, plt.Figure)
+        plt.close(fig1)
+        plt.close(fig2)
+
+
+class TestUniformEdgeStyle:
+    def test_regular_edges_are_solid_black(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize()
+        from matplotlib.collections import LineCollection
+
+        for child in ax.get_children():
+            if isinstance(child, LineCollection):
+                colors = child.get_colors()
+                for c in colors:
+                    from matplotlib.colors import to_hex
+
+                    assert to_hex(c) != "#cccccc", "Regular edges should be black, not gray"
+        plt.close(fig)
+
+    def test_collapsed_edges_are_solid_not_dashed(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        from matplotlib.collections import LineCollection
+
+        for child in ax.get_children():
+            if isinstance(child, LineCollection):
+                linestyle = child.get_linestyle()
+                for ls in linestyle:
+                    offset, dashes = ls
+                    assert dashes is None or len(dashes) == 0, "Collapsed edges should be solid, not dashed"
+        plt.close(fig)
