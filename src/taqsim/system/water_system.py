@@ -758,6 +758,7 @@ class WaterSystem:
         save_to: str | Path | None = None,
         figsize: tuple[float, float] = (12, 8),
         title: str | None = None,
+        **edge_kwargs: object,
     ) -> tuple:
         from taqsim.system._visualize import visualize_system
 
@@ -770,6 +771,7 @@ class WaterSystem:
             save_to=save_to,
             figsize=figsize,
             title=title,
+            **edge_kwargs,
         )
 
     def _clone_with_updates(self, updates: dict[str, dict[str, float]]) -> "WaterSystem":

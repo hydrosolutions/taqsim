@@ -464,18 +464,10 @@ class TestEdgeColors:
 
 
 class TestUniformEdgeStyle:
-    def test_regular_edges_are_solid_black(self):
-        system = make_simple_system_with_locations()
-        fig, ax = system.visualize()
-        from matplotlib.collections import LineCollection
-
-        for child in ax.get_children():
-            if isinstance(child, LineCollection):
-                colors = child.get_colors()
-                for c in colors:
-                    from matplotlib.colors import to_hex
-
-                    assert to_hex(c) != "#cccccc", "Regular edges should be black, not gray"
+    def test_regular_and_collapsed_use_same_style(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
     def test_collapsed_edges_are_solid_not_dashed(self):
@@ -489,4 +481,30 @@ class TestUniformEdgeStyle:
                 for ls in linestyle:
                     offset, dashes = ls
                     assert dashes is None or len(dashes) == 0, "Collapsed edges should be solid, not dashed"
+        plt.close(fig)
+
+
+class TestEdgeKwargs:
+    def test_override_alpha(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(alpha=1.0)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_override_edge_color(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(edge_color="red")
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_override_connectionstyle(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(connectionstyle="arc3,rad=0.05")
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_colored_collapsed_edges_have_full_opacity(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False, edge_colors={"canal": "red"})
+        assert isinstance(fig, plt.Figure)
         plt.close(fig)

@@ -58,6 +58,17 @@ class CollapsedEdge:
     reach_id: str
 
 
+EDGE_DEFAULTS: dict[str, Any] = {
+    "edge_color": "#bdc3c7",
+    "arrows": True,
+    "arrowsize": 15,
+    "arrowstyle": "-|>",
+    "connectionstyle": "arc3,rad=0.1",
+    "width": 1.5,
+    "alpha": 0.7,
+}
+
+
 def visualize_system(
     nodes: dict[str, BaseNode],
     edges: dict[str, Edge],
@@ -68,6 +79,7 @@ def visualize_system(
     save_to: str | Path | None = None,
     figsize: tuple[float, float] = (12, 8),
     title: str | None = None,
+    **edge_kwargs: Any,
 ) -> tuple[plt.Figure, plt.Axes]:
     if show_reaches:
         active_nodes = nodes
@@ -82,7 +94,9 @@ def visualize_system(
     fig, ax = plt.subplots(figsize=figsize)
 
     handles = _draw_nodes(graph, pos, active_nodes, ax)
-    _draw_edges(graph, pos, ax, collapsed_edges, show_reach_labels=show_reach_labels, edge_colors=edge_colors)
+    _draw_edges(
+        graph, pos, ax, collapsed_edges, show_reach_labels=show_reach_labels, edge_colors=edge_colors, **edge_kwargs
+    )
     _draw_labels(graph, pos, ax)
 
     if title is not None:
@@ -216,15 +230,19 @@ def _draw_edges(
     *,
     show_reach_labels: bool = True,
     edge_colors: dict[str, str] | None = None,
+    **edge_kwargs: Any,
 ) -> None:
+    style = {**EDGE_DEFAULTS, **edge_kwargs}
+    default_color = style.pop("edge_color")
+    default_alpha = style.pop("alpha")
+
     nx.draw_networkx_edges(
         graph,
         pos,
         ax=ax,
-        edge_color="black",
-        arrows=True,
-        arrowsize=15,
-        width=1.5,
+        edge_color=default_color,
+        alpha=default_alpha,
+        **style,
     )
 
     if collapsed_edges:
@@ -233,14 +251,15 @@ def _draw_edges(
             single = nx.DiGraph()
             single.add_edge(ce.source, ce.target)
             single_pos = {n: pos[n] for n in single.nodes() if n in pos}
+            color = color_map.get(ce.reach_id, default_color)
+            alpha = 1.0 if ce.reach_id in color_map else default_alpha
             nx.draw_networkx_edges(
                 single,
                 single_pos,
                 ax=ax,
-                edge_color=color_map.get(ce.reach_id, "black"),
-                arrows=True,
-                arrowsize=15,
-                width=1.5,
+                edge_color=color,
+                alpha=alpha,
+                **style,
             )
 
         if show_reach_labels:
