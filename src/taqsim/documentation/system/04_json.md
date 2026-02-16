@@ -1,4 +1,4 @@
-# Loading from JSON
+# JSON Serialization
 
 ## Overview
 
@@ -149,3 +149,109 @@ ValidationError: Source 'river': 'inflow' is required but not set
 | `ValueError: Invalid start_date '...'` | Unparseable date string |
 | `FileNotFoundError` | File path doesn't exist |
 | `json.JSONDecodeError` | Invalid JSON syntax |
+
+---
+
+## Exporting to JSON -- `to_json()`
+
+### Signature
+
+```python
+def to_json(self, save_to: str | Path | None = None) -> dict[str, Any]:
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `save_to` | `str \| Path \| None` | `None` | File path to write JSON. If `None`, only returns the dict. |
+
+### What's Serialized
+
+| Data | Serialized | Notes |
+|------|-----------|-------|
+| Frequency | Yes | Lowercase string (e.g., `"monthly"`) |
+| Start date | Yes | ISO format, omitted when `None` |
+| Node IDs and types | Yes | |
+| Node location | Yes | Tuple -> list conversion |
+| Node tags | Yes | Frozenset -> sorted list |
+| Node metadata | Yes | |
+| Node auxiliary_data | Yes | |
+| Storage: capacity, initial_storage, dead_storage | Yes | Always included |
+| Demand: consumption_fraction, efficiency | Yes | Always included |
+| Reach/PassThrough: capacity | Yes | Only when not `None` |
+| Edge ID, source, target | Yes | |
+| Edge tags, metadata | Yes | Only when non-empty |
+| Strategies (release_policy, split_policy, etc.) | **No** | Must be re-injected after loading |
+| TimeSeries (inflow, requirement) | **No** | Must be re-injected after loading |
+| Runtime state (events, accumulators) | **No** | |
+
+### Output Example
+
+```python
+system.to_json()
+# {
+#     "frequency": "monthly",
+#     "start_date": "2024-01-15",
+#     "nodes": [
+#         {"type": "source", "id": "river", "location": [31.5, 35.2]},
+#         {"type": "storage", "id": "dam", "capacity": 500.0, "initial_storage": 200.0, "dead_storage": 0.0},
+#         {"type": "sink", "id": "ocean"}
+#     ],
+#     "edges": [
+#         {"id": "e1", "source": "river", "target": "dam"},
+#         {"id": "e2", "source": "dam", "target": "ocean"}
+#     ]
+# }
+```
+
+### Saving to File
+
+```python
+# Save to file (also returns the dict)
+result = system.to_json(save_to="network.json")
+
+# Accepts Path objects
+from pathlib import Path
+result = system.to_json(save_to=Path("output") / "network.json")
+```
+
+---
+
+## Round-Trip Guarantee
+
+`to_json()` and `from_json()` form a round-trip for topology data:
+
+```python
+# Original system
+system = WaterSystem.from_json("network.json")
+
+# Round-trip
+exported = system.to_json()
+restored = WaterSystem.from_json(json.dumps(exported))
+
+# Topology is preserved
+assert set(restored.nodes.keys()) == set(system.nodes.keys())
+assert set(restored.edges.keys()) == set(system.edges.keys())
+```
+
+### What's Preserved
+
+- Frequency and start_date
+- All node IDs, types, and topology fields (location, tags, metadata, auxiliary_data)
+- Type-specific fields (capacity, initial_storage, etc.)
+- All edge IDs, source/target, tags, metadata
+
+### What Changes After Round-Trip
+
+Strategies reset to placeholders:
+
+| Node Type | Reset Strategy |
+|-----------|---------------|
+| Source | `inflow=None` |
+| Storage | `release_policy=NoRelease()`, `loss_rule=NoLoss()` |
+| Demand | `requirement=None` |
+| Splitter | `split_policy=NoSplit()` |
+| Reach | `routing_model=NoRouting()`, `loss_rule=NoReachLoss()` |
+
+These must be re-injected before simulation, just as with `from_json()`.

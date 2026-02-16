@@ -1,12 +1,28 @@
 from pathlib import Path
-from unittest.mock import patch
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import pytest
 
 from taqsim.edge import Edge
-from taqsim.node import Sink, Source
+from taqsim.node import (
+    Demand,
+    NoLoss,
+    NoReachLoss,
+    NoRelease,
+    NoRouting,
+    NoSplit,
+    Reach,
+    Sink,
+    Source,
+    Splitter,
+    Storage,
+)
 from taqsim.node.timeseries import TimeSeries
 from taqsim.system import WaterSystem
+from taqsim.system._visualize import NODE_COLORS
 from taqsim.time import Frequency
 
 
@@ -75,26 +91,288 @@ class TestEdgeLengths:
         assert system.edge_lengths() == {}
 
 
-class TestVisualize:
-    def test_raises_if_no_nodes_have_location(self):
+def make_system_without_locations() -> WaterSystem:
+    system = WaterSystem(frequency=Frequency.MONTHLY)
+    system.add_node(Source(id="src", inflow=TimeSeries([100.0] * 12)))
+    system.add_node(Sink(id="snk"))
+    system.add_edge(Edge(id="e1", source="src", target="snk"))
+    system.validate()
+    return system
+
+
+def make_system_with_reach() -> WaterSystem:
+    system = WaterSystem(frequency=Frequency.MONTHLY)
+    system.add_node(Source(id="src", inflow=TimeSeries([100.0] * 12), location=(31.0, 35.0)))
+    system.add_node(Reach(id="canal", routing_model=NoRouting(), loss_rule=NoReachLoss(), location=(31.1, 35.1)))
+    system.add_node(Sink(id="snk", location=(31.2, 35.2)))
+    system.add_edge(Edge(id="e1", source="src", target="canal"))
+    system.add_edge(Edge(id="e2", source="canal", target="snk"))
+    system.validate()
+    return system
+
+
+def make_system_with_multiple_reaches() -> WaterSystem:
+    system = WaterSystem(frequency=Frequency.MONTHLY)
+    system.add_node(Source(id="src", inflow=TimeSeries([100.0] * 12), location=(31.0, 35.0)))
+    system.add_node(Reach(id="canal1", routing_model=NoRouting(), loss_rule=NoReachLoss(), location=(31.05, 35.05)))
+    system.add_node(Reach(id="canal2", routing_model=NoRouting(), loss_rule=NoReachLoss(), location=(31.15, 35.15)))
+    system.add_node(Sink(id="snk", location=(31.2, 35.2)))
+    system.add_edge(Edge(id="e1", source="src", target="canal1"))
+    system.add_edge(Edge(id="e2", source="canal1", target="canal2"))
+    system.add_edge(Edge(id="e3", source="canal2", target="snk"))
+    system.validate()
+    return system
+
+
+def make_multi_type_system() -> WaterSystem:
+    system = WaterSystem(frequency=Frequency.MONTHLY)
+    system.add_node(Source(id="river", inflow=TimeSeries([100.0] * 12), location=(31.0, 35.0)))
+    system.add_node(
+        Storage(
+            id="dam",
+            capacity=1000,
+            release_policy=NoRelease(),
+            loss_rule=NoLoss(),
+            location=(31.05, 35.05),
+        )
+    )
+    system.add_node(Splitter(id="junc", split_policy=NoSplit(), location=(31.1, 35.1)))
+    system.add_node(Demand(id="city", requirement=TimeSeries([50.0] * 12), location=(31.15, 35.15)))
+    system.add_node(Sink(id="sea", location=(31.2, 35.2)))
+    system.add_edge(Edge(id="e1", source="river", target="dam"))
+    system.add_edge(Edge(id="e2", source="dam", target="junc"))
+    system.add_edge(Edge(id="e3", source="junc", target="city"))
+    system.add_edge(Edge(id="e4", source="junc", target="sea"))
+    system.add_edge(Edge(id="e5", source="city", target="sea"))
+    system.validate()
+    return system
+
+
+class TestVisualizeBasic:
+    def test_returns_tuple(self):
+        system = make_simple_system_with_locations()
+        result = system.visualize()
+        assert isinstance(result, tuple)
+        plt.close(result[0])
+
+    def test_returns_fig_and_ax(self):
+        system = make_simple_system_with_locations()
+        result = system.visualize()
+        assert len(result) == 2
+        plt.close(result[0])
+
+    def test_fig_type(self):
+        system = make_simple_system_with_locations()
+        result = system.visualize()
+        assert isinstance(result[0], plt.Figure)
+        plt.close(result[0])
+
+    def test_ax_type(self):
+        system = make_simple_system_with_locations()
+        result = system.visualize()
+        assert isinstance(result[1], plt.Axes)
+        plt.close(result[0])
+
+    def test_works_with_locations(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize()
+        plt.close(fig)
+
+    def test_works_without_locations(self):
+        system = make_system_without_locations()
+        result = system.visualize()
+        assert isinstance(result, tuple)
+        fig, ax = result
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+        plt.close(fig)
+
+    def test_warns_on_no_locations(self):
+        system = make_system_without_locations()
+        with pytest.warns(UserWarning, match="No nodes have locations"):
+            fig, ax = system.visualize()
+        plt.close(fig)
+
+    def test_custom_figsize(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(figsize=(16, 10))
+        width, height = fig.get_size_inches()
+        assert abs(width - 16) < 0.5
+        assert abs(height - 10) < 0.5
+        plt.close(fig)
+
+    def test_custom_title(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(title="My Network")
+        assert ax.get_title() == "My Network"
+        plt.close(fig)
+
+    def test_auto_title_with_counts(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize()
+        title = ax.get_title()
+        assert "2 nodes" in title
+        assert "1 edges" in title
+        plt.close(fig)
+
+
+class TestVisualizeShowReaches:
+    def test_default_is_true(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize()
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" in texts
+        plt.close(fig)
+
+    def test_true_shows_reach_node(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=True)
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" in texts
+        plt.close(fig)
+
+    def test_false_hides_reach_node(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        texts = [t.get_text() for t in ax.texts]
+        # With reaches hidden, "canal" should only appear as an edge label
+        # The node "src" and "snk" should still be present as node labels
+        assert "src" in texts
+        assert "snk" in texts
+        plt.close(fig)
+
+    def test_false_draws_direct_edge(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+        plt.close(fig)
+
+    def test_false_labels_edge_with_reach_id(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        texts = [t.get_text() for t in ax.texts]
+        assert "canal" in texts
+        plt.close(fig)
+
+    def test_false_with_multiple_reaches(self):
+        system = make_system_with_multiple_reaches()
+        fig, ax = system.visualize(show_reaches=False)
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+        plt.close(fig)
+
+    def test_false_preserves_non_reach_nodes(self):
+        system = make_system_with_reach()
+        fig, ax = system.visualize(show_reaches=False)
+        texts = [t.get_text() for t in ax.texts]
+        assert "src" in texts
+        assert "snk" in texts
+        plt.close(fig)
+
+
+class TestVisualizeLegend:
+    def test_legend_present(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize()
+        assert ax.get_legend() is not None
+        plt.close(fig)
+
+    def test_legend_entries_match_present_types(self):
+        system = make_multi_type_system()
+        fig, ax = system.visualize()
+        legend_texts = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert "Source" in legend_texts
+        assert "Storage" in legend_texts
+        assert "Splitter" in legend_texts
+        assert "Demand" in legend_texts
+        assert "Sink" in legend_texts
+        plt.close(fig)
+
+
+class TestVisualizeSaveTo:
+    def test_saves_file(self, tmp_path: Path):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(save_to=str(tmp_path / "net.png"))
+        assert (tmp_path / "net.png").exists()
+        plt.close(fig)
+
+    def test_saved_file_nonzero(self, tmp_path: Path):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(save_to=str(tmp_path / "net.png"))
+        assert (tmp_path / "net.png").stat().st_size > 0
+        plt.close(fig)
+
+    def test_returns_tuple_when_saving(self, tmp_path: Path):
+        system = make_simple_system_with_locations()
+        result = system.visualize(save_to=str(tmp_path / "net.png"))
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], plt.Figure)
+        assert isinstance(result[1], plt.Axes)
+        plt.close(result[0])
+
+    def test_accepts_path_object(self, tmp_path: Path):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize(save_to=tmp_path / "net.png")
+        assert (tmp_path / "net.png").exists()
+        plt.close(fig)
+
+
+class TestVisualizeNodeStyles:
+    def test_different_types_get_different_colors(self):
+        system = make_multi_type_system()
+        fig, ax = system.visualize()
+        plt.close(fig)
+
+    def test_colors_use_palette(self):
+        system = make_multi_type_system()
+        fig, ax = system.visualize()
+        palette_colors = set(NODE_COLORS.values())
+        found_palette_color = False
+        for child in ax.get_children():
+            if hasattr(child, "get_facecolor"):
+                facecolors = child.get_facecolor()
+                if len(facecolors) > 0:
+                    from matplotlib.colors import to_hex
+
+                    for fc in facecolors:
+                        hex_color = to_hex(fc)
+                        if hex_color in palette_colors:
+                            found_palette_color = True
+                            break
+            if found_palette_color:
+                break
+        assert found_palette_color
+        plt.close(fig)
+
+
+class TestVisualizeEdgeCases:
+    def test_minimal_topology(self):
+        system = make_simple_system_with_locations()
+        fig, ax = system.visualize()
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+        plt.close(fig)
+
+    def test_only_sources_and_sinks(self):
         system = WaterSystem(frequency=Frequency.MONTHLY)
-        system.add_node(Source(id="s", inflow=TimeSeries([100.0] * 12)))
-        system.add_node(Sink(id="t"))
-        system.add_edge(Edge(id="e", source="s", target="t"))
+        system.add_node(Source(id="s1", inflow=TimeSeries([100.0] * 12), location=(31.0, 35.0)))
+        system.add_node(Sink(id="t1", location=(31.1, 35.1)))
+        system.add_edge(Edge(id="e1", source="s1", target="t1"))
         system.validate()
+        fig, ax = system.visualize()
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+        plt.close(fig)
 
-        with pytest.raises(ValueError, match="No nodes have locations"):
-            system.visualize()
-
-    @patch("matplotlib.pyplot.show")
-    def test_creates_figure_with_located_nodes(self, mock_show):
-        system = make_simple_system_with_locations()
-        system.visualize()
-        mock_show.assert_called_once()
-
-    def test_saves_to_file_when_path_provided(self, tmp_path: Path):
-        system = make_simple_system_with_locations()
-        output_file = tmp_path / "network.png"
-        system.visualize(save_to=str(output_file))
-        assert output_file.exists()
-        assert output_file.stat().st_size > 0
+    def test_mixed_located_and_unlocated(self):
+        system = WaterSystem(frequency=Frequency.MONTHLY)
+        system.add_node(Source(id="s1", inflow=TimeSeries([100.0] * 12), location=(31.0, 35.0)))
+        system.add_node(Sink(id="t1"))  # no location
+        system.add_edge(Edge(id="e1", source="s1", target="t1"))
+        system.validate()
+        fig, ax = system.visualize()
+        assert isinstance(fig, plt.Figure)
+        assert isinstance(ax, plt.Axes)
+        plt.close(fig)

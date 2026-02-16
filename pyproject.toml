@@ -1,6 +1,6 @@
 [project]
 name = "taqsim"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,11 +25,12 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "altair>=6.0.0",
+    "bump-my-version>=1.2.7",
     "marimo>=0.18.1",
     "polars>=1.35.2",
-    "pytest>=8.3",       # tests
+    "pytest>=8.3", # tests
     "pytest-cov>=6.2.1",
-    "ruff>=0.12",        # linter + formatter
+    "ruff>=0.12", # linter + formatter
 ]
 
 # -----------------------
@@ -73,3 +74,22 @@ addopts = ["--strict-markers", "--strict-config", "-ra"]
 
 [tool.uv.sources]
 ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "main" }
+
+# -----------------------
+# Bump My Version
+# -----------------------
+[tool.bumpversion]
+current_version = "0.1.1"
+commit = false
+tag = false
+allow_dirty = true
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/taqsim/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'

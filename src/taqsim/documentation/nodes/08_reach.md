@@ -189,3 +189,5 @@ canal = Reach(id="canal", routing_model=NoRouting(), loss_rule=NoReachLoss(), ca
 Calling `reset()` reinitializes the routing state via `routing_model.initial_state(reach)` and clears the received counter.
 
 > **Tip**: Use `WaterSystem.connect(source, target, via=reach)` to wire a Reach into the network in a single call. See [WaterSystem Architecture](../system/01_architecture.md#connectsource-target--vianone-tagsfrozenset-metadatanone).
+
+> **Tip**: Use `system.visualize(show_reaches=False)` to collapse Reach nodes into labeled edges for a simplified view of the logical topology. See [Visualization](../system/05_visualization.md).

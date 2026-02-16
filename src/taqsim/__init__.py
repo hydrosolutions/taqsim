@@ -131,4 +131,4 @@ __all__ = [
     "get_docs_path",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.1.1"

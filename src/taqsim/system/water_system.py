@@ -135,6 +135,96 @@ _NODE_PARSERS: dict[str, Any] = {
     "sink": _parse_sink,
 }
 
+_FREQUENCY_REVERSE: dict[Frequency, str] = {v: k for k, v in _FREQUENCY_MAP.items()}
+
+
+def _serialize_common_fields(node: BaseNode) -> dict[str, Any]:
+    fields: dict[str, Any] = {"id": node.id}
+    if node.location is not None:
+        fields["location"] = list(node.location)
+    if node.tags:
+        fields["tags"] = sorted(node.tags)
+    if node.metadata:
+        fields["metadata"] = dict(node.metadata)
+    if node.auxiliary_data:
+        fields["auxiliary_data"] = dict(node.auxiliary_data)
+    return fields
+
+
+def _serialize_source(node: Source) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "source"
+    return fields
+
+
+def _serialize_storage(node: Storage) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "storage"
+    fields["capacity"] = node.capacity
+    fields["initial_storage"] = node.initial_storage
+    fields["dead_storage"] = node.dead_storage
+    return fields
+
+
+def _serialize_demand(node: Demand) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "demand"
+    fields["consumption_fraction"] = node.consumption_fraction
+    fields["efficiency"] = node.efficiency
+    return fields
+
+
+def _serialize_splitter(node: Splitter) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "splitter"
+    return fields
+
+
+def _serialize_reach(node: Reach) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "reach"
+    if node.capacity is not None:
+        fields["capacity"] = node.capacity
+    return fields
+
+
+def _serialize_passthrough(node: PassThrough) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "passthrough"
+    if node.capacity is not None:
+        fields["capacity"] = node.capacity
+    return fields
+
+
+def _serialize_sink(node: Sink) -> dict[str, Any]:
+    fields = _serialize_common_fields(node)
+    fields["type"] = "sink"
+    return fields
+
+
+def _serialize_edge(edge: Edge) -> dict[str, Any]:
+    fields: dict[str, Any] = {
+        "id": edge.id,
+        "source": edge.source,
+        "target": edge.target,
+    }
+    if edge.tags:
+        fields["tags"] = sorted(edge.tags)
+    if edge.metadata:
+        fields["metadata"] = dict(edge.metadata)
+    return fields
+
+
+_NODE_SERIALIZERS: dict[type, Any] = {
+    Source: _serialize_source,
+    Storage: _serialize_storage,
+    Demand: _serialize_demand,
+    Splitter: _serialize_splitter,
+    Reach: _serialize_reach,
+    PassThrough: _serialize_passthrough,
+    Sink: _serialize_sink,
+}
+
 
 @dataclass
 class WaterSystem:
@@ -190,6 +280,16 @@ class WaterSystem:
             system.add_edge(_parse_edge(edge_data))
 
         return system
+
+    def to_json(self, save_to: str | Path | None = None) -> dict[str, Any]:
+        result: dict[str, Any] = {"frequency": _FREQUENCY_REVERSE[self.frequency]}
+        if self.start_date is not None:
+            result["start_date"] = self.start_date.isoformat()
+        result["nodes"] = [_NODE_SERIALIZERS[type(node)](node) for node in self._nodes.values()]
+        result["edges"] = [_serialize_edge(edge) for edge in self._edges.values()]
+        if save_to is not None:
+            Path(save_to).write_text(json.dumps(result, indent=2), encoding="utf-8")
+        return result
 
     def add_node(self, node: BaseNode) -> None:
         if node.id in self._nodes:
@@ -649,84 +749,24 @@ class WaterSystem:
         """Compute geodesic lengths for all edges where both endpoints have locations."""
         return {edge_id: length for edge_id in self._edges if (length := self.edge_length(edge_id)) is not None}
 
-    def visualize(self, save_to: str | None = None, figsize: tuple[int, int] = (12, 8)) -> None:
-        """Visualize the water network on a geographic plot.
+    def visualize(
+        self,
+        *,
+        show_reaches: bool = True,
+        save_to: str | Path | None = None,
+        figsize: tuple[float, float] = (12, 8),
+        title: str | None = None,
+    ) -> tuple:
+        from taqsim.system._visualize import visualize_system
 
-        Plots nodes at their (lon, lat) positions with colors/markers by type.
-        Draws edges as arrows between connected nodes.
-        """
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-
-        sns.set_context("paper", font_scale=1.3)
-
-        # Filter nodes with locations
-        located_nodes = {nid: node for nid, node in self._nodes.items() if node.location is not None}
-
-        if not located_nodes:
-            raise ValueError("No nodes have locations set. Cannot visualize.")
-
-        # Node type styling
-        node_styles = {
-            Source: {"color": "blue", "marker": "^", "label": "Source"},
-            Storage: {"color": "green", "marker": "s", "label": "Storage"},
-            Demand: {"color": "orange", "marker": "o", "label": "Demand"},
-            Sink: {"color": "gray", "marker": "v", "label": "Sink"},
-            Splitter: {"color": "purple", "marker": "D", "label": "Splitter"},
-            PassThrough: {"color": "cyan", "marker": "h", "label": "PassThrough"},
-            Reach: {"color": "brown", "marker": "p", "label": "Reach"},
-        }
-
-        fig, ax = plt.subplots(figsize=figsize)
-
-        # Collect positions: (lon, lat) -> (x, y)
-        positions = {}
-        for nid, node in located_nodes.items():
-            lat, lon = node.location
-            positions[nid] = (lon, lat)  # x=lon, y=lat
-
-        # Plot nodes by type
-        plotted_types: set[type] = set()
-        for nid, node in located_nodes.items():
-            x, y = positions[nid]
-            for node_type, style in node_styles.items():
-                if isinstance(node, node_type):
-                    label = style["label"] if node_type not in plotted_types else None
-                    ax.scatter(x, y, c=style["color"], marker=style["marker"], s=150, zorder=3, label=label)
-                    plotted_types.add(node_type)
-                    break
-
-            # Add node ID label
-            ax.annotate(nid, (x, y), textcoords="offset points", xytext=(5, 5), zorder=4)
-
-        # Draw edges as arrows
-        for edge in self._edges.values():
-            if edge.source in positions and edge.target in positions:
-                x1, y1 = positions[edge.source]
-                x2, y2 = positions[edge.target]
-                ax.annotate(
-                    "",
-                    xy=(x2, y2),
-                    xytext=(x1, y1),
-                    arrowprops={"arrowstyle": "->", "color": "black", "lw": 1.5},
-                    zorder=2,
-                )
-
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
-        ax.set_title("Water System Network")
-        ax.legend(loc="best")
-        ax.grid(True, alpha=0.3)
-        ax.ticklabel_format(useOffset=False)
-
-        plt.tight_layout()
-        sns.despine(fig=fig)
-
-        if save_to:
-            plt.savefig(save_to, dpi=150, bbox_inches="tight")
-            plt.close(fig)
-        else:
-            plt.show()
+        return visualize_system(
+            self._nodes,
+            self._edges,
+            show_reaches=show_reaches,
+            save_to=save_to,
+            figsize=figsize,
+            title=title,
+        )
 
     def _clone_with_updates(self, updates: dict[str, dict[str, float]]) -> "WaterSystem":
         """Create a new system with updated strategy parameters."""

@@ -125,6 +125,23 @@ value: str | None = None
   - Format: `uv run ruff format`
   - Lint + fix: `uv run ruff check --fix`
 
+### Version Bumping (mandatory)
+
+**Every commit MUST include a patch version bump.** No exceptions.
+
+Before committing, follow this exact sequence:
+
+1. `uv run bump-my-version bump patch` — modifies `pyproject.toml` and `src/taqsim/__init__.py`
+2. Stage version files alongside code changes
+3. Commit with a conventional commit message
+4. `git tag v$(uv run bump-my-version show current_version)` — tag the commit
+
+**Rules:**
+- **Patch bumps**: Automatic with every commit. Claude MUST do this.
+- **Minor/major bumps**: Only when the user explicitly requests. Use `uv run bump-my-version bump minor` or `major`.
+- **Never let bump-my-version create its own commit** — config has `commit = false`. Fold version changes into the real commit.
+- **Always tag** after every commit.
+
 ---
 
 ## Code Quality Standards

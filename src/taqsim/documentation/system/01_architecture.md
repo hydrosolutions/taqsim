@@ -287,27 +287,14 @@ See [Parameter Exposure](03_parameter_exposure.md) for complete documentation.
 
 ## Visualization
 
-`WaterSystem.visualize()` renders the network on a geographic plot:
+`WaterSystem.visualize()` renders the network as a graph using networkx and matplotlib. Returns `(fig, ax)` for composability.
 
 ```python
-system.visualize()                                      # Interactive display
-system.visualize(save_to="map.png")                     # Save to file
-system.visualize(figsize=(16, 10), save_to="map.png")   # Custom figure size
+fig, ax = system.visualize()
+plt.show()
 ```
 
-Features:
-- Nodes plotted at (longitude, latitude) positions
-- Different colors/markers per node type:
-  - Source: blue triangle
-  - Storage: green square
-  - Demand: orange circle
-  - Sink: gray triangle
-  - Splitter: purple diamond
-  - PassThrough: cyan hexagon
-- Edges drawn as arrows
-- Node IDs as labels
-
-Raises `ValueError` if no nodes have locations set.
+See [Visualization](05_visualization.md) for full documentation including `show_reaches`, layout strategies, and node styling.
 
 ## Edge Length Computation
 
