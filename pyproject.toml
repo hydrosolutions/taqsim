@@ -1,7 +1,7 @@
 [project]
 name = "taqsim"
 version = "0.1.4"
-description = "Add your description here"
+description = "Event-sourced framework for simulating and optimizing water allocation across directed network models"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -54,12 +54,12 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
-# # -----------------------
-# # ty (fast static type checker)
-# # -----------------------
-# [tool.ty]
-# [tool.ty.rules]
-# possibly-unresolved-reference = "warn"
+# -----------------------
+# ty (fast static type checker)
+# -----------------------
+[tool.ty]
+[tool.ty.rules]
+possibly-unresolved-reference = "warn"
 
 # -----------------------
 # Pytest
@@ -72,24 +72,10 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 
+[tool.uv]
+# Keep uv's cache inside the workspace: agent gate runners sandbox children to
+# workspace-write, and uv's default ~/.cache/uv is denied there.
+cache-dir = ".uv-cache"
+
 [tool.uv.sources]
-ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "main" }
-
-# -----------------------
-# Bump My Version
-# -----------------------
-[tool.bumpversion]
-current_version = "0.1.4"
-commit = false
-tag = false
-allow_dirty = true
-
-[[tool.bumpversion.files]]
-filename = "pyproject.toml"
-search = 'version = "{current_version}"'
-replace = 'version = "{new_version}"'
-
-[[tool.bumpversion.files]]
-filename = "src/taqsim/__init__.py"
-search = '__version__ = "{current_version}"'
-replace = '__version__ = "{new_version}"'
+# ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "main" } # example of how to add a git dependency
