@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -40,8 +41,16 @@ class Parameter:
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("parameter name must not be empty")
-        if self.bounds is not None and self.bounds[0] > self.bounds[1]:
-            raise ValueError(f"parameter {self.name!r} has reversed bounds")
+        if not math.isfinite(self.value):
+            raise ValueError(f"parameter {self.name!r} value must be finite")
+        if self.bounds is not None:
+            lower, upper = self.bounds
+            if not math.isfinite(lower) or not math.isfinite(upper):
+                raise ValueError(f"parameter {self.name!r} bounds must be finite")
+            if lower > upper:
+                raise ValueError(f"parameter {self.name!r} has reversed bounds")
+            if not lower <= self.value <= upper:
+                raise ValueError(f"parameter {self.name!r} value lies outside its bounds")
 
 
 type Scalar = float | int | Parameter
@@ -57,6 +66,7 @@ class RuleContext:
     steps: int
     timestep: timedelta
     parameters: dict[str, float] = field(default_factory=dict)
+    parameter_bounds: dict[str, tuple[float, float] | None] = field(default_factory=dict)
     forcings: dict[str, list[float]] = field(default_factory=dict)
     tables: list[dict[str, object]] = field(default_factory=list)
 
@@ -69,6 +79,9 @@ class RuleContext:
             previous = self.parameters.setdefault(value.name, float(value.value))
             if previous != float(value.value):
                 raise ValueError(f"parameter {value.name!r} has conflicting values")
+            if value.name in self.parameter_bounds and self.parameter_bounds[value.name] != value.bounds:
+                raise ValueError(f"parameter {value.name!r} has conflicting bounds")
+            self.parameter_bounds[value.name] = value.bounds
             return incidence.param(value.name)
         return incidence.literal(float(value))
 

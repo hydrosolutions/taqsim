@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+import math
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -73,6 +74,21 @@ class TimeAxis:
 
 # The engine needs bytes, while callers should be free to use the normal UUID value type.
 RunId = UUID | bytes | bytearray | str
+
+
+@dataclass(frozen=True)
+class RuleParameter:
+    """One addressed, substitutable rule scalar and its taqsim-side search bounds."""
+
+    compartment: str
+    name: str
+    value: float
+    bounds: tuple[float, float] | None
+
+    @property
+    def path(self) -> str:
+        """Return the stable user-facing address of this rule-local parameter."""
+        return f"{self.compartment}.{self.name}"
 
 
 @dataclass(frozen=True, init=False)
@@ -364,8 +380,16 @@ class Basin:
         time = self._declared_time()
         _require_closed_capacity(self._reaches)
         _require_source_horizons(self._sources, time)
-        document = _model_document(tuple(self._reaches), tuple(self._sources), tuple(self._sinks), time, self.flow_unit)
-        return BuiltBasin(document, incidence.compile_model(document), time, frozenset(r.name for r in self._reaches))
+        document, parameters = _model_document(
+            tuple(self._reaches), tuple(self._sources), tuple(self._sinks), time, self.flow_unit
+        )
+        return BuiltBasin(
+            document,
+            incidence.compile_model(document),
+            time,
+            frozenset(r.name for r in self._reaches),
+            parameters,
+        )
 
     def _declared_time(self) -> TimeAxis:
         if self.start_date is None:
@@ -385,14 +409,24 @@ class BuiltBasin:
     _compiled: incidence.CompiledModel
     time: TimeAxis
     reaches: frozenset[str]
+    parameters: tuple[RuleParameter, ...]
 
     def __init__(
-        self, document: dict[str, Any], compiled: incidence.CompiledModel, time: TimeAxis, reaches: frozenset[str]
+        self,
+        document: dict[str, Any],
+        compiled: incidence.CompiledModel,
+        time: TimeAxis,
+        reaches: frozenset[str],
+        parameters: tuple[RuleParameter, ...],
     ):
+        paths = [parameter.path for parameter in parameters]
+        if len(paths) != len(set(paths)):
+            raise ValueError("rule parameter paths must be unique")
         object.__setattr__(self, "_document", deepcopy(document))
         object.__setattr__(self, "_compiled", compiled)
         object.__setattr__(self, "time", time)
         object.__setattr__(self, "reaches", reaches)
+        object.__setattr__(self, "parameters", parameters)
 
     @property
     def document(self) -> Mapping[str, Any]:
@@ -409,10 +443,42 @@ class BuiltBasin:
         """Return the content address assigned by incidence."""
         return self._compiled.model_digest
 
-    def run(self, run_id: RunId) -> BasinRun:
-        """Execute without mutating this built model and return an immutable run value."""
-        completed = self._compiled.run(_engine_run_id(run_id))
+    @property
+    def parameter_bounds(self) -> Mapping[str, tuple[float, float]]:
+        """Return optimizer bounds without adding them to model identity."""
+        return {parameter.path: parameter.bounds for parameter in self.parameters if parameter.bounds is not None}
+
+    def run(self, run_id: RunId, parameters: Mapping[str, float] | None = None) -> BasinRun:
+        """Execute one run, optionally substituting addressed rule parameters."""
+        substitutions = self._substitutions(parameters or {})
+        completed = self._compiled.run(_engine_run_id(run_id), substitutions=substitutions)
         return BasinRun(completed, self.time, self.reaches)
+
+    def sweep(self, parameter: str | RuleParameter, values: Iterable[float]) -> tuple[BasinRun, ...]:
+        """Run a one-dimensional parameter sweep while holding the compiled model."""
+        path = parameter.path if isinstance(parameter, RuleParameter) else parameter
+        return tuple(self.run(index.to_bytes(16, byteorder="big"), {path: value}) for index, value in enumerate(values))
+
+    def _substitutions(self, values: Mapping[str, float]) -> list[dict[str, object]]:
+        declared = {parameter.path: parameter for parameter in self.parameters}
+        unknown = sorted(set(values) - declared.keys())
+        if unknown:
+            raise ValueError(f"unknown rule parameter(s): {', '.join(unknown)}")
+        substitutions: list[dict[str, object]] = []
+        for path, value in values.items():
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                raise ValueError(f"rule parameter {path!r} substitution must be finite")
+            parameter = declared[path]
+            substitutions.append(
+                {
+                    "compartment": parameter.compartment,
+                    "substance": "water",
+                    "parameter": parameter.name,
+                    "value": numeric,
+                }
+            )
+        return substitutions
 
 
 @dataclass(frozen=True, init=False)
@@ -552,7 +618,7 @@ def _model_document(
     sinks: tuple[Sink, ...],
     time: TimeAxis,
     flow_unit: str,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], tuple[RuleParameter, ...]]:
     reach_names = {reach.name for reach in reaches}
     source_names = {source.name for source in sources}
     finite_names = reach_names | source_names
@@ -630,7 +696,7 @@ def _model_document(
         identifier: values for context in contexts.values() for identifier, values in context.forcings.items()
     }
     tables = [table for context in contexts.values() for table in context.tables]
-    return incidence.model_document(
+    document = incidence.model_document(
         finite_compartments=sorted(finite_names),
         boundary_accounts=boundaries,
         connections=_unique_connections(connections),
@@ -701,6 +767,12 @@ def _model_document(
         input_bindings=[],
         units=[{"substance": "water", "unit": _stock_unit(flow_unit)}],
     )
+    parameters = tuple(
+        RuleParameter(reach.name, name, value, contexts[reach.name].parameter_bounds[name])
+        for reach in reaches
+        for name, value in contexts[reach.name].parameters.items()
+    )
+    return document, parameters
 
 
 def _available_projection(reach: Reach) -> dict[str, Any]:
