@@ -19,6 +19,7 @@ from .basin import (
     BuiltBasin,
     Presence,
     Reach,
+    RuleParameter,
     TimeAxis,
     WaterSeries,
     WaterValue,
@@ -73,7 +74,16 @@ from .objective import (
     maximize,
     minimize,
 )
-from .optimization import OptimizeResult, Solution, make_repair, optimize
+from .optimization import (
+    BasinObjective,
+    BasinOptimizeResult,
+    BasinSolution,
+    OptimizeResult,
+    Solution,
+    make_repair,
+    optimize,
+    optimize_basin,
+)
 from .persistence import (
     IncidenceVersionMismatchError,
     SavedRunError,
@@ -105,6 +115,7 @@ __all__ = [
     "BuiltBasin",
     "BasinRun",
     "Reach",
+    "RuleParameter",
     "TimeAxis",
     "Presence",
     "WaterSeries",
@@ -148,6 +159,10 @@ __all__ = [
     # Optimization
     "make_repair",
     "optimize",
+    "optimize_basin",
+    "BasinObjective",
+    "BasinOptimizeResult",
+    "BasinSolution",
     "OptimizeResult",
     "Solution",
     # Nodes
