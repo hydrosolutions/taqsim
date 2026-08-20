@@ -4,7 +4,7 @@ A rule appears in this file only if (a) it encodes a project choice that cannot 
 
 ## 0. Project Overview
 
-Taqsim is an event-sourced framework for simulating and optimizing water allocation across directed network models.
+Taqsim is a water-modelling and rule-authoring layer over the incidence engine.
 
 ## 1. Python Environment
 
