@@ -199,9 +199,9 @@ class PriorityDistribution:
         del downstream
         priority = incidence.min(context.available, context.seasonal(self.priority_amount, "priority-amount"))
         remainder = incidence.max(incidence.literal(0.0), subtract(context.available, priority))
-        branches = [(f"to-{self.priority_destination}", self.priority_destination, priority)]
+        branches = [(f"priority-to-{self.priority_destination}", self.priority_destination, priority)]
         branches.extend(
-            (f"to-{destination}", destination, incidence.mul(remainder, context.scalar(ratio)))
+            (f"remainder-to-{destination}", destination, incidence.mul(remainder, context.scalar(ratio)))
             for destination, ratio in self.remainder_ratios.items()
         )
         return RulePlan(tuple(branches))
@@ -223,11 +223,11 @@ class EFlowSplit:
         )
         remainder = incidence.max(incidence.literal(0.0), subtract(context.available, environmental))
         branches = [
-            (f"to-{destination}", destination, incidence.mul(environmental, context.scalar(ratio)))
+            (f"environmental-to-{destination}", destination, incidence.mul(environmental, context.scalar(ratio)))
             for destination, ratio in self.natural_ratios.items()
         ]
         branches.extend(
-            (f"to-{destination}", destination, incidence.mul(remainder, context.scalar(ratio)))
+            (f"remainder-to-{destination}", destination, incidence.mul(remainder, context.scalar(ratio)))
             for destination, ratio in self.remainder_ratios.items()
         )
         return RulePlan(tuple(branches))
