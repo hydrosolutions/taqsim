@@ -13,6 +13,17 @@ Core modules:
     - taqsim.objective: Optimization objectives and Trace arithmetics
 """
 
+from .basin import (
+    Basin,
+    BasinRun,
+    BuiltBasin,
+    Presence,
+    Reach,
+    TimeAxis,
+    WaterSeries,
+    WaterValue,
+    WaterValues,
+)
 from .common import (
     EVAPORATION,
     INEFFICIENCY,
@@ -41,7 +52,6 @@ from .node import (
     NoRouting,
     NoSplit,
     PassThrough,
-    Reach,
     ReachLossRule,
     RoutingModel,
     Sink,
@@ -68,6 +78,16 @@ from .system import WaterSystem
 from .time import Frequency, Timestep, time_index
 
 __all__ = [
+    # Basin authoring
+    "Basin",
+    "BuiltBasin",
+    "BasinRun",
+    "Reach",
+    "TimeAxis",
+    "Presence",
+    "WaterSeries",
+    "WaterValues",
+    "WaterValue",
     # Common
     "LossReason",
     "EVAPORATION",
@@ -98,7 +118,6 @@ __all__ = [
     "Demand",
     "Splitter",
     "PassThrough",
-    "Reach",
     "Sink",
     "TimeSeries",
     # Reach Strategies
