@@ -74,6 +74,14 @@ from .objective import (
     minimize,
 )
 from .optimization import OptimizeResult, Solution, make_repair, optimize
+from .persistence import (
+    IncidenceVersionMismatchError,
+    SavedRunError,
+    SavedRunFormatError,
+    incidence_version,
+    load_run,
+    save_run,
+)
 from .system import WaterSystem
 from .time import Frequency, Timestep, time_index
 from .vocabulary import (
@@ -115,6 +123,13 @@ __all__ = [
     "EvaporationLossRule",
     "CanalLosses",
     "CanalLossRule",
+    # Persistence
+    "save_run",
+    "load_run",
+    "incidence_version",
+    "SavedRunError",
+    "SavedRunFormatError",
+    "IncidenceVersionMismatchError",
     # Common
     "LossReason",
     "EVAPORATION",
