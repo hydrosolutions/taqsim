@@ -15,7 +15,8 @@ from typing import Any, NoReturn
 from .basin import BasinRun, Presence, TimeAxis, WaterSeries
 
 _FORMAT = "taqsim.saved-run"
-_FORMAT_VERSION = 1
+_FORMAT_VERSION = 2
+_ARTIFACT_DIGEST_FIELD = "artifact_sha256"
 
 
 class SavedRunError(ValueError):
@@ -42,7 +43,7 @@ def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
     """Write a completed run cache atomically at an explicitly supplied path."""
     log_bytes, log_digest = run.authoritative_log()
     flows = {reach: _series_document(run.flow(reach)) for reach in sorted(run.reaches)}
-    document = {
+    payload = {
         "format": _FORMAT,
         "format_version": _FORMAT_VERSION,
         "incidence_version": incidence_version(),
@@ -60,6 +61,7 @@ def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
         "reaches": sorted(run.reaches),
         "flows": flows,
     }
+    document = {**payload, _ARTIFACT_DIGEST_FIELD: _artifact_digest(payload)}
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
@@ -107,6 +109,7 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
             "time",
             "reaches",
             "flows",
+            _ARTIFACT_DIGEST_FIELD,
         },
         "saved run",
     )
@@ -114,6 +117,11 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
         _malformed(f"format must be {_FORMAT!r}")
     if _integer(document["format_version"], "format_version") != _FORMAT_VERSION:
         _malformed(f"unsupported saved-run format version {document['format_version']!r}")
+    declared_digest = _string(document[_ARTIFACT_DIGEST_FIELD], _ARTIFACT_DIGEST_FIELD)
+    payload = {key: value for key, value in document.items() if key != _ARTIFACT_DIGEST_FIELD}
+    actual_digest = _artifact_digest(payload)
+    if declared_digest != actual_digest:
+        _malformed(f"artifact digest mismatch: declared {declared_digest!r}, computed {actual_digest!r}")
 
     model_digest = _string(document["model_digest"], "model_digest")
     log = _read_log(document["authoritative_log"])
@@ -126,6 +134,11 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
         _malformed("flows must contain exactly the declared reaches")
     flows = {reach: _read_series(flow_documents[reach], time, reach) for reach in reaches}
     return BasinRun._from_cache(model_digest=model_digest, authoritative_log=log, time=time, flows=flows)
+
+
+def _artifact_digest(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, allow_nan=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _series_document(series: WaterSeries) -> dict[str, list[float | str | None]]:
