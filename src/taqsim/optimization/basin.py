@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal
 
 import numpy as np
@@ -38,6 +39,9 @@ class BasinSolution:
     scores: Mapping[str, float]
     parameters: Mapping[str, float]
     _model: BuiltBasin
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
 
     def run(self, run_id: RunId) -> BasinRun:
         """Execute this solution without rebuilding or mutating its model."""
