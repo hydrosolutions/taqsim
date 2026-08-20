@@ -42,7 +42,10 @@ class TimeAxis:
         seconds = timestep.total_seconds()
         if not seconds.is_integer():
             raise ValueError("timestep must contain a whole number of seconds")
-        object.__setattr__(self, "start", _parse_start(start))
+        parsed_start = _parse_start(start)
+        if parsed_start.microsecond != 0:
+            raise ValueError("time axis start must align to a whole second")
+        object.__setattr__(self, "start", parsed_start)
         object.__setattr__(self, "steps", steps)
         object.__setattr__(self, "timestep", timestep)
 
