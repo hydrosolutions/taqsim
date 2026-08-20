@@ -74,6 +74,14 @@ from .objective import (
     minimize,
 )
 from .optimization import OptimizeResult, Solution, make_repair, optimize
+from .persistence import (
+    IncidenceVersionMismatchError,
+    SavedRunError,
+    SavedRunFormatError,
+    incidence_version,
+    load_run,
+    save_run,
+)
 from .system import WaterSystem
 from .time import Frequency, Timestep, time_index
 
@@ -88,6 +96,13 @@ __all__ = [
     "WaterSeries",
     "WaterValues",
     "WaterValue",
+    # Persistence
+    "save_run",
+    "load_run",
+    "incidence_version",
+    "SavedRunError",
+    "SavedRunFormatError",
+    "IncidenceVersionMismatchError",
     # Common
     "LossReason",
     "EVAPORATION",

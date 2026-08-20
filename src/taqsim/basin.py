@@ -7,6 +7,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
+from os import PathLike
+from types import MappingProxyType
 from typing import Any, overload
 from uuid import UUID
 
@@ -412,25 +414,60 @@ class BuiltBasin:
 
 @dataclass(frozen=True, init=False)
 class BasinRun:
-    """An immutable completed run interpreted through basin dates and water names."""
+    """An immutable live or cached run interpreted through basin dates and water names."""
 
-    _completed: incidence.CompletedRun
+    _completed: incidence.CompletedRun | None
+    _cached_flows: Mapping[str, WaterSeries]
+    _cached_log: tuple[bytes, str] | None
+    _cached_model_digest: str | None
     time: TimeAxis
     reaches: frozenset[str]
 
     def __init__(self, completed: incidence.CompletedRun, time: TimeAxis, reaches: frozenset[str]):
         object.__setattr__(self, "_completed", completed)
+        object.__setattr__(self, "_cached_flows", MappingProxyType({}))
+        object.__setattr__(self, "_cached_log", None)
+        object.__setattr__(self, "_cached_model_digest", None)
         object.__setattr__(self, "time", time)
         object.__setattr__(self, "reaches", reaches)
 
+    @classmethod
+    def _from_cache(
+        cls,
+        *,
+        model_digest: str,
+        authoritative_log: tuple[bytes, str],
+        time: TimeAxis,
+        flows: Mapping[str, WaterSeries],
+    ) -> BasinRun:
+        run = object.__new__(cls)
+        object.__setattr__(run, "_completed", None)
+        object.__setattr__(run, "_cached_flows", MappingProxyType(dict(flows)))
+        object.__setattr__(run, "_cached_log", authoritative_log)
+        object.__setattr__(run, "_cached_model_digest", model_digest)
+        object.__setattr__(run, "time", time)
+        object.__setattr__(run, "reaches", frozenset(flows))
+        return run
+
+    @classmethod
+    def load(cls, path: str | PathLike[str]) -> BasinRun:
+        """Load a compatible saved-run cache without compiling or running a model."""
+        from .persistence import load_run
+
+        return load_run(path)
+
     @property
     def model_digest(self) -> str:
-        return self._completed.model_digest
+        if self._completed is not None:
+            return self._completed.model_digest
+        if self._cached_model_digest is None:
+            raise RuntimeError("cached run is missing its model digest")
+        return self._cached_model_digest
 
     @property
     def authoritative_log_digest(self) -> str:
         """Return the verified digest of the authoritative incidence log."""
-        return self._completed.authoritative_log()[1]
+        return self.authoritative_log()[1]
 
     @property
     def log_digest(self) -> str:
@@ -439,7 +476,17 @@ class BasinRun:
 
     def authoritative_log(self) -> tuple[bytes, str]:
         """Return incidence's canonical log bytes and verified digest."""
-        return self._completed.authoritative_log()
+        if self._completed is not None:
+            return self._completed.authoritative_log()
+        if self._cached_log is None:
+            raise RuntimeError("cached run is missing its authoritative log")
+        return self._cached_log
+
+    def save(self, path: str | PathLike[str]) -> None:
+        """Save this completed run as a version-stamped cache."""
+        from .persistence import save_run
+
+        save_run(self, path)
 
     def flow(
         self,
@@ -461,16 +508,10 @@ class BasinRun:
         engine_values: dict[int, float | None] = {}
         engine_states: dict[int, Presence] = {}
         if modelled_first <= modelled_last:
-            engine_series: incidence.PresenceSeries = self._completed.transfer_series(
-                name,
-                "water",
-                direction="outgoing",
-                first=modelled_first,
-                last=modelled_last,
-            )
+            modelled = self._modelled_flow(name, modelled_first, modelled_last)
             for offset, step in enumerate(range(modelled_first, modelled_last + 1)):
-                engine_values[step] = engine_series.values[offset]
-                engine_states[step] = Presence(engine_series.presence[offset])
+                engine_values[step] = modelled.values[offset]
+                engine_states[step] = modelled.presence[offset]
 
         dates = tuple(self.time.datetime_at(step) for step in range(first, last + 1))
         values: list[float | None] = []
@@ -483,6 +524,24 @@ class BasinRun:
                 values.append(None)
                 states.append(Presence.NOT_MODELLED)
         return WaterSeries(dates, tuple(values), tuple(states))
+
+    def _modelled_flow(self, name: str, first: int, last: int) -> WaterSeries:
+        dates = tuple(self.time.datetime_at(step) for step in range(first, last + 1))
+        if self._completed is not None:
+            engine_series: incidence.PresenceSeries = self._completed.transfer_series(
+                name,
+                "water",
+                direction="outgoing",
+                first=first,
+                last=last,
+            )
+            return WaterSeries(
+                dates,
+                tuple(engine_series.values),
+                tuple(Presence(state) for state in engine_series.presence),
+            )
+        cached = self._cached_flows[name]
+        return WaterSeries(dates, cached.values[first : last + 1], cached.presence[first : last + 1])
 
     def reach_flow(self, reach: str | Reach, **interval: Any) -> WaterSeries:
         """Explicit alias for flow."""
