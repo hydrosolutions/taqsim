@@ -111,7 +111,7 @@ name = "cffi"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy'" },
+    { name = "pycparser" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz", hash = "sha256:44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529", size = 523588, upload-time = "2025-09-08T23:24:04.541Z" }
 wheels = [
@@ -336,10 +336,14 @@ wheels = [
 [[package]]
 name = "ctrl-freak"
 version = "0.1.0"
-source = { git = "https://github.com/hydrosolutions/ctrl-freak.git?rev=main#5e08f8e928fe112872f35409017c0444b5a3f084" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "joblib" },
     { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/57/93/1b74e39f2ddd0a67181947cd3cb861aff40b25a0a3ea39eacb7a8ceb894c/ctrl_freak-0.1.0.tar.gz", hash = "sha256:93d81208b6f46c5898dceb4cd8f84d759a02c7f6f3d9fbaed1824ae924dc9708", size = 25260, upload-time = "2026-06-25T15:42:59.451Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/31/07736be816a8a999c97fd1a58fbd3b9cfe582cb2cdfcfc29fab45486a70b/ctrl_freak-0.1.0-py3-none-any.whl", hash = "sha256:edb053a1b9bc4bba2397feb11d71326d5a0e999ad30dcc911aaa1d006312d842", size = 38612, upload-time = "2026-06-25T15:42:58.592Z" },
 ]
 
 [[package]]
@@ -1965,7 +1969,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ctrl-freak", git = "https://github.com/hydrosolutions/ctrl-freak.git?rev=main" },
+    { name = "ctrl-freak", specifier = ">=0.1.0" },
     { name = "deap", specifier = ">=1.4" },
     { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "matplotlib", specifier = ">=3.7" },
