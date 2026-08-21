@@ -165,3 +165,5 @@ data_old/
 scratchpad/
 
 logs/
+# PCE run scaffolding: driver journal, briefs, outcomes, supervision (not history)
+/planning/
