@@ -1,5 +1,5 @@
-from .optimize import optimize
-from .repair import make_repair
-from .result import OptimizeResult, Solution
+"""Parameter optimization for built basin models."""
 
-__all__ = ["make_repair", "optimize", "OptimizeResult", "Solution"]
+from .basin import BasinObjective, BasinOptimizeResult, BasinSolution, optimize_basin
+
+__all__ = ["BasinObjective", "BasinOptimizeResult", "BasinSolution", "optimize_basin"]

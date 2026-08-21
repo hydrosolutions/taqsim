@@ -1,0 +1,28 @@
+{
+  "stated": {
+    "gates": {
+      "format": "uv run ruff format --check src/ tests/",
+      "lint": "uv run ruff check src/ tests/",
+      "typecheck": "uv run ty check",
+      "test": "uv run pytest",
+      "build": "uv build"
+    },
+    "version_policy": "NONE",
+    "branches": {
+      "default": "main",
+      "milestone": "pce/{vision}/milestone-{milestone}",
+      "step": "pce/{vision}/m{milestone}-s{step}"
+    },
+    "pull_requests": {
+      "step_base": "MILESTONE",
+      "milestone_base": "DEFAULT",
+      "merge_method": "SQUASH"
+    },
+    "workflows": []
+  },
+  "appendable": {
+    "environment_hazards": [],
+    "gate_orderings": [],
+    "lockfile_rules": []
+  }
+}
