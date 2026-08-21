@@ -8,6 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
+from fractions import Fraction
 from os import PathLike
 from types import MappingProxyType
 from typing import Any, overload
@@ -405,6 +406,7 @@ class Basin:
         resolution = self._declared_resolution()
         _require_closed_capacity(self._reaches)
         _require_source_horizons(self._sources, time)
+        _require_countable_initial_total(self._reaches, self._sources, resolution)
         document, parameters = _model_document(
             tuple(self._reaches), tuple(self._sources), tuple(self._sinks), time, self.flow_unit, resolution
         )
@@ -701,6 +703,28 @@ def _require_source_horizons(sources: Sequence[Source], time: TimeAxis) -> None:
             raise ValueError(
                 f"source {source.name!r} has {len(source.flow)} values for a {time.steps}-timestep horizon"
             )
+
+
+def _require_countable_initial_total(
+    reaches: Sequence[Reach], sources: Sequence[Source], resolution: Resolution
+) -> None:
+    ceiling = resolution.quantum_m3 * 2**53
+    total = Fraction()
+    for amount in (value for source in sources for value in source.flow):
+        if not math.isfinite(amount):
+            return
+        total += Fraction.from_float(amount)
+    for reach in reaches:
+        amount = float(reach.initial_water)
+        if not math.isfinite(amount):
+            return
+        total += Fraction.from_float(amount)
+    if total <= Fraction.from_float(ceiling):
+        return
+    displayed_total = str(total.numerator) if total.denominator == 1 else format(float(total), ".17g")
+    raise ValueError(
+        f"substance 'water' declared total {displayed_total} exceeds the exactly countable ceiling {ceiling:.17g}"
+    )
 
 
 def _model_document(
