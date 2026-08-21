@@ -13,7 +13,7 @@ def test_build_refuses_a_missing_start_date_before_compilation(monkeypatch: pyte
         compiled = True
 
     monkeypatch.setattr("taqsim.basin.incidence.compile_model", compile_model)
-    basin = Basin(timesteps=3)
+    basin = Basin(timesteps=3, resolution="1 mL")
     basin.add_reach("canal", "river", "farm")
 
     with pytest.raises(ValueError, match="start date"):

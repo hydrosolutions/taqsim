@@ -26,6 +26,25 @@ class Presence(StrEnum):
     NOT_MODELLED = "not_modelled"
 
 
+class Resolution(StrEnum):
+    """One accepted arithmetic resolution for water amounts expressed in m3."""
+
+    CUBIC_METRE = "1 m3"
+    LITRE = "1 L"
+    MILLILITRE = "1 mL"
+    CUBIC_MILLIMETRE = "1 mm3"
+
+    @property
+    def quantum_m3(self) -> float:
+        """Return one resolution unit expressed in cubic metres."""
+        return {
+            Resolution.CUBIC_METRE: 1.0,
+            Resolution.LITRE: 1e-3,
+            Resolution.MILLILITRE: 1e-6,
+            Resolution.CUBIC_MILLIMETRE: 1e-9,
+        }[self]
+
+
 @dataclass(frozen=True, init=False)
 class TimeAxis:
     """A finite sequence of equally spaced, real-world timesteps."""
@@ -288,6 +307,7 @@ class Basin:
     timesteps: int | None = None
     timestep: timedelta = timedelta(days=1)
     flow_unit: str = "m3/timestep"
+    resolution: str | Resolution | None = None
     _reaches: list[Reach] = field(default_factory=list, init=False, repr=False)
     _sources: list[Source] = field(default_factory=list, init=False, repr=False)
     _sinks: list[Sink] = field(default_factory=list, init=False, repr=False)
@@ -300,6 +320,7 @@ class Basin:
         timesteps: int | None = None,
         timestep: timedelta = timedelta(days=1),
         flow_unit: str = "m3/timestep",
+        resolution: str | Resolution | None = None,
         time: TimeAxis | None = None,
         horizon: int | None = None,
     ) -> None:
@@ -312,6 +333,7 @@ class Basin:
         self.timesteps = time.steps if time is not None else (timesteps if timesteps is not None else horizon)
         self.timestep = time.timestep if time is not None else timestep
         self.flow_unit = flow_unit
+        self.resolution = resolution
         self._reaches = []
         self._sources = []
         self._sinks = []
@@ -380,10 +402,11 @@ class Basin:
     def build(self) -> BuiltBasin:
         """Validate water-specific declarations, then compile one incidence model."""
         time = self._declared_time()
+        resolution = self._declared_resolution()
         _require_closed_capacity(self._reaches)
         _require_source_horizons(self._sources, time)
         document, parameters = _model_document(
-            tuple(self._reaches), tuple(self._sources), tuple(self._sinks), time, self.flow_unit
+            tuple(self._reaches), tuple(self._sources), tuple(self._sinks), time, self.flow_unit, resolution
         )
         return BuiltBasin(
             document,
@@ -401,6 +424,15 @@ class Basin:
         if not self.flow_unit:
             raise ValueError(f"basin {self.name!r} is missing required flow unit declaration")
         return TimeAxis(self.start_date, self.timesteps, self.timestep)
+
+    def _declared_resolution(self) -> Resolution:
+        if self.resolution is None:
+            raise ValueError(f"basin {self.name!r} is missing required resolution declaration")
+        try:
+            return Resolution(self.resolution)
+        except ValueError as error:
+            accepted = ", ".join(repr(item.value) for item in Resolution)
+            raise ValueError(f"unknown resolution {self.resolution!r}; accepted resolutions are {accepted}") from error
 
 
 @dataclass(frozen=True, init=False)
@@ -677,6 +709,7 @@ def _model_document(
     sinks: tuple[Sink, ...],
     time: TimeAxis,
     flow_unit: str,
+    resolution: Resolution,
 ) -> tuple[dict[str, Any], tuple[RuleParameter, ...]]:
     reach_names = {reach.name for reach in reaches}
     source_names = {source.name for source in sources}
@@ -824,7 +857,13 @@ def _model_document(
             for branch, destination, _ in plans[reach.name].branches
         ],
         input_bindings=[],
-        units=[{"substance": "water", "unit": _stock_unit(flow_unit)}],
+        units=[
+            {
+                "substance": "water",
+                "unit": _stock_unit(flow_unit),
+                "quantum": resolution.quantum_m3,
+            }
+        ],
     )
     parameters = tuple(
         RuleParameter(reach.name, name, value, contexts[reach.name].parameter_bounds[name])

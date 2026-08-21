@@ -4,7 +4,7 @@ from taqsim import Basin
 
 
 def test_the_same_model_and_run_id_have_the_same_authoritative_digest() -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=3)
+    basin = Basin(start_date="2020-01-01", timesteps=3, resolution="1 mL")
     basin.add_reach("reach", "river", "farm")
     model = basin.build()
     run_id = bytes(range(16))

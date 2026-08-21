@@ -6,7 +6,7 @@ from taqsim import Basin, BasinObjective, Parameter, ZoneRelease, optimize_basin
 
 
 def bounded_basin():
-    basin = Basin(start_date="2020-01-01", timesteps=1)
+    basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
     basin.source("river", [100.0])
     basin.reach(
         "reservoir",

@@ -4,7 +4,7 @@ from taqsim import Basin, Presence
 
 
 def test_zero_inside_the_horizon_is_not_missing() -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=3)
+    basin = Basin(start_date="2020-01-01", timesteps=3, resolution="1 mL")
     basin.source("river", flow=[5.0, 0.0, 0.0])
     basin.sink("farm")
     basin.add_reach("dry-reach", "river", "farm")

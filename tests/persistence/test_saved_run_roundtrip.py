@@ -9,7 +9,7 @@ from taqsim import Basin, Presence, load_run
 
 
 def test_saved_run_reopens_in_a_fresh_process_without_running(tmp_path: Path) -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=3)
+    basin = Basin(start_date="2020-01-01", timesteps=3, resolution="1 mL")
     basin.source("river", flow=[5.0, 0.0, 2.0])
     basin.sink("farm")
     basin.add_reach("canal", "river", "farm")
