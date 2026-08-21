@@ -512,7 +512,7 @@ wheels = [
 [[package]]
 name = "incidence"
 version = "0.1.4"
-source = { git = "https://github.com/CooperBigFoot/incidence.git?subdirectory=bindings%2Fpython&rev=b12d024256303ed8ef75c124a7d6afae230a5653#b12d024256303ed8ef75c124a7d6afae230a5653" }
+source = { git = "https://github.com/CooperBigFoot/incidence.git?subdirectory=bindings%2Fpython&rev=3c67154da60b352a9077e1917dbdcb70e029b897#3c67154da60b352a9077e1917dbdcb70e029b897" }
 
 [[package]]
 name = "iniconfig"
@@ -1977,7 +1977,7 @@ dev = [
 requires-dist = [
     { name = "ctrl-freak", specifier = ">=0.1.0" },
     { name = "deap", specifier = ">=1.4" },
-    { name = "incidence", git = "https://github.com/CooperBigFoot/incidence.git?subdirectory=bindings%2Fpython&rev=b12d024256303ed8ef75c124a7d6afae230a5653" },
+    { name = "incidence", git = "https://github.com/CooperBigFoot/incidence.git?subdirectory=bindings%2Fpython&rev=3c67154da60b352a9077e1917dbdcb70e029b897" },
     { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "matplotlib", specifier = ">=3.7" },
     { name = "networkx", specifier = ">=3.0" },
