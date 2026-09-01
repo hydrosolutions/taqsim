@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from _inputs import interval_volume, make_water_system
 
-from taqsim import CanalLosses, ConservationQuantum
+from taqsim import CanalLosses, CanalSeepageCoefficient, ConservationQuantum, Length
 
 _SEED = 11
 _SECONDS_PER_TIMESTEP = 86_400.0
@@ -66,7 +66,12 @@ def _draw_canals(count: int, quantum: ConservationQuantum) -> tuple[Draw, ...]:
 def _recorded_seepage(draw: Draw, quantum: ConservationQuantum, run_number: int) -> float:
     water_system = make_water_system(1, quantum)
     water_system.source("river", interval_volume([draw.flow_m3]))
-    water_system.reach("canal", "river", "farm", rule=CanalLosses(draw.coefficient, draw.length_km))
+    water_system.reach(
+        "canal",
+        "river",
+        "farm",
+        rule=CanalLosses(CanalSeepageCoefficient(draw.coefficient, "sqrt(m3/s)/km"), Length(draw.length_km, "km")),
+    )
     run = water_system.build().run(run_number.to_bytes(16, "big"))
     recorded = run.arrivals("seepage").values[0]
     if recorded is None:

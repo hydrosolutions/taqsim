@@ -42,6 +42,14 @@ Finer inputs must be prepared explicitly with `aggregate_to(system.time)`. Taqsi
 not convert, fill, interpolate, aggregate, or infer time inside `source()`, `build()`, or
 `run()`.
 
+Every physical rule scalar is also unit-aware. Use `WaterVolume` and `VolumetricRate`
+for water amounts and rates, `WaterDepth` for evaporation depths, `SurfaceArea` for
+reservoir areas, `Length` for canal length and width, and
+`CanalSeepageCoefficient(..., "sqrt(m3/s)/km")` for the square-root seepage law.
+Dimensionless fractions remain numerical. Wrap optimizable physical values as, for
+example, `WaterDepth(Parameter("depth", 5.0, (0.0, 10.0)), "mm")`; compiled bounds,
+substitutions, sweeps, and solutions retain a compatible named quantity.
+
 ## Maintenance Status
 
 🟢 **Active Development**

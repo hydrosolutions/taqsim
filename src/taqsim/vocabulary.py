@@ -8,7 +8,15 @@ from typing import Protocol
 
 import incidence
 
-from .inputs import Parameter, VolumetricRate, WaterVolume
+from .inputs import (
+    CanalSeepageCoefficient,
+    Length,
+    Parameter,
+    SurfaceArea,
+    VolumetricRate,
+    WaterDepth,
+    WaterVolume,
+)
 
 type Expression = dict[str, object]
 
@@ -35,6 +43,7 @@ type Scalar = float | int | Parameter
 type SeasonalScalar = Scalar | tuple[Scalar, ...]
 type SeasonalVolume = WaterVolume | tuple[WaterVolume, ...]
 type SeasonalRate = VolumetricRate | tuple[VolumetricRate, ...]
+type SeasonalDepth = WaterDepth | tuple[WaterDepth, ...]
 
 
 def _volume_values(value: SeasonalVolume) -> SeasonalScalar:
@@ -55,6 +64,22 @@ def _rate_values(value: SeasonalRate) -> SeasonalScalar:
     if not isinstance(value, VolumetricRate):
         raise TypeError("water rates must be declared as VolumetricRate values")
     return value.m3_per_second
+
+
+def _depth_values(value: SeasonalDepth) -> SeasonalScalar:
+    if isinstance(value, tuple):
+        if not all(isinstance(item, WaterDepth) for item in value):
+            raise TypeError("water depths must be declared as WaterDepth values")
+        return tuple(item.metres for item in value)
+    if not isinstance(value, WaterDepth):
+        raise TypeError("water depths must be declared as WaterDepth values")
+    return value.metres
+
+
+def _fixed_physical(value: float | Parameter, carrier: str) -> float:
+    if isinstance(value, Parameter):
+        raise TypeError(f"{carrier} must be fixed, not parameterized")
+    return value
 
 
 @dataclass
@@ -270,18 +295,25 @@ EFlowSplitPolicy = EFlowSplit
 
 @dataclass(frozen=True)
 class ReservoirEvaporation:
-    """Monthly evaporation depth over area interpolated from stored water."""
+    """Seasonal water depth over surface area interpolated from stored volume."""
 
-    rates_mm: tuple[Scalar, ...]
-    volume_area: tuple[tuple[WaterVolume, float], ...]
+    evaporation_depths: tuple[WaterDepth, ...]
+    volume_surface_area: tuple[tuple[WaterVolume, SurfaceArea], ...]
     destination: str = "evaporation"
 
     def __post_init__(self) -> None:
-        if any(not isinstance(volume, WaterVolume) for volume, _ in self.volume_area):
-            raise TypeError("volume-area abscissae must be declared as WaterVolume values")
+        _depth_values(self.evaporation_depths)
+        if any(
+            not isinstance(volume, WaterVolume) or not isinstance(area, SurfaceArea)
+            for volume, area in self.volume_surface_area
+        ):
+            raise TypeError("volume-surface-area points require WaterVolume and SurfaceArea values")
+        for volume, area in self.volume_surface_area:
+            _fixed_physical(volume.m3, "volume-area volume")
+            _fixed_physical(area.square_metres, "volume-area surface area")
 
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
-        if len(self.volume_area) < 2:
+        if len(self.volume_surface_area) < 2:
             raise ValueError("reservoir evaporation requires at least two volume-area points")
         table_id = f"{context.owner}-surface-area"
         context.tables.append(
@@ -289,16 +321,17 @@ class ReservoirEvaporation:
                 "id": table_id,
                 "numerical_semantics_version": "v1",
                 "boundary_policy": "clamp_to_endpoint",
-                "abscissae": [point[0].m3 for point in self.volume_area],
-                "ordinates": [point[1] for point in self.volume_area],
+                "abscissae": [_fixed_physical(point[0].m3, "volume-area volume") for point in self.volume_surface_area],
+                "ordinates": [
+                    _fixed_physical(point[1].square_metres, "volume-area surface area")
+                    for point in self.volume_surface_area
+                ],
             }
         )
         area = incidence.table_lookup(table_id, context.available)
         loss = incidence.min(
             context.available,
-            incidence.mul(
-                incidence.mul(context.seasonal(self.rates_mm, "evaporation-rate"), incidence.literal(0.001)), area
-            ),
+            incidence.mul(context.seasonal(_depth_values(self.evaporation_depths), "evaporation-depth"), area),
         )
         delivered = incidence.max(incidence.literal(0.0), subtract(context.available, loss))
         return RulePlan((("evaporation", self.destination, loss), ("release", downstream, delivered)))
@@ -311,14 +344,25 @@ EvaporationLossRule = ReservoirEvaporation
 class CanalLosses:
     """A sequential canal loss cascade including the real square-root seepage law."""
 
-    seepage_coefficient: Scalar
-    length_km: float
+    seepage_coefficient: CanalSeepageCoefficient
+    length: Length
     seepage_destination: str = "seepage"
-    evaporation_mm: SeasonalScalar = 0.0
-    width_m: float = 0.0
+    evaporation_depth: SeasonalDepth = WaterDepth(0.0, "m")
+    width: Length = Length(0.0, "m")
     evaporation_destination: str = "evaporation"
     operational_fraction: Scalar = 0.0
     operational_destination: str = "operational-loss"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.seepage_coefficient, CanalSeepageCoefficient):
+            raise TypeError("seepage_coefficient must be a CanalSeepageCoefficient")
+        if not isinstance(self.length, Length):
+            raise TypeError("canal length must be a Length")
+        _depth_values(self.evaporation_depth)
+        if not isinstance(self.width, Length):
+            raise TypeError("canal width must be a Length")
+        _fixed_physical(self.length.kilometres, "canal length")
+        _fixed_physical(self.width.metres, "canal width")
 
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
         seconds = incidence.literal(context.timestep.total_seconds())
@@ -328,9 +372,10 @@ class CanalLosses:
             incidence.mul(
                 incidence.mul(
                     incidence.mul(
-                        context.scalar(self.seepage_coefficient), incidence.power(q_m3s, incidence.literal(0.5))
+                        context.scalar(self.seepage_coefficient.canonical),
+                        incidence.power(q_m3s, incidence.literal(0.5)),
                     ),
-                    incidence.literal(self.length_km),
+                    incidence.literal(_fixed_physical(self.length.kilometres, "canal length")),
                 ),
                 seconds,
             ),
@@ -339,8 +384,11 @@ class CanalLosses:
         evaporation = incidence.min(
             after_seepage,
             incidence.mul(
-                context.seasonal(self.evaporation_mm, "canal-evaporation"),
-                incidence.literal(0.001 * self.length_km * 1000.0 * self.width_m),
+                context.seasonal(_depth_values(self.evaporation_depth), "canal-evaporation"),
+                incidence.literal(
+                    _fixed_physical(self.length.metres, "canal length")
+                    * _fixed_physical(self.width.metres, "canal width")
+                ),
             ),
         )
         after_evaporation = incidence.max(incidence.literal(0.0), subtract(after_seepage, evaporation))

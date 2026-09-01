@@ -11,15 +11,19 @@ import pytest
 
 from taqsim import (
     CanalLosses,
+    CanalSeepageCoefficient,
     ConservationQuantum,
     EFlowSplit,
+    Length,
     MonthlyDistribution,
     Parameter,
     Presence,
     PriorityDistribution,
     ReservoirEvaporation,
+    SurfaceArea,
     TimeAxis,
     VolumetricRate,
+    WaterDepth,
     WaterSystem,
     WaterSystemObjective,
     WaterVolume,
@@ -80,7 +84,9 @@ def test_reported_canal_case_accounts_in_integer_counts_and_carries_residual() -
     quantum = ConservationQuantum.LITRE
     water_system = _water_system(steps=2, quantum=quantum)
     water_system.source("river", interval_volume([10000.0, 8000.0]))
-    water_system.reach("canal", "river", "farm", rule=CanalLosses(0.0014, 12.0))
+    water_system.reach(
+        "canal", "river", "farm", rule=CanalLosses(CanalSeepageCoefficient(0.0014, "sqrt(m3/s)/km"), Length(12.0, "km"))
+    )
     run = water_system.build().run(bytes(16))
 
     incoming = [_count(value, quantum) for value in run.arrivals("canal").values]
@@ -102,7 +108,9 @@ def test_reported_canal_case_accounts_in_integer_counts_and_carries_residual() -
 def test_computed_subquantum_zero_is_present_not_absent_or_not_modelled() -> None:
     water_system = _water_system(quantum=ConservationQuantum.CUBIC_METRE)
     water_system.source("river", interval_volume([1.0]))
-    water_system.reach("canal", "river", "farm", rule=CanalLosses(1e-9, 1.0))
+    water_system.reach(
+        "canal", "river", "farm", rule=CanalLosses(CanalSeepageCoefficient(1e-9, "sqrt(m3/s)/km"), Length(1.0, "km"))
+    )
     run = water_system.build().run(bytes([2]) * 16)
     seepage = run.arrivals("seepage")
     assert list(seepage.values) == [0.0]
@@ -139,7 +147,9 @@ def test_quantum_is_bound_to_model_live_run_and_saved_run(tmp_path: Path) -> Non
 def test_repeated_execution_has_identical_authoritative_digest() -> None:
     water_system = _water_system(steps=2, quantum=ConservationQuantum.LITRE)
     water_system.source("river", interval_volume([3.141, 2.718]))
-    water_system.reach("canal", "river", "farm", rule=CanalLosses(0.0014, 12.0))
+    water_system.reach(
+        "canal", "river", "farm", rule=CanalLosses(CanalSeepageCoefficient(0.0014, "sqrt(m3/s)/km"), Length(12.0, "km"))
+    )
     model = water_system.build()
     run_id = bytes([4]) * 16
     assert model.run(run_id).authoritative_log_digest == model.run(run_id).authoritative_log_digest
@@ -155,7 +165,12 @@ def test_all_75_canal_grid_cases_complete() -> None:
     for index, (flow, coefficient, length) in enumerate(cases, 1):
         water_system = _water_system(steps=2, quantum=ConservationQuantum.LITRE)
         water_system.source("river", interval_volume([flow, flow * 0.8]))
-        water_system.reach("canal", "river", "farm", rule=CanalLosses(coefficient, length))
+        water_system.reach(
+            "canal",
+            "river",
+            "farm",
+            rule=CanalLosses(CanalSeepageCoefficient(coefficient, "sqrt(m3/s)/km"), Length(length, "km")),
+        )
         assert water_system.build().run(index.to_bytes(16, "big")).authoritative_log_digest
 
 
@@ -189,7 +204,11 @@ def test_seeded_nonround_samples_cover_all_six_rule_compilers() -> None:
         lambda: PriorityDistribution("downstream", WaterVolume(rng.uniform(1.0, 900.0), "m3"), {"other": 1.0}),
         lambda: EFlowSplit({"downstream": 1.0}, {"other": 1.0}, rng.uniform(0.01, 0.6)),
         lambda: ReservoirEvaporation(
-            (rng.uniform(0.5, 120.0),) * 12, ((WaterVolume(0.0, "m3"), 0.0), (WaterVolume(1000.0, "m3"), 10_000.0))
+            (WaterDepth(rng.uniform(0.5, 120.0), "mm"),) * 12,
+            (
+                (WaterVolume(0.0, "m3"), SurfaceArea(0.0, "m2")),
+                (WaterVolume(1000.0, "m3"), SurfaceArea(10_000.0, "m2")),
+            ),
         ),
         lambda: (
             lambda fraction: MonthlyDistribution({"downstream": (fraction,) * 12, "other": (1.0 - fraction,) * 12})
@@ -200,7 +219,10 @@ def test_seeded_nonround_samples_cover_all_six_rule_compilers() -> None:
             WaterVolume(50_000.0, "m3"),
             VolumetricRate(rng.uniform(0.0001, 0.02), "m3/s"),
         ),
-        lambda: CanalLosses(rng.uniform(1e-4, 1e-2), rng.uniform(0.5, 15.0)),
+        lambda: CanalLosses(
+            CanalSeepageCoefficient(rng.uniform(1e-4, 1e-2), "sqrt(m3/s)/km"),
+            Length(rng.uniform(0.5, 15.0), "km"),
+        ),
     )
     for shape_index, factory in enumerate(factories):
         for sample in range(60):
@@ -218,13 +240,19 @@ def test_sweep_and_replay_complete_at_ordinary_nonround_parameters() -> None:
         "canal",
         "river",
         "farm",
-        rule=CanalLosses(Parameter("seepage", 0.00143, (0.00017, 0.00983)), 7.321),
+        rule=CanalLosses(
+            CanalSeepageCoefficient(Parameter("seepage", 0.00143, (0.00017, 0.00983)), "sqrt(m3/s)/km"),
+            Length(7.321, "km"),
+        ),
     )
     model = water_system.build()
-    runs = model.sweep("canal.seepage", [0.000173, 0.002719, 0.008997])
+    runs = model.sweep(
+        "canal.seepage",
+        [CanalSeepageCoefficient(value, "sqrt(m3/s)/km") for value in (0.000173, 0.002719, 0.008997)],
+    )
     assert len(runs) == 3
-    first = model.run(bytes([71]) * 16, {"canal.seepage": 0.002719})
-    repeated = model.run(bytes([71]) * 16, {"canal.seepage": 0.002719})
+    first = model.run(bytes([71]) * 16, {"canal.seepage": CanalSeepageCoefficient(0.002719, "sqrt(m3/s)/km")})
+    repeated = model.run(bytes([71]) * 16, {"canal.seepage": CanalSeepageCoefficient(0.002719, "sqrt(m3/s)/km")})
     first.verify_replay(repeated)
     assert first.authoritative_log_digest == repeated.authoritative_log_digest
 

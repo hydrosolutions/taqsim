@@ -17,7 +17,17 @@ from uuid import UUID
 
 import incidence
 
-from .inputs import IntervalVolume, Parameter, VolumetricRate, WaterVolume, _frequency_seconds
+from .inputs import (
+    CanalSeepageCoefficient,
+    IntervalVolume,
+    Length,
+    Parameter,
+    SurfaceArea,
+    VolumetricRate,
+    WaterDepth,
+    WaterVolume,
+    _frequency_seconds,
+)
 from .vocabulary import RuleContext, RulePlan, WaterRule, subtract
 
 
@@ -102,7 +112,7 @@ class TimeAxis:
 
 # The engine needs bytes, while callers should be free to use the normal UUID value type.
 RunId = UUID | bytes | bytearray | str
-type RuleScalar = float | WaterVolume | VolumetricRate
+type RuleScalar = float | WaterVolume | VolumetricRate | WaterDepth | Length | SurfaceArea | CanalSeepageCoefficient
 RuleSubstitutions = Mapping[str, RuleScalar]
 WaterQuantumCount = NewType("WaterQuantumCount", int)
 
@@ -139,6 +149,14 @@ class RuleParameter:
             return WaterVolume(value, self.value.unit)
         if isinstance(self.value, VolumetricRate):
             return VolumetricRate(value, self.value.unit)
+        if isinstance(self.value, WaterDepth):
+            return WaterDepth(value, self.value.unit)
+        if isinstance(self.value, Length):
+            return Length(value, self.value.unit)
+        if isinstance(self.value, SurfaceArea):
+            return SurfaceArea(value, self.value.unit)
+        if isinstance(self.value, CanalSeepageCoefficient):
+            return CanalSeepageCoefficient(value, self.value.unit)
         return value
 
     def engine_value(self, value: RuleScalar) -> float:
@@ -151,7 +169,26 @@ class RuleParameter:
             if not isinstance(value, VolumetricRate):
                 raise TypeError(f"rule parameter {self.path!r} substitution must be a VolumetricRate")
             return _fixed_rule_quantity(value.to(self.value.unit))
-        if isinstance(value, (WaterVolume, VolumetricRate)):
+        if isinstance(self.value, WaterDepth):
+            if not isinstance(value, WaterDepth):
+                raise TypeError(f"rule parameter {self.path!r} substitution must be a WaterDepth")
+            return _fixed_rule_quantity(value.to(self.value.unit))
+        if isinstance(self.value, Length):
+            if not isinstance(value, Length):
+                raise TypeError(f"rule parameter {self.path!r} substitution must be a Length")
+            return _fixed_rule_quantity(value.to(self.value.unit))
+        if isinstance(self.value, SurfaceArea):
+            if not isinstance(value, SurfaceArea):
+                raise TypeError(f"rule parameter {self.path!r} substitution must be a SurfaceArea")
+            return _fixed_rule_quantity(value.to(self.value.unit))
+        if isinstance(self.value, CanalSeepageCoefficient):
+            if not isinstance(value, CanalSeepageCoefficient):
+                raise TypeError(f"rule parameter {self.path!r} substitution must be a CanalSeepageCoefficient")
+            return _fixed_rule_quantity(value)
+        if isinstance(
+            value,
+            (WaterVolume, VolumetricRate, WaterDepth, Length, SurfaceArea, CanalSeepageCoefficient),
+        ):
             raise TypeError(f"dimensionless rule parameter {self.path!r} substitution must be a number")
         return float(value)
 
@@ -1094,14 +1131,16 @@ def _model_document(
     return document, parameters
 
 
-def _fixed_rule_quantity(quantity: WaterVolume | VolumetricRate) -> float:
+def _fixed_rule_quantity(
+    quantity: WaterVolume | VolumetricRate | WaterDepth | Length | SurfaceArea | CanalSeepageCoefficient,
+) -> float:
     if isinstance(quantity.value, Parameter):
         raise TypeError("rule substitution quantity must contain a fixed value")
     return quantity.value
 
 
 def _rule_scalar_magnitude(value: RuleScalar) -> float:
-    if isinstance(value, (WaterVolume, VolumetricRate)):
+    if isinstance(value, (WaterVolume, VolumetricRate, WaterDepth, Length, SurfaceArea, CanalSeepageCoefficient)):
         return _fixed_rule_quantity(value)
     return value
 
@@ -1113,6 +1152,18 @@ def _quantity_scalar(parameter: Parameter, value: float) -> RuleScalar:
     if parameter.physical_kind == "rate":
         assert parameter.unit is not None
         return VolumetricRate(value, parameter.unit)
+    if parameter.physical_kind == "depth":
+        assert parameter.unit is not None
+        return WaterDepth(value, parameter.unit)
+    if parameter.physical_kind == "length":
+        assert parameter.unit is not None
+        return Length(value, parameter.unit)
+    if parameter.physical_kind == "area":
+        assert parameter.unit is not None
+        return SurfaceArea(value, parameter.unit)
+    if parameter.physical_kind == "seepage_coefficient":
+        assert parameter.unit is not None
+        return CanalSeepageCoefficient(value, parameter.unit)
     return value
 
 

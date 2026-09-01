@@ -2,10 +2,14 @@
 
 from .docs import get_docs_path
 from .inputs import (
+    CanalSeepageCoefficient,
     IntervalMeanRate,
     IntervalVolume,
+    Length,
     SourceProvenance,
+    SurfaceArea,
     VolumetricRate,
+    WaterDepth,
     WaterVolume,
 )
 from .optimization import (
@@ -71,6 +75,10 @@ __all__ = [
     "SourceProvenance",
     "WaterVolume",
     "VolumetricRate",
+    "WaterDepth",
+    "Length",
+    "SurfaceArea",
+    "CanalSeepageCoefficient",
     "Parameter",
     "monthly_parameters",
     "ZoneRelease",

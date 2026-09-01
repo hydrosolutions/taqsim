@@ -65,6 +65,25 @@ _VOLUME_ALIASES = {
     "litres": "L",
 }
 
+_LENGTH_FACTORS: dict[str, Decimal] = {
+    "km": Decimal("1000"),
+    "m": Decimal("1"),
+    "cm": Decimal("0.01"),
+    "mm": Decimal("0.001"),
+}
+_AREA_FACTORS: dict[str, Decimal] = {
+    "km2": Decimal("1e6"),
+    "km²": Decimal("1e6"),
+    "ha": Decimal("1e4"),
+    "m2": Decimal("1"),
+    "m²": Decimal("1"),
+}
+_SEEPAGE_COEFFICIENT_UNITS = {
+    "sqrt(m3/s)/km": "sqrt(m3/s)/km",
+    "sqrt(m³/s)/km": "sqrt(m3/s)/km",
+    "(m3/s)^0.5/km": "sqrt(m3/s)/km",
+}
+
 
 def _volume_unit(unit: str) -> tuple[str, Decimal]:
     normalized = _VOLUME_ALIASES.get(unit.strip(), unit.strip())
@@ -72,6 +91,30 @@ def _volume_unit(unit: str) -> tuple[str, Decimal]:
         return normalized, _VOLUME_FACTORS[normalized]
     except KeyError as error:
         raise ValueError(f"unknown or non-volume unit {unit!r}") from error
+
+
+def _length_unit(unit: str) -> tuple[str, Decimal]:
+    normalized = unit.strip()
+    try:
+        return normalized, _LENGTH_FACTORS[normalized]
+    except KeyError as error:
+        raise ValueError(f"unknown or non-length unit {unit!r}") from error
+
+
+def _area_unit(unit: str) -> tuple[str, Decimal]:
+    normalized = unit.strip()
+    try:
+        factor = _AREA_FACTORS[normalized]
+    except KeyError as error:
+        raise ValueError(f"unknown or non-area unit {unit!r}") from error
+    return ({"km²": "km2", "m²": "m2"}.get(normalized, normalized), factor)
+
+
+def _seepage_coefficient_unit(unit: str) -> str:
+    try:
+        return _SEEPAGE_COEFFICIENT_UNITS[unit.strip()]
+    except KeyError as error:
+        raise ValueError(f"unknown seepage-coefficient unit {unit!r}; use 'sqrt(m3/s)/km'") from error
 
 
 def _rate_unit(unit: str) -> tuple[str, Decimal, Decimal]:
@@ -98,7 +141,7 @@ class Parameter:
     name: str
     value: float
     bounds: tuple[float, float] | None = None
-    physical_kind: Literal["volume", "rate"] | None = None
+    physical_kind: Literal["volume", "rate", "depth", "length", "area", "seepage_coefficient"] | None = None
     unit: str | None = None
 
     def __post_init__(self) -> None:
@@ -117,7 +160,9 @@ class Parameter:
         if (self.physical_kind is None) != (self.unit is None):
             raise ValueError("parameter physical kind and unit must be declared together")
 
-    def as_quantity(self, kind: Literal["volume", "rate"], unit: str) -> Parameter:
+    def as_quantity(
+        self, kind: Literal["volume", "rate", "depth", "length", "area", "seepage_coefficient"], unit: str
+    ) -> Parameter:
         """Bind this parameter to one explicit physical dimension and unit."""
         if self.physical_kind is not None and (self.physical_kind, self.unit) != (kind, unit):
             raise ValueError(f"parameter {self.name!r} already has incompatible physical meaning")
@@ -204,6 +249,107 @@ class VolumetricRate:
     def m3_per_second(self) -> float | Parameter:
         """Return the rate expressed in cubic metres per second."""
         return self.to("m3/s").value
+
+
+@dataclass(frozen=True, init=False)
+class WaterDepth:
+    """One finite non-negative water depth with an explicit length unit."""
+
+    value: float | Parameter
+    unit: str
+
+    def __init__(self, value: float | Parameter, unit: str) -> None:
+        physical = _physical_value(value, "WaterDepth")
+        canonical, _ = _length_unit(unit)
+        if isinstance(physical, Parameter):
+            physical = physical.as_quantity("depth", canonical)
+        object.__setattr__(self, "value", physical)
+        object.__setattr__(self, "unit", canonical)
+
+    def to(self, unit: str) -> WaterDepth:
+        target, target_factor = _length_unit(unit)
+        _, source_factor = _length_unit(self.unit)
+        return WaterDepth(_scaled_physical(self.value, source_factor / target_factor, unit=target), target)
+
+    @property
+    def metres(self) -> float | Parameter:
+        """Return this depth expressed in metres."""
+        return self.to("m").value
+
+
+@dataclass(frozen=True, init=False)
+class Length:
+    """One finite non-negative physical length with an explicit unit."""
+
+    value: float | Parameter
+    unit: str
+
+    def __init__(self, value: float | Parameter, unit: str) -> None:
+        physical = _physical_value(value, "Length")
+        canonical, _ = _length_unit(unit)
+        if isinstance(physical, Parameter):
+            physical = physical.as_quantity("length", canonical)
+        object.__setattr__(self, "value", physical)
+        object.__setattr__(self, "unit", canonical)
+
+    def to(self, unit: str) -> Length:
+        target, target_factor = _length_unit(unit)
+        _, source_factor = _length_unit(self.unit)
+        return Length(_scaled_physical(self.value, source_factor / target_factor, unit=target), target)
+
+    @property
+    def metres(self) -> float | Parameter:
+        return self.to("m").value
+
+    @property
+    def kilometres(self) -> float | Parameter:
+        return self.to("km").value
+
+
+@dataclass(frozen=True, init=False)
+class SurfaceArea:
+    """One finite non-negative surface area with an explicit unit."""
+
+    value: float | Parameter
+    unit: str
+
+    def __init__(self, value: float | Parameter, unit: str) -> None:
+        physical = _physical_value(value, "SurfaceArea")
+        canonical, _ = _area_unit(unit)
+        if isinstance(physical, Parameter):
+            physical = physical.as_quantity("area", canonical)
+        object.__setattr__(self, "value", physical)
+        object.__setattr__(self, "unit", canonical)
+
+    def to(self, unit: str) -> SurfaceArea:
+        target, target_factor = _area_unit(unit)
+        _, source_factor = _area_unit(self.unit)
+        return SurfaceArea(_scaled_physical(self.value, source_factor / target_factor, unit=target), target)
+
+    @property
+    def square_metres(self) -> float | Parameter:
+        return self.to("m2").value
+
+
+@dataclass(frozen=True, init=False)
+class CanalSeepageCoefficient:
+    """A canal seepage coefficient for coefficient × sqrt(m3/s) × km."""
+
+    value: float | Parameter
+    unit: str
+
+    def __init__(self, value: float | Parameter, unit: str) -> None:
+        physical = _physical_value(value, "CanalSeepageCoefficient")
+        canonical = _seepage_coefficient_unit(unit)
+        if isinstance(physical, Parameter):
+            physical = physical.as_quantity("seepage_coefficient", canonical)
+        object.__setattr__(self, "value", physical)
+        object.__setattr__(self, "unit", canonical)
+
+    @property
+    def canonical(self) -> float | Parameter:
+        """Return the coefficient on the sqrt(m3/s) per kilometre basis."""
+        return self.value
 
 
 def _quantity(text: str, kind: Literal["volume", "rate"]) -> WaterVolume | VolumetricRate:
@@ -293,8 +439,6 @@ class IntervalVolume:
         unit: str,
         cadence: str,
         data_resolution: str | WaterVolume,
-        *,
-        _source_provenance: SourceProvenance | None = None,
     ) -> None:
         canonical, _ = _volume_unit(unit)
         current = _quantity(data_resolution, "volume") if isinstance(data_resolution, str) else data_resolution
@@ -304,13 +448,36 @@ class IntervalVolume:
             raise ValueError("IntervalVolume data_resolution must be a fixed WaterVolume")
         if current.value <= 0:
             raise ValueError("IntervalVolume data_resolution must be positive")
-        validated = _validated_frame(data, cadence)
-        provenance = _source_provenance or SourceProvenance("interval_volume", canonical, cadence, current)
-        object.__setattr__(self, "_data", validated)
+        object.__setattr__(self, "_data", _validated_frame(data, cadence))
         object.__setattr__(self, "unit", canonical)
         object.__setattr__(self, "cadence", cadence)
         object.__setattr__(self, "data_resolution", current)
-        object.__setattr__(self, "source_provenance", provenance)
+        object.__setattr__(
+            self,
+            "source_provenance",
+            SourceProvenance("interval_volume", canonical, cadence, current),
+        )
+
+    @classmethod
+    def _from_transformation(
+        cls,
+        data: pl.DataFrame,
+        unit: str,
+        cadence: str,
+        data_resolution: WaterVolume,
+        source_provenance: SourceProvenance,
+    ) -> IntervalVolume:
+        """Construct transformed values while retaining trusted original provenance."""
+        canonical, _ = _volume_unit(unit)
+        if isinstance(data_resolution.value, Parameter) or data_resolution.value <= 0:
+            raise ValueError("transformed data resolution must be a fixed positive WaterVolume")
+        result = object.__new__(cls)
+        object.__setattr__(result, "_data", _validated_frame(data, cadence))
+        object.__setattr__(result, "unit", canonical)
+        object.__setattr__(result, "cadence", cadence)
+        object.__setattr__(result, "data_resolution", data_resolution)
+        object.__setattr__(result, "source_provenance", source_provenance)
+        return result
 
     @property
     def data(self) -> pl.DataFrame:
@@ -412,10 +579,10 @@ def _aggregate(source: IntervalVolume | IntervalMeanRate, axis: TimeAxis, target
         {"time": output_times, "value": totals},
         schema={"time": pl.Datetime("us"), "value": pl.Float64},
     )
-    return IntervalVolume(
+    return IntervalVolume._from_transformation(
         frame,
         canonical_target,
         axis.frequency,
         WaterVolume(resolution_magnitude, canonical_target),
-        _source_provenance=source.source_provenance,
+        source.source_provenance,
     )
