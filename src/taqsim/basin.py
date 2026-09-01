@@ -1,4 +1,4 @@
-"""Basin.build : BasinDeclaration → BuiltBasin, and BuiltBasin.run : RunId → BasinRun."""
+"""Basin.build : Basin → BuiltBasin; BuiltBasin.run : BuiltBasin × RunId × RuleSubstitutions → BasinRun."""
 
 from __future__ import annotations
 
@@ -97,6 +97,7 @@ class TimeAxis:
 
 # The engine needs bytes, while callers should be free to use the normal UUID value type.
 RunId = UUID | bytes | bytearray | str
+RuleSubstitutions = Mapping[str, float]
 WaterQuantumCount = NewType("WaterQuantumCount", int)
 
 
@@ -504,7 +505,7 @@ class BuiltBasin:
         """Return optimizer bounds without adding them to model identity."""
         return {parameter.path: parameter.bounds for parameter in self.parameters if parameter.bounds is not None}
 
-    def run(self, run_id: RunId, parameters: Mapping[str, float] | None = None) -> BasinRun:
+    def run(self, run_id: RunId, parameters: RuleSubstitutions | None = None) -> BasinRun:
         """Execute one run, optionally substituting addressed rule parameters."""
         substitutions = self._substitutions(parameters or {})
         completed = self._compiled.run(_engine_run_id(run_id), substitutions=substitutions)
@@ -515,7 +516,7 @@ class BuiltBasin:
         path = parameter.path if isinstance(parameter, RuleParameter) else parameter
         return tuple(self.run(index.to_bytes(16, byteorder="big"), {path: value}) for index, value in enumerate(values))
 
-    def _substitutions(self, values: Mapping[str, float]) -> list[dict[str, object]]:
+    def _substitutions(self, values: RuleSubstitutions) -> list[dict[str, object]]:
         declared = {parameter.path: parameter for parameter in self.parameters}
         unknown = sorted(set(values) - declared.keys())
         if unknown:
@@ -715,19 +716,19 @@ class BasinRun:
             cached = self._cached_retained[name]
             dates = tuple(self.time.datetime_at(step) for step in range(first, last + 1))
             return WaterSeries(dates, cached.values[first : last + 1], cached.presence[first : last + 1])
-        incoming = self._completed.transfer_series(
+        incoming: incidence.PresenceCountSeries = self._completed.transfer_count_series(
             name, "water", direction="incoming", first=0, last=self.time.steps - 1
         )
-        outgoing = self._completed.transfer_series(
+        outgoing: incidence.PresenceCountSeries = self._completed.transfer_count_series(
             name, "water", direction="outgoing", first=0, last=self.time.steps - 1
         )
         stock_count = int(self._initial_counts[name])
         values: list[float] = []
-        for step, (incoming_value, outgoing_value) in enumerate(zip(incoming.values, outgoing.values, strict=True)):
-            if incoming_value is None or outgoing_value is None:
+        for step, (incoming_count, outgoing_count) in enumerate(zip(incoming.values, outgoing.values, strict=True)):
+            if incoming_count is None or outgoing_count is None:
                 raise RuntimeError(f"incidence omitted retained-stock input for reach {name!r} at timestep {step}")
-            stock_count += int(_count_from_projected(incoming_value, self.resolution))
-            stock_count -= int(_count_from_projected(outgoing_value, self.resolution))
+            stock_count += incoming_count
+            stock_count -= outgoing_count
             if stock_count < 0:
                 raise RuntimeError(f"incidence returned negative retained count for reach {name!r}")
             values.append(_amount_from_count(stock_count, self.resolution))
@@ -875,20 +876,6 @@ def _require_unambiguous_projection(count: int, resolution: Resolution, carrier:
             f"{carrier} has quantum count {count}, whose public value {projected!r} does not identify one count "
             f"at quantum {resolution.quantum_m3!r}"
         )
-
-
-def _count_from_projected(value: float, resolution: Resolution) -> WaterQuantumCount:
-    value = float(value)
-    count = round(value / resolution.quantum_m3)
-    projected: float = _amount_from_count(count, resolution)
-    collision_below = count > 0 and _float_bits(_amount_from_count(count - 1, resolution)) == _float_bits(projected)
-    collision_above = count < 2**53 and _float_bits(_amount_from_count(count + 1, resolution)) == _float_bits(projected)
-    if _float_bits(projected) != _float_bits(value) or collision_below or collision_above:
-        raise RuntimeError(
-            f"incidence returned water value {value!r} without one unambiguous count at quantum "
-            f"{resolution.quantum_m3!r}"
-        )
-    return WaterQuantumCount(count)
 
 
 def _require_countable_initial_total(

@@ -79,5 +79,5 @@ addopts = ["--strict-markers", "--strict-config", "-ra"]
 cache-dir = ".uv-cache"
 
 [tool.uv.sources]
-incidence = { git = "https://github.com/CooperBigFoot/incidence.git", subdirectory = "bindings/python", rev = "90d3fc5bf7607f78738cad8ea0711d1124d21393" }
+incidence = { git = "https://github.com/CooperBigFoot/incidence.git", subdirectory = "bindings/python", rev = "ded06a5225b908ebaba5989aa5028df34cbdf026" }
 # ctrl-freak = { git = "https://github.com/hydrosolutions/ctrl-freak.git", rev = "main" } # example of how to add a git dependency
