@@ -258,3 +258,26 @@ def test_ambiguous_aggregate_initial_stock_is_refused_before_compilation(
     ):
         basin.build()
     assert not compiled
+
+
+def test_non_roundtripping_aggregate_initial_stock_is_refused_before_compilation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    counts = (680_958_065_804_247, 3_736_979_495_382_760)
+    basin = _basin(steps=2, resolution=Resolution.LITRE)
+    basin.source("river", [_count_value(count, Resolution.LITRE) for count in counts])
+    basin.reach("canal", "river", "farm")
+    compiled = False
+
+    def compile_model(document: object) -> None:
+        nonlocal compiled
+        compiled = True
+        raise AssertionError("non-roundtripping aggregate reached incidence")
+
+    monkeypatch.setattr("taqsim.basin.incidence.compile_model", compile_model)
+    with pytest.raises(
+        ValueError,
+        match=r"source 'river' aggregate initial stock at position 0.*4417937561187007.*quantum 0.001",
+    ):
+        basin.build()
+    assert not compiled
