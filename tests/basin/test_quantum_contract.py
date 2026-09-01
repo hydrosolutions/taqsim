@@ -281,3 +281,31 @@ def test_non_roundtripping_aggregate_initial_stock_is_refused_before_compilation
     ):
         basin.build()
     assert not compiled
+
+
+def test_merged_transfer_counts_drive_retained_stock_and_saved_roundtrip(tmp_path: Path) -> None:
+    resolution = Resolution.MILLILITRE
+    individual_count = 4_394_222_044_288_838
+    merged_count = 8_788_444_088_577_676
+    value = _count_value(individual_count, resolution)
+    basin = _basin(resolution=resolution)
+    for source_name in ("source-a", "source-b"):
+        basin.source(source_name, [value])
+        basin.reach(f"{source_name}-feeder", source_name, "canal")
+    basin.reach("canal", "junction", "farm")
+
+    run = basin.build().run(bytes([0x62]) * 16)
+    retained = run.retained("canal")
+    assert list(retained.values) == [resolution.quantum_m3]
+    assert retained.presence == (Presence.PRESENT,)
+
+    saved = tmp_path / "merged-count-run.json"
+    run.save(saved)
+    reopened = load_run(saved)
+    assert reopened.retained("canal") == retained
+
+    completed = run._completed
+    assert completed is not None
+    incoming_counts = completed.transfer_count_series("canal", "water", direction="incoming")
+    assert incoming_counts.values == [merged_count]
+    assert incoming_counts.presence == [Presence.PRESENT.value]
