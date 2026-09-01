@@ -25,6 +25,9 @@ def main() -> None:
             self._compiled = compiled
             self.model_digest = compiled.model_digest
 
+        def quantum(self, substance: str) -> float:
+            return self._compiled.quantum(substance)
+
         def run(self, run_id: bytes, *, substitutions: list[dict[str, object]]) -> incidence.CompletedRun:
             run_calls.append((run_id, substitutions))
             return self._compiled.run(run_id, substitutions=substitutions)

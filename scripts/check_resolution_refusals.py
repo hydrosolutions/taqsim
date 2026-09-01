@@ -19,7 +19,7 @@ def main() -> None:
         basin.build()
     except ValueError as error:
         message = str(error)
-        if "declared total" not in message or "countable ceiling" not in message:
+        if "countable ceiling" not in message:
             raise RuntimeError(f"build raised the wrong refusal: {message}") from error
         displayed_total = f"{arguments.basin_total_m3:.17g}"
         if displayed_total not in message:

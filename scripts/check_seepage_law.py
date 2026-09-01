@@ -84,7 +84,7 @@ def main() -> None:
     for run_number, draw in enumerate(_draw_canals(arguments.draws, resolution), start=1):
         recorded = _recorded_seepage(draw, resolution, run_number)
         error = abs(recorded - draw.expected_seepage_m3)
-        if not math.isfinite(recorded) or error > tolerance_m3:
+        if not math.isfinite(recorded) or error >= tolerance_m3:
             raise RuntimeError(
                 f"draw {run_number} violates the seepage law: recorded={recorded!r} m3, "
                 f"expected={draw.expected_seepage_m3!r} m3, error={error!r} m3, "

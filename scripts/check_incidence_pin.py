@@ -15,9 +15,9 @@ def main() -> None:
     basin.sink("sea")
     basin.reach("channel", "river", "sea")
     built = basin.build()
-    quantum = built._document["units"][0]["quantum"]
-    if quantum != 1e-3:
-        raise RuntimeError(f"decoded model has quantum {quantum!r}, expected 0.001")
+    run = built.run(bytes([91]) * 16)
+    if built.resolution.quantum_m3 != 1e-3 or run.resolution is not built.resolution:
+        raise RuntimeError(f"model/run resolution mismatch: model={built.resolution!r}, run={run.resolution!r}")
 
 
 if __name__ == "__main__":

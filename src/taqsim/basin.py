@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import math
+import struct
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
-from fractions import Fraction
 from os import PathLike
 from types import MappingProxyType
-from typing import Any, overload
+from typing import Any, NewType, overload
 from uuid import UUID
 
 import incidence
@@ -96,6 +97,7 @@ class TimeAxis:
 
 # The engine needs bytes, while callers should be free to use the normal UUID value type.
 RunId = UUID | bytes | bytearray | str
+WaterQuantumCount = NewType("WaterQuantumCount", int)
 
 
 @dataclass(frozen=True)
@@ -406,15 +408,25 @@ class Basin:
         resolution = self._declared_resolution()
         _require_closed_capacity(self._reaches)
         _require_source_horizons(self._sources, time)
-        _require_countable_initial_total(self._reaches, self._sources, resolution)
+        source_counts, initial_counts = _external_water_counts(self._reaches, self._sources, time, resolution)
+        _require_countable_initial_total(source_counts, initial_counts, resolution)
         document, parameters = _model_document(
-            tuple(self._reaches), tuple(self._sources), tuple(self._sinks), time, self.flow_unit, resolution
+            tuple(self._reaches),
+            tuple(self._sources),
+            tuple(self._sinks),
+            time,
+            self.flow_unit,
+            resolution,
+            source_counts,
+            initial_counts,
         )
         return BuiltBasin(
             document,
             incidence.compile_model(document),
             time,
+            resolution,
             frozenset(r.name for r in self._reaches),
+            initial_counts,
             parameters,
         )
 
@@ -444,7 +456,9 @@ class BuiltBasin:
     _document: dict[str, Any]
     _compiled: incidence.CompiledModel
     time: TimeAxis
+    resolution: Resolution
     reaches: frozenset[str]
+    _initial_counts: Mapping[str, WaterQuantumCount]
     parameters: tuple[RuleParameter, ...]
 
     def __init__(
@@ -452,7 +466,9 @@ class BuiltBasin:
         document: dict[str, Any],
         compiled: incidence.CompiledModel,
         time: TimeAxis,
+        resolution: Resolution,
         reaches: frozenset[str],
+        initial_counts: Mapping[str, WaterQuantumCount],
         parameters: tuple[RuleParameter, ...],
     ):
         paths = [parameter.path for parameter in parameters]
@@ -460,8 +476,12 @@ class BuiltBasin:
             raise ValueError("rule parameter paths must be unique")
         object.__setattr__(self, "_document", deepcopy(document))
         object.__setattr__(self, "_compiled", compiled)
+        if compiled.quantum("water") != resolution.quantum_m3:
+            raise ValueError("compiled water quantum differs from the declared basin resolution")
         object.__setattr__(self, "time", time)
+        object.__setattr__(self, "resolution", resolution)
         object.__setattr__(self, "reaches", reaches)
+        object.__setattr__(self, "_initial_counts", MappingProxyType(dict(initial_counts)))
         object.__setattr__(self, "parameters", parameters)
 
     @property
@@ -488,7 +508,7 @@ class BuiltBasin:
         """Execute one run, optionally substituting addressed rule parameters."""
         substitutions = self._substitutions(parameters or {})
         completed = self._compiled.run(_engine_run_id(run_id), substitutions=substitutions)
-        return BasinRun(completed, self.time, self.reaches)
+        return BasinRun(completed, self.time, self.resolution, self.reaches, self._initial_counts)
 
     def sweep(self, parameter: str | RuleParameter, values: Iterable[float]) -> tuple[BasinRun, ...]:
         """Run a one-dimensional parameter sweep while holding the compiled model."""
@@ -523,17 +543,32 @@ class BasinRun:
 
     _completed: incidence.CompletedRun | None
     _cached_flows: Mapping[str, WaterSeries]
+    _cached_retained: Mapping[str, WaterSeries]
     _cached_log: tuple[bytes, str] | None
     _cached_model_digest: str | None
+    _initial_counts: Mapping[str, WaterQuantumCount]
     time: TimeAxis
+    resolution: Resolution
     reaches: frozenset[str]
 
-    def __init__(self, completed: incidence.CompletedRun, time: TimeAxis, reaches: frozenset[str]):
+    def __init__(
+        self,
+        completed: incidence.CompletedRun,
+        time: TimeAxis,
+        resolution: Resolution,
+        reaches: frozenset[str],
+        initial_counts: Mapping[str, WaterQuantumCount],
+    ):
+        if completed.quantum("water") != resolution.quantum_m3:
+            raise ValueError("completed-run water quantum differs from the model resolution")
         object.__setattr__(self, "_completed", completed)
         object.__setattr__(self, "_cached_flows", MappingProxyType({}))
+        object.__setattr__(self, "_cached_retained", MappingProxyType({}))
         object.__setattr__(self, "_cached_log", None)
         object.__setattr__(self, "_cached_model_digest", None)
+        object.__setattr__(self, "_initial_counts", MappingProxyType(dict(initial_counts)))
         object.__setattr__(self, "time", time)
+        object.__setattr__(self, "resolution", resolution)
         object.__setattr__(self, "reaches", reaches)
 
     @classmethod
@@ -543,14 +578,19 @@ class BasinRun:
         model_digest: str,
         authoritative_log: tuple[bytes, str],
         time: TimeAxis,
+        resolution: Resolution,
         flows: Mapping[str, WaterSeries],
+        retained: Mapping[str, WaterSeries],
     ) -> BasinRun:
         run = object.__new__(cls)
         object.__setattr__(run, "_completed", None)
         object.__setattr__(run, "_cached_flows", MappingProxyType(dict(flows)))
+        object.__setattr__(run, "_cached_retained", MappingProxyType(dict(retained)))
         object.__setattr__(run, "_cached_log", authoritative_log)
         object.__setattr__(run, "_cached_model_digest", model_digest)
+        object.__setattr__(run, "_initial_counts", MappingProxyType({}))
         object.__setattr__(run, "time", time)
+        object.__setattr__(run, "resolution", resolution)
         object.__setattr__(run, "reaches", frozenset(flows))
         return run
 
@@ -586,6 +626,12 @@ class BasinRun:
         if self._cached_log is None:
             raise RuntimeError("cached run is missing its authoritative log")
         return self._cached_log
+
+    def verify_replay(self, other: BasinRun) -> None:
+        """Verify this live run by replaying its exact log against the other run's model."""
+        if self._completed is None or other._completed is None:
+            raise ValueError("replay verification requires two live runs")
+        self._completed.replay_against(other._completed)
 
     def save(self, path: str | PathLike[str]) -> None:
         """Save this completed run as a version-stamped cache."""
@@ -648,6 +694,47 @@ class BasinRun:
         cached = self._cached_flows[name]
         return WaterSeries(dates, cached.values[first : last + 1], cached.presence[first : last + 1])
 
+    def retained(
+        self,
+        reach: str | Reach,
+        *,
+        start: date | datetime | str | None = None,
+        end: date | datetime | str | None = None,
+    ) -> WaterSeries:
+        """Read represented water retained in one reach after each timestep."""
+        name = reach.name if isinstance(reach, Reach) else reach
+        if name not in self.reaches:
+            raise KeyError(f"unknown reach {name!r}")
+        first = 0 if start is None else self.time.timestep_at(start)
+        last = self.time.steps - 1 if end is None else self.time.timestep_at(end)
+        if first < 0 or last >= self.time.steps:
+            raise ValueError("retained-stock reads must lie inside the modelled horizon")
+        if last < first:
+            raise ValueError("retained-stock end precedes start")
+        if self._completed is None:
+            cached = self._cached_retained[name]
+            dates = tuple(self.time.datetime_at(step) for step in range(first, last + 1))
+            return WaterSeries(dates, cached.values[first : last + 1], cached.presence[first : last + 1])
+        incoming = self._completed.transfer_series(
+            name, "water", direction="incoming", first=0, last=self.time.steps - 1
+        )
+        outgoing = self._completed.transfer_series(
+            name, "water", direction="outgoing", first=0, last=self.time.steps - 1
+        )
+        stock_count = int(self._initial_counts[name])
+        values: list[float] = []
+        for step, (incoming_value, outgoing_value) in enumerate(zip(incoming.values, outgoing.values, strict=True)):
+            if incoming_value is None or outgoing_value is None:
+                raise RuntimeError(f"incidence omitted retained-stock input for reach {name!r} at timestep {step}")
+            stock_count += int(_count_from_projected(incoming_value, self.resolution))
+            stock_count -= int(_count_from_projected(outgoing_value, self.resolution))
+            if stock_count < 0:
+                raise RuntimeError(f"incidence returned negative retained count for reach {name!r}")
+            values.append(_amount_from_count(stock_count, self.resolution))
+        dates = tuple(self.time.datetime_at(step) for step in range(first, last + 1))
+        selected = tuple(values[first : last + 1])
+        return WaterSeries(dates, selected, (Presence.PRESENT,) * len(selected))
+
     def reach_flow(self, reach: str | Reach, **interval: Any) -> WaterSeries:
         """Explicit alias for flow."""
         return self.flow(reach, **interval)
@@ -666,6 +753,8 @@ class BasinRun:
             raise ValueError("arrival reads must lie inside the modelled horizon")
         if last < first:
             raise ValueError("arrival end precedes arrival start")
+        if self._completed is None:
+            raise ValueError("arrival reads are unavailable from saved-run caches")
         series: incidence.PresenceSeries = self._completed.transfer_series(
             endpoint, "water", direction="incoming", first=first, last=last
         )
@@ -705,26 +794,96 @@ def _require_source_horizons(sources: Sequence[Source], time: TimeAxis) -> None:
             )
 
 
-def _require_countable_initial_total(
-    reaches: Sequence[Reach], sources: Sequence[Source], resolution: Resolution
-) -> None:
-    ceiling = resolution.quantum_m3 * 2**53
-    total = Fraction()
-    for amount in (value for source in sources for value in source.flow):
-        if not math.isfinite(amount):
-            return
-        total += Fraction.from_float(amount)
-    for reach in reaches:
-        amount = float(reach.initial_water)
-        if not math.isfinite(amount):
-            return
-        total += Fraction.from_float(amount)
-    if total <= Fraction.from_float(ceiling):
-        return
-    displayed_total = str(total.numerator) if total.denominator == 1 else format(float(total), ".17g")
-    raise ValueError(
-        f"substance 'water' declared total {displayed_total} exceeds the exactly countable ceiling {ceiling:.17g}"
+def _external_water_counts(
+    reaches: Sequence[Reach],
+    sources: Sequence[Source],
+    time: TimeAxis,
+    resolution: Resolution,
+) -> tuple[dict[str, tuple[WaterQuantumCount, ...]], dict[str, WaterQuantumCount]]:
+    """quantize_external : Sources × InitialStocks × Resolution → WaterQuantumCounts."""
+    source_counts: dict[str, tuple[WaterQuantumCount, ...]] = {}
+    for source in sources:
+        source_counts[source.name] = tuple(
+            _external_count(
+                value,
+                resolution,
+                f"source {source.name!r} at timestep {position} ({time.datetime_at(position).isoformat()})",
+            )
+            for position, value in enumerate(source.flow)
+        )
+    initial_counts = {
+        reach.name: _external_count(
+            reach.initial_water,
+            resolution,
+            f"reach {reach.name!r} initial stock at position {position}",
+        )
+        for position, reach in enumerate(reaches)
+    }
+    return source_counts, initial_counts
+
+
+def _external_count(value: float, resolution: Resolution, carrier: str) -> WaterQuantumCount:
+    if not math.isfinite(value) or value < 0.0:
+        raise ValueError(
+            f"{carrier} has invalid water value {value!r}; expected a finite non-negative multiple "
+            f"of quantum {resolution.quantum_m3!r}"
+        )
+    quotient = round(value / resolution.quantum_m3)
+    if quotient > 2**53:
+        raise ValueError(
+            f"{carrier} has water value {value!r}, whose quantum count {quotient} exceeds the "
+            f"exactly countable ceiling 2^53 at quantum {resolution.quantum_m3!r}"
+        )
+    projected = _amount_from_count(quotient, resolution)
+    collision_below = quotient > 0 and _float_bits(_amount_from_count(quotient - 1, resolution)) == _float_bits(
+        projected
     )
+    collision_above = quotient < 2**53 and _float_bits(_amount_from_count(quotient + 1, resolution)) == _float_bits(
+        projected
+    )
+    if _float_bits(projected) != _float_bits(value) or collision_below or collision_above:
+        raise ValueError(
+            f"{carrier} has water value {value!r}, which is not an exact multiple of quantum {resolution.quantum_m3!r}"
+        )
+    return WaterQuantumCount(quotient)
+
+
+def _amount_from_count(count: WaterQuantumCount | int, resolution: Resolution) -> float:
+    """project_water : WaterQuantumCount × Resolution → PublicAmount."""
+    return float(float(count) * resolution.quantum_m3)
+
+
+def _float_bits(value: float) -> bytes:
+    return struct.pack(">d", value)
+
+
+def _count_from_projected(value: float, resolution: Resolution) -> WaterQuantumCount:
+    value = float(value)
+    count = round(value / resolution.quantum_m3)
+    projected: float = _amount_from_count(count, resolution)
+    collision_below = count > 0 and _float_bits(_amount_from_count(count - 1, resolution)) == _float_bits(projected)
+    collision_above = count < 2**53 and _float_bits(_amount_from_count(count + 1, resolution)) == _float_bits(projected)
+    if _float_bits(projected) != _float_bits(value) or collision_below or collision_above:
+        raise RuntimeError(
+            f"incidence returned water value {value!r} without one unambiguous count at quantum "
+            f"{resolution.quantum_m3!r}"
+        )
+    return WaterQuantumCount(count)
+
+
+def _require_countable_initial_total(
+    source_counts: Mapping[str, Sequence[WaterQuantumCount]],
+    initial_counts: Mapping[str, WaterQuantumCount],
+    resolution: Resolution,
+) -> None:
+    total_count = sum(int(count) for counts in source_counts.values() for count in counts) + sum(
+        int(count) for count in initial_counts.values()
+    )
+    if total_count <= 2**53:
+        return
+    total = Decimal(total_count) * Decimal(str(resolution.quantum_m3))
+    ceiling = Decimal(2**53) * Decimal(str(resolution.quantum_m3))
+    raise ValueError(f"substance 'water' declared total {total} exceeds the exactly countable ceiling {ceiling}")
 
 
 def _model_document(
@@ -734,6 +893,8 @@ def _model_document(
     time: TimeAxis,
     flow_unit: str,
     resolution: Resolution,
+    source_counts: Mapping[str, Sequence[WaterQuantumCount]],
+    initial_counts: Mapping[str, WaterQuantumCount],
 ) -> tuple[dict[str, Any], tuple[RuleParameter, ...]]:
     reach_names = {reach.name for reach in reaches}
     source_names = {source.name for source in sources}
@@ -820,12 +981,19 @@ def _model_document(
         initial_stocks=[
             {
                 "compartment": source.name,
-                "amounts": [{"substance": "water", "amount": sum(source.flow)}],
+                "amounts": [
+                    {"substance": "water", "amount": _amount_from_count(sum(source_counts[source.name]), resolution)}
+                ],
             }
             for source in sorted(sources, key=lambda item: item.name)
         ]
         + [
-            {"compartment": reach.name, "amounts": [{"substance": "water", "amount": reach.initial_water}]}
+            {
+                "compartment": reach.name,
+                "amounts": [
+                    {"substance": "water", "amount": _amount_from_count(initial_counts[reach.name], resolution)}
+                ],
+            }
             for reach in sorted(reaches, key=lambda item: item.name)
         ],
         calendar={
@@ -838,7 +1006,12 @@ def _model_document(
             "initial_states": [
                 {
                     "projection": f"{reach.name}-available",
-                    "values": [{"kind": "extensive", "value": reach.initial_water}],
+                    "values": [
+                        {
+                            "kind": "extensive",
+                            "value": _amount_from_count(initial_counts[reach.name], resolution),
+                        }
+                    ],
                 }
                 for reach in reaches
             ],
@@ -847,7 +1020,7 @@ def _model_document(
             {
                 "id": f"{source.name}-flow",
                 "horizon": {"first": 0, "last": time.steps - 1},
-                "values": list(source.flow),
+                "values": [_amount_from_count(count, resolution) for count in source_counts[source.name]],
             }
             for source in sources
         ]
