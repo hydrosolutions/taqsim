@@ -25,7 +25,10 @@ Each contains a strict Polars frame with `time` and `value` columns and carries:
 - ordered, unique timestamps;
 - an explicitly declared cadence;
 - a physical unit compatible with its named meaning;
-- the source data's declared value resolution.
+- `data_resolution`, the declared resolution of the values in that object, compatible with its named physical meaning;
+- immutable source provenance containing the original input kind, unit, cadence, and declared data resolution.
+
+On a directly constructed input, `data_resolution` and the source provenance describe the same declaration. A transformation changes `data_resolution` to describe its returned values while retaining the original declaration in `source_provenance`.
 
 A timestamp names the interval beginning at that timestamp. The cadence determines its end. A daily value stamped `2026-01-01` covers the calendar day beginning on `2026-01-01`. Taqsim owns the mechanical representation needed to make that convention exact; users do not have to author interval-bound tables for ordinary regular series.
 
@@ -115,9 +118,10 @@ This explicit transformation may:
 1. convert supported compatible units;
 2. integrate an interval-mean rate over its declared source interval;
 3. sum finer interval volumes when those intervals exactly partition each target model interval;
-4. return an aligned `IntervalVolume` with its Polars data, meaning, and source provenance still attached.
+4. mechanically transform `data_resolution` through the same unit conversion and rate integration, while summation on one resolution grid retains that grid resolution;
+5. return an aligned `IntervalVolume` with its Polars data, current meaning, and immutable source provenance still attached.
 
-For example, 24 hourly values with a mean rate of `1 m3/s` over one complete day aggregate to one daily interval volume of `86,400 m3`.
+For example, 24 hourly values with a mean rate of `1 m3/s` and `data_resolution="0.01 m3/s"` over one complete day aggregate to one daily interval volume of `86,400 m3`. If the returned volume unit is `m3`, its `data_resolution` is `36 m3`: the original rate resolution integrated over one hour. Its `source_provenance.data_resolution` remains `0.01 m3/s`.
 
 The operation refuses gaps, overlaps, partial target intervals, or any requested transformation that would require interpolation or invented data. It does not disaggregate coarse data into finer model intervals. No conversion or aggregation occurs implicitly in `source()`, `build()`, or `run()`; passing unaligned hourly data directly to a daily system fails.
 
@@ -129,9 +133,11 @@ The accepted set need not claim every unit system or spelling. Unknown units, am
 
 ### Source-data resolution is not conservation quantum
 
-`data_resolution` records the resolution claimed by the input source, in the source's declared unit. Taqsim trusts and preserves that declaration as data meaning and provenance; it does not attempt to infer it from the observed values or use it to select the model's arithmetic representation.
+`data_resolution` records the declared resolution of the values in the current object and has a unit compatible with that object's physical meaning. On a direct input this is the resolution claimed by the source. Taqsim trusts the declaration rather than inferring it from observed values.
 
-The model separately requires an explicit `ConservationQuantum`, retaining the four choices established by Effort #14: `1 m3`, `1 L`, `1 mL`, and `1 mm3`. Unit conversion and aggregation transform physical values, but do not derive or silently alter this quantum. Once an input has been prepared for the model axis, Effort #14's exact representability and count-ceiling rules still apply. A transformed interval volume that cannot be represented by the selected conservation quantum is refused.
+An explicit transformation propagates the current resolution mechanically. Unit conversion scales it. Rate integration multiplies it by the exact source-interval duration. Summing values expressed on the same resolution grid retains that grid resolution because a sum of grid multiples remains on that grid. The returned `IntervalVolume.data_resolution` is therefore volume-compatible. Its immutable `source_provenance` separately retains the original kind, unit, cadence, and data resolution, including a rate resolution when the source was an `IntervalMeanRate`. Both current resolution and original provenance remain inspectable after transformation.
+
+Neither resolution field selects the model's arithmetic representation. The model separately requires an explicit `ConservationQuantum`, retaining the four choices established by Effort #14: `1 m3`, `1 L`, `1 mL`, and `1 mm3`. Unit conversion and aggregation transform physical values, but do not derive or silently alter this quantum. Once an input has been prepared for the model axis, Effort #14's exact representability and count-ceiling rules still apply. A transformed interval volume that cannot be represented by the selected conservation quantum is refused.
 
 ### Scalar physical inputs
 
