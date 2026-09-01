@@ -7,7 +7,7 @@ import argparse
 import incidence
 from _inputs import interval_volume, make_water_system
 
-from taqsim import CanalLosses, Parameter
+from taqsim import Parameter, VolumetricRate, WaterVolume, ZoneRelease
 
 
 def main() -> None:
@@ -45,12 +45,17 @@ def main() -> None:
             "reservoir",
             "river",
             "downstream",
-            rule=CanalLosses(Parameter("seepage", 1.0, (0.0, 2.0)), 1.0),
+            rule=ZoneRelease(
+                WaterVolume(0.0, "m3"),
+                WaterVolume(0.0, "m3"),
+                WaterVolume(1_000.0, "m3"),
+                VolumetricRate(Parameter("release-rate", 1.0, (0.0, 2.0)), "m3/s"),
+            ),
         )
         model = water_system.build()
         runs = model.sweep(
-            "reservoir.seepage",
-            (2.0 * trial / (args.trials - 1) for trial in range(args.trials)),
+            "reservoir.release-rate",
+            (VolumetricRate(2.0 * trial / (args.trials - 1), "m3/s") for trial in range(args.trials)),
         )
     finally:
         incidence.compile_model = original_compile
@@ -64,7 +69,7 @@ def main() -> None:
             {
                 "compartment": "reservoir",
                 "substance": "water",
-                "parameter": "seepage",
+                "parameter": "release-rate",
                 "value": substitutions[0]["value"],
             }
         ]

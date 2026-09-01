@@ -1,4 +1,4 @@
-"""prepare_input : IntervalWaterInput × TimeAxis × VolumeUnit → IntervalVolume   (pure)."""
+"""interval input = StrictPolarsSeries × PhysicalMeaning × SourceProvenance; aggregate_to : IntervalInput × TimeAxis → IntervalVolume   (pure)."""
 
 from __future__ import annotations
 
@@ -91,31 +91,89 @@ def _converted(value: float, factor: Decimal) -> float:
     return float(Decimal(str(value)) * factor)
 
 
+@dataclass(frozen=True)
+class Parameter:
+    """A substitutable scalar whose physical unit is supplied by its enclosing quantity."""
+
+    name: str
+    value: float
+    bounds: tuple[float, float] | None = None
+    physical_kind: Literal["volume", "rate"] | None = None
+    unit: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("parameter name must not be empty")
+        if not math.isfinite(self.value):
+            raise ValueError(f"parameter {self.name!r} value must be finite")
+        if self.bounds is not None:
+            lower, upper = self.bounds
+            if not math.isfinite(lower) or not math.isfinite(upper):
+                raise ValueError(f"parameter {self.name!r} bounds must be finite")
+            if lower > upper:
+                raise ValueError(f"parameter {self.name!r} has reversed bounds")
+            if not lower <= self.value <= upper:
+                raise ValueError(f"parameter {self.name!r} value lies outside its bounds")
+        if (self.physical_kind is None) != (self.unit is None):
+            raise ValueError("parameter physical kind and unit must be declared together")
+
+    def as_quantity(self, kind: Literal["volume", "rate"], unit: str) -> Parameter:
+        """Bind this parameter to one explicit physical dimension and unit."""
+        if self.physical_kind is not None and (self.physical_kind, self.unit) != (kind, unit):
+            raise ValueError(f"parameter {self.name!r} already has incompatible physical meaning")
+        return Parameter(self.name, self.value, self.bounds, kind, unit)
+
+    def scaled(self, factor: Decimal, *, unit: str | None = None) -> Parameter:
+        """Return the same addressed parameter expressed on a mechanically scaled unit grid."""
+        bounds = None
+        if self.bounds is not None:
+            bounds = (_converted(self.bounds[0], factor), _converted(self.bounds[1], factor))
+        return Parameter(self.name, _converted(self.value, factor), bounds, self.physical_kind, unit or self.unit)
+
+
+def _physical_value(value: float | Parameter, carrier: str) -> float | Parameter:
+    if isinstance(value, Parameter):
+        lower = value.value if value.bounds is None else value.bounds[0]
+        if lower < 0:
+            raise ValueError(f"{carrier} parameter values and bounds must be non-negative")
+        return value
+    if isinstance(value, bool):
+        raise TypeError(f"{carrier} value must be a number, not bool")
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric < 0:
+        raise ValueError(f"{carrier} value must be finite and non-negative")
+    return numeric
+
+
+def _scaled_physical(value: float | Parameter, factor: Decimal, *, unit: str) -> float | Parameter:
+    if isinstance(value, Parameter):
+        return value.scaled(factor, unit=unit)
+    return _converted(value, factor)
+
+
 @dataclass(frozen=True, init=False)
 class WaterVolume:
     """One finite non-negative scalar water amount with an explicit volume unit."""
 
-    value: float
+    value: float | Parameter
     unit: str
 
-    def __init__(self, value: float, unit: str) -> None:
-        if isinstance(value, bool):
-            raise TypeError("WaterVolume value must be a number, not bool")
-        numeric = float(value)
-        if not math.isfinite(numeric) or numeric < 0:
-            raise ValueError("WaterVolume value must be finite and non-negative")
+    def __init__(self, value: float | Parameter, unit: str) -> None:
+        physical = _physical_value(value, "WaterVolume")
         canonical, _ = _volume_unit(unit)
-        object.__setattr__(self, "value", numeric)
+        if isinstance(physical, Parameter):
+            physical = physical.as_quantity("volume", canonical)
+        object.__setattr__(self, "value", physical)
         object.__setattr__(self, "unit", canonical)
 
     def to(self, unit: str) -> WaterVolume:
         """Convert this volume to an explicitly selected compatible unit."""
         target, target_factor = _volume_unit(unit)
         _, source_factor = _volume_unit(self.unit)
-        return WaterVolume(_converted(self.value, source_factor / target_factor), target)
+        return WaterVolume(_scaled_physical(self.value, source_factor / target_factor, unit=target), target)
 
     @property
-    def m3(self) -> float:
+    def m3(self) -> float | Parameter:
         """Return the amount expressed in cubic metres."""
         return self.to("m3").value
 
@@ -124,17 +182,15 @@ class WaterVolume:
 class VolumetricRate:
     """One finite non-negative scalar mean volumetric rate with an explicit rate unit."""
 
-    value: float
+    value: float | Parameter
     unit: str
 
-    def __init__(self, value: float, unit: str) -> None:
-        if isinstance(value, bool):
-            raise TypeError("VolumetricRate value must be a number, not bool")
-        numeric = float(value)
-        if not math.isfinite(numeric) or numeric < 0:
-            raise ValueError("VolumetricRate value must be finite and non-negative")
+    def __init__(self, value: float | Parameter, unit: str) -> None:
+        physical = _physical_value(value, "VolumetricRate")
         canonical, _, _ = _rate_unit(unit)
-        object.__setattr__(self, "value", numeric)
+        if isinstance(physical, Parameter):
+            physical = physical.as_quantity("rate", canonical)
+        object.__setattr__(self, "value", physical)
         object.__setattr__(self, "unit", canonical)
 
     def to(self, unit: str) -> VolumetricRate:
@@ -142,10 +198,10 @@ class VolumetricRate:
         target, target_volume, target_period = _rate_unit(unit)
         _, source_volume, source_period = _rate_unit(self.unit)
         factor = (source_volume / source_period) / (target_volume / target_period)
-        return VolumetricRate(_converted(self.value, factor), target)
+        return VolumetricRate(_scaled_physical(self.value, factor, unit=target), target)
 
     @property
-    def m3_per_second(self) -> float:
+    def m3_per_second(self) -> float | Parameter:
         """Return the rate expressed in cubic metres per second."""
         return self.to("m3/s").value
 
@@ -166,6 +222,19 @@ class SourceProvenance:
     unit: str
     cadence: str
     data_resolution: WaterVolume | VolumetricRate
+
+    def __post_init__(self) -> None:
+        _frequency_seconds(self.cadence)
+        if self.kind == "interval_volume":
+            _volume_unit(self.unit)
+            if not isinstance(self.data_resolution, WaterVolume):
+                raise ValueError("interval-volume provenance requires a WaterVolume data resolution")
+        elif self.kind == "interval_mean_rate":
+            _rate_unit(self.unit)
+            if not isinstance(self.data_resolution, VolumetricRate):
+                raise ValueError("interval-mean-rate provenance requires a VolumetricRate data resolution")
+        else:
+            raise ValueError(f"unknown source provenance kind {self.kind!r}")
 
 
 def _frequency_seconds(frequency: str) -> int:
@@ -225,16 +294,18 @@ class IntervalVolume:
         cadence: str,
         data_resolution: str | WaterVolume,
         *,
-        source_provenance: SourceProvenance | None = None,
+        _source_provenance: SourceProvenance | None = None,
     ) -> None:
         canonical, _ = _volume_unit(unit)
         current = _quantity(data_resolution, "volume") if isinstance(data_resolution, str) else data_resolution
         if not isinstance(current, WaterVolume):
             raise ValueError("IntervalVolume data_resolution must be a WaterVolume")
+        if isinstance(current.value, Parameter):
+            raise ValueError("IntervalVolume data_resolution must be a fixed WaterVolume")
         if current.value <= 0:
             raise ValueError("IntervalVolume data_resolution must be positive")
         validated = _validated_frame(data, cadence)
-        provenance = source_provenance or SourceProvenance("interval_volume", canonical, cadence, current)
+        provenance = _source_provenance or SourceProvenance("interval_volume", canonical, cadence, current)
         object.__setattr__(self, "_data", validated)
         object.__setattr__(self, "unit", canonical)
         object.__setattr__(self, "cadence", cadence)
@@ -274,6 +345,8 @@ class IntervalMeanRate:
         current = _quantity(data_resolution, "rate") if isinstance(data_resolution, str) else data_resolution
         if not isinstance(current, VolumetricRate):
             raise ValueError("IntervalMeanRate data_resolution must be a VolumetricRate")
+        if isinstance(current.value, Parameter):
+            raise ValueError("IntervalMeanRate data_resolution must be a fixed VolumetricRate")
         if current.value <= 0:
             raise ValueError("IntervalMeanRate data_resolution must be positive")
         object.__setattr__(self, "_data", _validated_frame(data, cadence))
@@ -292,6 +365,12 @@ class IntervalMeanRate:
     def aggregate_to(self, axis: TimeAxis, *, unit: str | None = None) -> IntervalVolume:
         """Integrate rates and sum exact source intervals into an explicitly supplied target axis."""
         return _aggregate(self, axis, "m3" if unit is None else unit)
+
+
+def _fixed_magnitude(quantity: WaterVolume | VolumetricRate) -> float:
+    if isinstance(quantity.value, Parameter):
+        raise TypeError("data resolution must be fixed")
+    return quantity.value
 
 
 def _aggregate(source: IntervalVolume | IntervalMeanRate, axis: TimeAxis, target_unit: str) -> IntervalVolume:
@@ -318,12 +397,12 @@ def _aggregate(source: IntervalVolume | IntervalMeanRate, axis: TimeAxis, target
         _, source_volume_factor, source_period = _rate_unit(source.unit)
         factor = (source_volume_factor / source_period) * Decimal(source_seconds) / target_factor
         prepared = [_converted(value, factor) for value in values]
-        resolution_magnitude = _converted(source.data_resolution.to(source.unit).value, factor)
+        resolution_magnitude = _converted(_fixed_magnitude(source.data_resolution.to(source.unit)), factor)
     else:
         _, source_volume_factor = _volume_unit(source.unit)
         factor = source_volume_factor / target_factor
         prepared = [_converted(value, factor) for value in values]
-        resolution_magnitude = _converted(source.data_resolution.to(source.unit).value, factor)
+        resolution_magnitude = _converted(_fixed_magnitude(source.data_resolution.to(source.unit)), factor)
     totals = [
         float(sum((Decimal(str(value)) for value in prepared[index : index + per_target]), start=Decimal(0)))
         for index in range(0, len(prepared), per_target)
@@ -338,5 +417,5 @@ def _aggregate(source: IntervalVolume | IntervalMeanRate, axis: TimeAxis, target
         canonical_target,
         axis.frequency,
         WaterVolume(resolution_magnitude, canonical_target),
-        source_provenance=source.source_provenance,
+        _source_provenance=source.source_provenance,
     )

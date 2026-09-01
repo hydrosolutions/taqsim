@@ -17,7 +17,7 @@ from uuid import UUID
 
 import incidence
 
-from .inputs import IntervalVolume, WaterVolume, _frequency_seconds
+from .inputs import IntervalVolume, Parameter, VolumetricRate, WaterVolume, _frequency_seconds
 from .vocabulary import RuleContext, RulePlan, WaterRule, subtract
 
 
@@ -58,7 +58,7 @@ class TimeAxis:
     timestep: timedelta
 
     def __init__(self, start: date | datetime | str, periods: int, frequency: str = "1d") -> None:
-        if isinstance(periods, bool) or periods < 1:
+        if isinstance(periods, bool) or not isinstance(periods, int) or periods < 1:
             raise ValueError("time axis periods must be a positive integer")
         seconds = _frequency_seconds(frequency)
         parsed_start = _parse_start(start)
@@ -102,23 +102,58 @@ class TimeAxis:
 
 # The engine needs bytes, while callers should be free to use the normal UUID value type.
 RunId = UUID | bytes | bytearray | str
-RuleSubstitutions = Mapping[str, float]
+type RuleScalar = float | WaterVolume | VolumetricRate
+RuleSubstitutions = Mapping[str, RuleScalar]
 WaterQuantumCount = NewType("WaterQuantumCount", int)
 
 
 @dataclass(frozen=True)
 class RuleParameter:
-    """One addressed, substitutable rule scalar and its taqsim-side search bounds."""
+    """One addressed rule scalar whose physical descriptor remains attached."""
 
     compartment: str
     name: str
-    value: float
-    bounds: tuple[float, float] | None
+    value: RuleScalar
+    bounds: tuple[RuleScalar, RuleScalar] | None
 
     @property
     def path(self) -> str:
         """Return the stable user-facing address of this rule-local parameter."""
         return f"{self.compartment}.{self.name}"
+
+    @property
+    def numeric_value(self) -> float:
+        """Return the canonical engine-unit magnitude for internal optimization."""
+        return _rule_scalar_magnitude(self.value)
+
+    @property
+    def numeric_bounds(self) -> tuple[float, float] | None:
+        """Return canonical engine-unit bounds for internal optimization."""
+        if self.bounds is None:
+            return None
+        return (_rule_scalar_magnitude(self.bounds[0]), _rule_scalar_magnitude(self.bounds[1]))
+
+    def from_numeric(self, value: float) -> RuleScalar:
+        """Attach this parameter's physical descriptor to an internal numeric candidate."""
+        if isinstance(self.value, WaterVolume):
+            return WaterVolume(value, self.value.unit)
+        if isinstance(self.value, VolumetricRate):
+            return VolumetricRate(value, self.value.unit)
+        return value
+
+    def engine_value(self, value: RuleScalar) -> float:
+        """Convert one matching typed public substitution to the canonical engine magnitude."""
+        if isinstance(self.value, WaterVolume):
+            if not isinstance(value, WaterVolume):
+                raise TypeError(f"rule parameter {self.path!r} substitution must be a WaterVolume")
+            return _fixed_rule_quantity(value.to(self.value.unit))
+        if isinstance(self.value, VolumetricRate):
+            if not isinstance(value, VolumetricRate):
+                raise TypeError(f"rule parameter {self.path!r} substitution must be a VolumetricRate")
+            return _fixed_rule_quantity(value.to(self.value.unit))
+        if isinstance(value, (WaterVolume, VolumetricRate)):
+            raise TypeError(f"dimensionless rule parameter {self.path!r} substitution must be a number")
+        return float(value)
 
 
 @dataclass(frozen=True, init=False)
@@ -158,8 +193,12 @@ class Reach:
             raise ValueError(f"reach {name!r} must name both source and destination")
         if capacity is not None and not isinstance(capacity, WaterVolume):
             raise TypeError(f"reach {name!r} capacity must be a WaterVolume")
+        if capacity is not None and isinstance(capacity.value, Parameter):
+            raise TypeError(f"reach {name!r} capacity must be a fixed WaterVolume")
         if initial_water is not None and not isinstance(initial_water, WaterVolume):
             raise TypeError(f"reach {name!r} initial_water must be a WaterVolume")
+        if initial_water is not None and isinstance(initial_water.value, Parameter):
+            raise TypeError(f"reach {name!r} initial_water must be a fixed WaterVolume")
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "source", source)
         object.__setattr__(self, "destination", destination)
@@ -458,7 +497,7 @@ class BuiltWaterSystem:
         return self._compiled.model_digest
 
     @property
-    def parameter_bounds(self) -> Mapping[str, tuple[float, float]]:
+    def parameter_bounds(self) -> Mapping[str, tuple[RuleScalar, RuleScalar]]:
         """Return optimizer bounds without adding them to model identity."""
         return {parameter.path: parameter.bounds for parameter in self.parameters if parameter.bounds is not None}
 
@@ -468,7 +507,7 @@ class BuiltWaterSystem:
         completed = self._compiled.run(_engine_run_id(run_id), substitutions=substitutions)
         return WaterSystemRun(completed, self.time, self.quantum, self.reaches, self._initial_counts)
 
-    def sweep(self, parameter: str | RuleParameter, values: Iterable[float]) -> tuple[WaterSystemRun, ...]:
+    def sweep(self, parameter: str | RuleParameter, values: Iterable[RuleScalar]) -> tuple[WaterSystemRun, ...]:
         """Run a one-dimensional parameter sweep while holding the compiled model."""
         path = parameter.path if isinstance(parameter, RuleParameter) else parameter
         return tuple(self.run(index.to_bytes(16, byteorder="big"), {path: value}) for index, value in enumerate(values))
@@ -480,10 +519,10 @@ class BuiltWaterSystem:
             raise ValueError(f"unknown rule parameter(s): {', '.join(unknown)}")
         substitutions: list[dict[str, object]] = []
         for path, value in values.items():
-            numeric = float(value)
+            parameter = declared[path]
+            numeric = parameter.engine_value(value)
             if not math.isfinite(numeric):
                 raise ValueError(f"rule parameter {path!r} substitution must be finite")
-            parameter = declared[path]
             substitutions.append(
                 {
                     "compartment": parameter.compartment,
@@ -771,6 +810,13 @@ def _require_source_horizons(sources: Sequence[Source], time: TimeAxis) -> None:
             )
 
 
+def _fixed_volume_m3(volume: WaterVolume) -> float:
+    value = volume.m3
+    if isinstance(value, Parameter):
+        raise TypeError("expected a fixed WaterVolume")
+    return value
+
+
 def _external_water_counts(
     reaches: Sequence[Reach],
     sources: Sequence[Source],
@@ -798,7 +844,7 @@ def _external_water_counts(
             )
     initial_counts = {
         reach.name: _external_count(
-            reach.initial_water.m3,
+            _fixed_volume_m3(reach.initial_water),
             quantum,
             f"reach {reach.name!r} initial stock at position {position}",
         )
@@ -897,7 +943,7 @@ def _model_document(
             plans[reach.name] = reach.rule.compile(context, reach.destination)
         elif reach.capacity is not None:
             available = context.available
-            normal = incidence.min(available, incidence.literal(reach.capacity.m3))
+            normal = incidence.min(available, incidence.literal(_fixed_volume_m3(reach.capacity)))
             overflow = incidence.max(incidence.literal(0.0), subtract(available, normal))
             plans[reach.name] = RulePlan(
                 (
@@ -1041,11 +1087,43 @@ def _model_document(
         ],
     )
     parameters = tuple(
-        RuleParameter(reach.name, name, value, contexts[reach.name].parameter_bounds[name])
+        _rule_parameter(reach.name, contexts[reach.name].parameter_descriptors[name])
         for reach in reaches
-        for name, value in contexts[reach.name].parameters.items()
+        for name in contexts[reach.name].parameters
     )
     return document, parameters
+
+
+def _fixed_rule_quantity(quantity: WaterVolume | VolumetricRate) -> float:
+    if isinstance(quantity.value, Parameter):
+        raise TypeError("rule substitution quantity must contain a fixed value")
+    return quantity.value
+
+
+def _rule_scalar_magnitude(value: RuleScalar) -> float:
+    if isinstance(value, (WaterVolume, VolumetricRate)):
+        return _fixed_rule_quantity(value)
+    return value
+
+
+def _quantity_scalar(parameter: Parameter, value: float) -> RuleScalar:
+    if parameter.physical_kind == "volume":
+        assert parameter.unit is not None
+        return WaterVolume(value, parameter.unit)
+    if parameter.physical_kind == "rate":
+        assert parameter.unit is not None
+        return VolumetricRate(value, parameter.unit)
+    return value
+
+
+def _rule_parameter(compartment: str, parameter: Parameter) -> RuleParameter:
+    bounds = None
+    if parameter.bounds is not None:
+        bounds = (
+            _quantity_scalar(parameter, parameter.bounds[0]),
+            _quantity_scalar(parameter, parameter.bounds[1]),
+        )
+    return RuleParameter(compartment, parameter.name, _quantity_scalar(parameter, parameter.value), bounds)
 
 
 def _available_projection(reach: Reach) -> dict[str, Any]:

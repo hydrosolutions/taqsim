@@ -166,12 +166,16 @@ def test_priority_optimizer_completes_first_generation() -> None:
         "split",
         "river",
         "tail",
-        rule=CanalLosses(Parameter("seepage", 0.0014, (0.0001, 0.01)), 7.0),
+        rule=PriorityDistribution(
+            "priority",
+            WaterVolume(Parameter("amount", 17.1234, (1.1111, 80.8888)), "m3"),
+            {"other": 1.0},
+        ),
     )
     model = water_system.build()
     result = optimize_water_system(
         model,
-        [WaterSystemObjective("priority", "maximize", lambda run: float(run.arrivals("tail").values[0] or 0.0))],
+        [WaterSystemObjective("priority", "maximize", lambda run: float(run.arrivals("priority").values[0] or 0.0))],
         pop_size=8,
         generations=1,
         seed=19,

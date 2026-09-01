@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta
+from typing import Any, cast
 
 import polars as pl
 import pytest
@@ -12,6 +13,7 @@ from taqsim import (
     ConservationQuantum,
     IntervalMeanRate,
     IntervalVolume,
+    SourceProvenance,
     TimeAxis,
     VolumetricRate,
     WaterSystem,
@@ -208,8 +210,6 @@ def test_source_frame_is_detached_from_caller_changes() -> None:
 
 
 def test_physical_rules_reject_bare_water_amounts_and_rates() -> None:
-    from typing import Any, cast
-
     from taqsim import PriorityDistribution, ZoneRelease
 
     untyped = cast(Any, 1.0)
@@ -251,3 +251,21 @@ def test_common_rate_unit_aggregation_defaults_to_model_ready_cubic_metres() -> 
     assert daily.unit == "m3"
     assert daily.data["value"].to_list() == [86.4]
     assert daily.data_resolution == WaterVolume(0.36, "m3")
+
+
+def test_provenance_cannot_be_forged_or_injected_on_direct_construction() -> None:
+    with pytest.raises(ValueError, match="VolumetricRate"):
+        SourceProvenance("interval_mean_rate", "L/s", "1h", WaterVolume(1.0, "m3"))
+    with pytest.raises(TypeError, match="source_provenance"):
+        cast(Any, IntervalVolume)(
+            frame("2020-01-01", 1, "1d", [1.0]),
+            "m3",
+            "1d",
+            "1 m3",
+            source_provenance=SourceProvenance("interval_volume", "m3", "1d", WaterVolume(1.0, "m3")),
+        )
+
+
+def test_time_axis_refuses_non_integer_periods_at_construction() -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        cast(Any, TimeAxis)("2020-01-01", periods=1.5, frequency="1d")

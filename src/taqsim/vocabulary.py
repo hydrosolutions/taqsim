@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
 
 import incidence
 
-from .inputs import VolumetricRate, WaterVolume
+from .inputs import Parameter, VolumetricRate, WaterVolume
 
 type Expression = dict[str, object]
 
@@ -30,29 +29,6 @@ def subtract(lhs: Expression, rhs: Expression) -> Expression:
 def divide(lhs: Expression, rhs: Expression) -> Expression:
     """Compile division, which is part of the IR but has no binding helper."""
     return _binary("divide", lhs, rhs)
-
-
-@dataclass(frozen=True)
-class Parameter:
-    """A substitutable scalar rule value; bounds stay outside the model document."""
-
-    name: str
-    value: float
-    bounds: tuple[float, float] | None = None
-
-    def __post_init__(self) -> None:
-        if not self.name:
-            raise ValueError("parameter name must not be empty")
-        if not math.isfinite(self.value):
-            raise ValueError(f"parameter {self.name!r} value must be finite")
-        if self.bounds is not None:
-            lower, upper = self.bounds
-            if not math.isfinite(lower) or not math.isfinite(upper):
-                raise ValueError(f"parameter {self.name!r} bounds must be finite")
-            if lower > upper:
-                raise ValueError(f"parameter {self.name!r} has reversed bounds")
-            if not lower <= self.value <= upper:
-                raise ValueError(f"parameter {self.name!r} value lies outside its bounds")
 
 
 type Scalar = float | int | Parameter
@@ -91,6 +67,7 @@ class RuleContext:
     timestep: timedelta
     parameters: dict[str, float] = field(default_factory=dict)
     parameter_bounds: dict[str, tuple[float, float] | None] = field(default_factory=dict)
+    parameter_descriptors: dict[str, Parameter] = field(default_factory=dict)
     forcings: dict[str, list[float]] = field(default_factory=dict)
     tables: list[dict[str, object]] = field(default_factory=list)
 
@@ -105,6 +82,9 @@ class RuleContext:
                 raise ValueError(f"parameter {value.name!r} has conflicting values")
             if value.name in self.parameter_bounds and self.parameter_bounds[value.name] != value.bounds:
                 raise ValueError(f"parameter {value.name!r} has conflicting bounds")
+            previous_descriptor = self.parameter_descriptors.setdefault(value.name, value)
+            if previous_descriptor != value:
+                raise ValueError(f"parameter {value.name!r} has conflicting physical meaning")
             self.parameter_bounds[value.name] = value.bounds
             return incidence.param(value.name)
         return incidence.literal(float(value))
@@ -264,6 +244,10 @@ class EFlowSplit:
     eflow_fraction: Scalar = 0.2
     eflow_cap: WaterVolume = WaterVolume(1e300, "m3")
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.eflow_cap, WaterVolume):
+            raise TypeError("environmental-flow cap must be declared as a WaterVolume")
+
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
         del downstream
         environmental = incidence.min(
@@ -291,6 +275,10 @@ class ReservoirEvaporation:
     rates_mm: tuple[Scalar, ...]
     volume_area: tuple[tuple[WaterVolume, float], ...]
     destination: str = "evaporation"
+
+    def __post_init__(self) -> None:
+        if any(not isinstance(volume, WaterVolume) for volume, _ in self.volume_area):
+            raise TypeError("volume-area abscissae must be declared as WaterVolume values")
 
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
         if len(self.volume_area) < 2:

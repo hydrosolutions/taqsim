@@ -12,7 +12,7 @@ import numpy as np
 from ctrl_freak import NSGA2Result, nsga2, polynomial_mutation, sbx_crossover
 from numpy.typing import NDArray
 
-from taqsim.water_system import BuiltWaterSystem, RuleParameter, RunId, WaterSystemRun
+from taqsim.water_system import BuiltWaterSystem, RuleParameter, RuleScalar, RunId, WaterSystemRun
 
 Direction = Literal["minimize", "maximize"]
 
@@ -37,7 +37,7 @@ class WaterSystemSolution:
     """One Pareto solution that can execute against the held model."""
 
     scores: Mapping[str, float]
-    parameters: Mapping[str, float]
+    parameters: Mapping[str, RuleScalar]
     _model: BuiltWaterSystem
 
     def __post_init__(self) -> None:
@@ -85,7 +85,9 @@ def optimize_water_system(
         return rng.uniform(lower, upper)
 
     def evaluate(vector: NDArray[np.float64]) -> NDArray[np.float64]:
-        values = {parameter.path: float(vector[index]) for index, parameter in enumerate(parameters)}
+        values = {
+            parameter.path: parameter.from_numeric(float(vector[index])) for index, parameter in enumerate(parameters)
+        }
         run = model.run(_candidate_run_id(model.model_digest, parameters, vector), values)
         scores = np.array([float(objective.evaluate(run)) for objective in objectives], dtype=float)
         if not np.all(np.isfinite(scores)):
@@ -116,14 +118,17 @@ def optimize_water_system(
             objective.name: float(-scores[index] if objective.direction == "maximize" else scores[index])
             for index, objective in enumerate(objectives)
         }
-        values = {parameter.path: float(vector[index]) for index, parameter in enumerate(parameters)}
+        values = {
+            parameter.path: parameter.from_numeric(float(vector[index])) for index, parameter in enumerate(parameters)
+        }
         solutions.append(WaterSystemSolution(displayed, values, model))
     return WaterSystemOptimizeResult(tuple(solutions), result)
 
 
 def _bounds(parameter: RuleParameter) -> tuple[float, float]:
-    assert parameter.bounds is not None
-    return parameter.bounds
+    bounds = parameter.numeric_bounds
+    assert bounds is not None
+    return bounds
 
 
 def _candidate_run_id(
