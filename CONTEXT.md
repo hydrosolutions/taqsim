@@ -35,7 +35,7 @@ The project's signature failure mode, observed three times at three granularitie
 
 | Term | Meaning |
 |---|---|
-| Basin | taqsim's water-naming authoring surface. Declares reaches, reservoirs, demands, diversions and their connections, and compiles to one incidence model document. Replaces `WaterSystem` plus the seven node types plus `Edge`. |
+| WaterSystem | taqsim's typed water-naming authoring surface. Declares time, conservation quantum, interval-volume sources, reaches, demands, diversions and their connections, and compiles to one incidence model document. |
 | Rule vocabulary | taqsim's composable, hydrology-flavoured pieces (zone conditions, seasonal values, per-second rates) from which a modeller writes a new operating policy without editing taqsim. Compiles to the engine's rule IR. Not a catalogue of fixed rules, and not arbitrary Python: nothing calls back into Python during a step. |
 | Declared time | A model states its start date, timestep length and flow unit before it will build. taqsim refuses to build without them, so a result is always indexed by real dates in known units and no consumer re-derives a calendar. |
 | Run | The immutable value returned by executing a model. Holds the authoritative log; every reading is a projection over it. Replaces in-place `simulate()` plus `reset()` plus scattered per-node event lists. |

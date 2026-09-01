@@ -1,4 +1,4 @@
-"""optimize_basin : BuiltBasin × Objectives × SearchConfig → ParetoSolutions."""
+"""optimize_water_system : BuiltWaterSystem × Objectives × SearchConfig → ParetoSolutions."""
 
 from __future__ import annotations
 
@@ -12,18 +12,18 @@ import numpy as np
 from ctrl_freak import NSGA2Result, nsga2, polynomial_mutation, sbx_crossover
 from numpy.typing import NDArray
 
-from taqsim.basin import BasinRun, BuiltBasin, RuleParameter, RunId
+from taqsim.water_system import BuiltWaterSystem, RuleParameter, RunId, WaterSystemRun
 
 Direction = Literal["minimize", "maximize"]
 
 
 @dataclass(frozen=True)
-class BasinObjective:
-    """A named scalar reading of an immutable basin run."""
+class WaterSystemObjective:
+    """A named scalar reading of an immutable WaterSystem run."""
 
     name: str
     direction: Direction
-    evaluate: Callable[[BasinRun], float]
+    evaluate: Callable[[WaterSystemRun], float]
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -33,48 +33,48 @@ class BasinObjective:
 
 
 @dataclass(frozen=True)
-class BasinSolution:
+class WaterSystemSolution:
     """One Pareto solution that can execute against the held model."""
 
     scores: Mapping[str, float]
     parameters: Mapping[str, float]
-    _model: BuiltBasin
+    _model: BuiltWaterSystem
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
 
-    def run(self, run_id: RunId) -> BasinRun:
+    def run(self, run_id: RunId) -> WaterSystemRun:
         """Execute this solution without rebuilding or mutating its model."""
         return self._model.run(run_id, self.parameters)
 
 
 @dataclass(frozen=True)
-class BasinOptimizeResult:
+class WaterSystemOptimizeResult:
     """Pareto solutions and the underlying ctrl-freak result."""
 
-    solutions: tuple[BasinSolution, ...]
+    solutions: tuple[WaterSystemSolution, ...]
     ctrl_freak_result: NSGA2Result
 
 
-def optimize_basin(
-    model: BuiltBasin,
-    objectives: Sequence[BasinObjective],
+def optimize_water_system(
+    model: BuiltWaterSystem,
+    objectives: Sequence[WaterSystemObjective],
     *,
     pop_size: int = 100,
     generations: int = 200,
     seed: int | None = None,
     n_workers: int = 1,
-) -> BasinOptimizeResult:
+) -> WaterSystemOptimizeResult:
     """Optimize bounded rule parameters while holding one compiled model."""
     if not objectives:
-        raise ValueError("at least one basin objective is required")
+        raise ValueError("at least one WaterSystem objective is required")
     if len({objective.name for objective in objectives}) != len(objectives):
-        raise ValueError("basin objective names must be unique")
+        raise ValueError("WaterSystem objective names must be unique")
     if n_workers != 1:
-        raise ValueError("held basin optimization currently requires n_workers=1")
+        raise ValueError("held WaterSystem optimization currently requires n_workers=1")
     parameters = tuple(parameter for parameter in model.parameters if parameter.bounds is not None)
     if not parameters:
-        raise ValueError("built basin has no bounded rule parameters")
+        raise ValueError("built WaterSystem has no bounded rule parameters")
 
     lower = np.array([_bounds(parameter)[0] for parameter in parameters], dtype=float)
     upper = np.array([_bounds(parameter)[1] for parameter in parameters], dtype=float)
@@ -89,7 +89,7 @@ def optimize_basin(
         run = model.run(_candidate_run_id(model.model_digest, parameters, vector), values)
         scores = np.array([float(objective.evaluate(run)) for objective in objectives], dtype=float)
         if not np.all(np.isfinite(scores)):
-            raise ValueError("basin objectives must return finite values")
+            raise ValueError("WaterSystem objectives must return finite values")
         for index, objective in enumerate(objectives):
             if objective.direction == "maximize":
                 scores[index] = -scores[index]
@@ -117,8 +117,8 @@ def optimize_basin(
             for index, objective in enumerate(objectives)
         }
         values = {parameter.path: float(vector[index]) for index, parameter in enumerate(parameters)}
-        solutions.append(BasinSolution(displayed, values, model))
-    return BasinOptimizeResult(tuple(solutions), result)
+        solutions.append(WaterSystemSolution(displayed, values, model))
+    return WaterSystemOptimizeResult(tuple(solutions), result)
 
 
 def _bounds(parameter: RuleParameter) -> tuple[float, float]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from datetime import datetime, timedelta
 
 import polars as pl
 import pytest
@@ -19,9 +20,11 @@ from taqsim import (
 
 
 def frame(start: str, count: int, interval: str, values: list[float]) -> pl.DataFrame:
+    origin = datetime.fromisoformat(start)
+    seconds = {"1h": 3600, "1d": 86400, "2d": 172800}[interval]
     return pl.DataFrame(
         {
-            "time": pl.datetime_range(start=start, end=None, interval=interval, eager=True).head(count),
+            "time": [origin + timedelta(seconds=seconds * index) for index in range(count)],
             "value": values,
         },
         schema={"time": pl.Datetime("us"), "value": pl.Float64},
@@ -68,7 +71,7 @@ def test_hourly_rate_is_explicitly_integrated_and_aggregated() -> None:
     assert daily.source_provenance.kind == "interval_mean_rate"
     assert daily.source_provenance.data_resolution == VolumetricRate(0.01, "m3/s")
     with pytest.raises(FrozenInstanceError):
-        daily.source_provenance.unit = "L/s"  # type: ignore[misc]
+        daily.source_provenance.unit = "L/s"  # ty: ignore[invalid-assignment]
 
 
 def test_finer_interval_volumes_sum_only_when_they_exactly_partition_axis() -> None:
@@ -90,7 +93,7 @@ def test_finer_interval_volumes_sum_only_when_they_exactly_partition_axis() -> N
         (frame("2020-01-01", 2, "1d", [1.0, float("nan")]), "finite"),
         (frame("2020-01-01", 2, "1d", [1.0, -1.0]), "non-negative"),
         (pl.DataFrame({"time": [1], "value": [1.0]}), "schema"),
-        (pl.DataFrame({"time": [pl.datetime(2020, 1, 1)], "value": [1.0], "extra": [1.0]}), "columns"),
+        (pl.DataFrame({"time": [datetime(2020, 1, 1)], "value": [1.0], "extra": [1.0]}), "columns"),
     ],
 )
 def test_interval_input_refuses_invalid_frames(data: pl.DataFrame, match: str) -> None:
@@ -155,3 +158,83 @@ def test_unaligned_input_is_not_prepared_implicitly() -> None:
     system.reach("canal", "river", "farm")
     with pytest.raises(ValueError, match="aggregate_to"):
         system.build()
+
+
+def test_common_units_convert_case_sensitively_and_preserve_direct_declaration() -> None:
+    declared = IntervalVolume(
+        data=frame("2020-01-01", 1, "1d", [1.0]),
+        unit="m3",
+        cadence="1d",
+        data_resolution="100 L",
+    )
+    assert declared.data_resolution == WaterVolume(100.0, "L")
+    assert declared.source_provenance.data_resolution == WaterVolume(100.0, "L")
+    assert WaterVolume(1.0, "ML").to("m3") == WaterVolume(1_000.0, "m3")
+    assert WaterVolume(1.0, "mL").to("m3") == WaterVolume(1e-6, "m3")
+    assert WaterVolume(1.0, "mm3").to("m3") == WaterVolume(1e-9, "m3")
+    with pytest.raises(ValueError, match="unknown"):
+        WaterVolume(1.0, "l")
+
+
+def test_same_cadence_conversion_is_explicit_and_preserves_provenance() -> None:
+    litres = IntervalVolume(
+        data=frame("2020-01-01", 1, "1d", [1_000.0]),
+        unit="L",
+        cadence="1d",
+        data_resolution="1 L",
+    )
+    converted = litres.aggregate_to(TimeAxis("2020-01-01", periods=1, frequency="1d"), unit="m3")
+    assert converted.data["value"].to_list() == [1.0]
+    assert converted.data_resolution == WaterVolume(0.001, "m3")
+    assert converted.source_provenance.unit == "L"
+
+
+def test_timezone_and_datetime_precision_are_refused() -> None:
+    aware = frame("2020-01-01", 1, "1d", [1.0]).with_columns(pl.col("time").dt.replace_time_zone("UTC"))
+    with pytest.raises(ValueError, match="timezone-naive"):
+        IntervalVolume(aware, "m3", "1d", "1 m3")
+    nanosecond = frame("2020-01-01", 1, "1d", [1.0]).with_columns(pl.col("time").cast(pl.Datetime("ns")))
+    with pytest.raises(ValueError, match="schema"):
+        IntervalVolume(nanosecond, "m3", "1d", "1 m3")
+
+
+def test_source_frame_is_detached_from_caller_changes() -> None:
+    original = frame("2020-01-01", 1, "1d", [1.0])
+    typed = IntervalVolume(original, "m3", "1d", "1 m3")
+    original[0, "value"] = 9.0
+    detached = typed.data
+    detached[0, "value"] = 8.0
+    assert typed.data["value"].to_list() == [1.0]
+
+
+def test_physical_rules_reject_bare_water_amounts_and_rates() -> None:
+    from typing import Any, cast
+
+    from taqsim import PriorityDistribution, ZoneRelease
+
+    untyped = cast(Any, 1.0)
+    with pytest.raises(TypeError, match="WaterVolume"):
+        PriorityDistribution("farm", untyped, {"other": 1.0})
+    with pytest.raises(TypeError, match="WaterVolume"):
+        ZoneRelease(
+            untyped,
+            WaterVolume(1.0, "m3"),
+            WaterVolume(2.0, "m3"),
+            VolumetricRate(1.0, "m3/s"),
+        )
+
+
+def test_decimal_grid_aggregation_remains_quantum_representable() -> None:
+    hourly = IntervalVolume(
+        data=frame("2020-01-01", 2, "1h", [0.1, 0.2]),
+        unit="m3",
+        cadence="1h",
+        data_resolution="0.001 m3",
+    )
+    axis = TimeAxis("2020-01-01", periods=1, frequency="2h")
+    prepared = hourly.aggregate_to(axis)
+    assert prepared.data["value"].to_list() == [0.3]
+    system = WaterSystem(time=axis, quantum=ConservationQuantum.LITRE)
+    system.source("river", prepared)
+    system.reach("canal", "river", "farm")
+    assert system.build().run(bytes(16)).arrivals("farm").values[0] == 0.3

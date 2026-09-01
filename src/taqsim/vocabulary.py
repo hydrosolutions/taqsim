@@ -9,6 +9,8 @@ from typing import Protocol
 
 import incidence
 
+from .inputs import VolumetricRate, WaterVolume
+
 type Expression = dict[str, object]
 
 
@@ -55,6 +57,28 @@ class Parameter:
 
 type Scalar = float | int | Parameter
 type SeasonalScalar = Scalar | tuple[Scalar, ...]
+type SeasonalVolume = WaterVolume | tuple[WaterVolume, ...]
+type SeasonalRate = VolumetricRate | tuple[VolumetricRate, ...]
+
+
+def _volume_values(value: SeasonalVolume) -> SeasonalScalar:
+    if isinstance(value, tuple):
+        if not all(isinstance(item, WaterVolume) for item in value):
+            raise TypeError("water amounts must be declared as WaterVolume values")
+        return tuple(item.m3 for item in value)
+    if not isinstance(value, WaterVolume):
+        raise TypeError("water amounts must be declared as WaterVolume values")
+    return value.m3
+
+
+def _rate_values(value: SeasonalRate) -> SeasonalScalar:
+    if isinstance(value, tuple):
+        if not all(isinstance(item, VolumetricRate) for item in value):
+            raise TypeError("water rates must be declared as VolumetricRate values")
+        return tuple(item.m3_per_second for item in value)
+    if not isinstance(value, VolumetricRate):
+        raise TypeError("water rates must be declared as VolumetricRate values")
+    return value.m3_per_second
 
 
 @dataclass
@@ -137,19 +161,25 @@ def monthly_parameters(
 class ZoneRelease:
     """A dead-floor, buffer, conservation, and flood reservoir policy."""
 
-    dead_storage: SeasonalScalar
-    buffer_limit: SeasonalScalar
-    conservation_limit: SeasonalScalar
-    release_rate_m3s: SeasonalScalar
+    dead_storage: SeasonalVolume
+    buffer_limit: SeasonalVolume
+    conservation_limit: SeasonalVolume
+    release_rate: SeasonalRate
     buffer_fraction: SeasonalScalar = 0.2
     flood_fraction: SeasonalScalar = 1.0
 
+    def __post_init__(self) -> None:
+        _volume_values(self.dead_storage)
+        _volume_values(self.buffer_limit)
+        _volume_values(self.conservation_limit)
+        _rate_values(self.release_rate)
+
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
         available = context.available
-        dead = context.seasonal(self.dead_storage, "dead-storage")
-        buffer = context.seasonal(self.buffer_limit, "buffer-limit")
-        conservation = context.seasonal(self.conservation_limit, "conservation-limit")
-        release_rate = context.seasonal(self.release_rate_m3s, "release-rate")
+        dead = context.seasonal(_volume_values(self.dead_storage), "dead-storage")
+        buffer = context.seasonal(_volume_values(self.buffer_limit), "buffer-limit")
+        conservation = context.seasonal(_volume_values(self.conservation_limit), "conservation-limit")
+        release_rate = context.seasonal(_rate_values(self.release_rate), "release-rate")
         seconds = incidence.literal(context.timestep.total_seconds())
         target = incidence.mul(release_rate, seconds)
         buffered = incidence.mul(context.seasonal(self.buffer_fraction, "buffer-fraction"), target)
@@ -205,12 +235,17 @@ class PriorityDistribution:
     """Serve one named destination first, then distribute the remainder."""
 
     priority_destination: str
-    priority_amount: SeasonalScalar
+    priority_amount: SeasonalVolume
     remainder_ratios: dict[str, Scalar]
+
+    def __post_init__(self) -> None:
+        _volume_values(self.priority_amount)
 
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
         del downstream
-        priority = incidence.min(context.available, context.seasonal(self.priority_amount, "priority-amount"))
+        priority = incidence.min(
+            context.available, context.seasonal(_volume_values(self.priority_amount), "priority-amount")
+        )
         remainder = incidence.max(incidence.literal(0.0), subtract(context.available, priority))
         branches = [(f"priority-to-{self.priority_destination}", self.priority_destination, priority)]
         branches.extend(
@@ -227,12 +262,12 @@ class EFlowSplit:
     natural_ratios: dict[str, Scalar]
     remainder_ratios: dict[str, Scalar]
     eflow_fraction: Scalar = 0.2
-    eflow_cap: Scalar = 1e300
+    eflow_cap: WaterVolume = WaterVolume(1e300, "m3")
 
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
         del downstream
         environmental = incidence.min(
-            incidence.mul(context.available, context.scalar(self.eflow_fraction)), context.scalar(self.eflow_cap)
+            incidence.mul(context.available, context.scalar(self.eflow_fraction)), context.scalar(self.eflow_cap.m3)
         )
         remainder = incidence.max(incidence.literal(0.0), subtract(context.available, environmental))
         branches = [
@@ -254,7 +289,7 @@ class ReservoirEvaporation:
     """Monthly evaporation depth over area interpolated from stored water."""
 
     rates_mm: tuple[Scalar, ...]
-    volume_area: tuple[tuple[float, float], ...]
+    volume_area: tuple[tuple[WaterVolume, float], ...]
     destination: str = "evaporation"
 
     def compile(self, context: RuleContext, downstream: str) -> RulePlan:
@@ -266,7 +301,7 @@ class ReservoirEvaporation:
                 "id": table_id,
                 "numerical_semantics_version": "v1",
                 "boundary_policy": "clamp_to_endpoint",
-                "abscissae": [point[0] for point in self.volume_area],
+                "abscissae": [point[0].m3 for point in self.volume_area],
                 "ordinates": [point[1] for point in self.volume_area],
             }
         )

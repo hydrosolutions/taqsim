@@ -5,16 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from taqsim import Basin, SavedRunFormatError, load_run
+from taqsim import SavedRunFormatError, load_run
+from tests import interval_volume, make_water_system
 
 
 def test_saved_run_refuses_tampered_cached_flow(tmp_path: Path) -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=2, resolution="1 mL")
-    basin.source("river", flow=[4.0, 2.0])
-    basin.sink("farm")
-    basin.add_reach("canal", "river", "farm")
+    water_system = make_water_system(2, "1 mL")
+    water_system.source("river", interval_volume([4.0, 2.0]))
+    water_system.sink("farm")
+    water_system.add_reach("canal", "river", "farm")
     saved = tmp_path / "run.json"
-    basin.build().run(bytes(16)).save(saved)
+    water_system.build().run(bytes(16)).save(saved)
 
     document = json.loads(saved.read_text())
     document["flows"]["canal"]["values"][0] = 4000.0

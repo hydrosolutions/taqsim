@@ -1,4 +1,4 @@
-"""saved-run cache : BasinRun × Path ⇄ version-stamped JSON artifact."""
+"""saved-run cache : WaterSystemRun × Path ⇄ version-stamped JSON artifact."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, NoReturn
 
-from .basin import BasinRun, Presence, Resolution, TimeAxis, WaterSeries
+from .water_system import ConservationQuantum, Presence, TimeAxis, WaterSeries, WaterSystemRun
 
 _FORMAT = "taqsim.saved-run"
-_FORMAT_VERSION = 3
+_FORMAT_VERSION = 4
 _ARTIFACT_DIGEST_FIELD = "artifact_sha256"
 
 
@@ -39,7 +39,7 @@ def incidence_version() -> str:
         raise RuntimeError("the incidence distribution is not installed") from error
 
 
-def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
+def save_run(run: WaterSystemRun, path: str | PathLike[str]) -> None:
     """Write a completed run cache atomically at an explicitly supplied path."""
     log_bytes, log_digest = run.authoritative_log()
     flows = {reach: _series_document(run.flow(reach)) for reach in sorted(run.reaches)}
@@ -49,7 +49,7 @@ def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
         "format_version": _FORMAT_VERSION,
         "incidence_version": incidence_version(),
         "model_digest": run.model_digest,
-        "resolution": run.resolution.value,
+        "quantum": run.quantum.value,
         "authoritative_log": {
             "encoding": "base64",
             "sha256": log_digest,
@@ -83,7 +83,7 @@ def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def load_run(path: str | PathLike[str]) -> BasinRun:
+def load_run(path: str | PathLike[str]) -> WaterSystemRun:
     """Load a compatible cache without decoding a model document or executing incidence."""
     source = Path(path)
     try:
@@ -108,7 +108,7 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
             "format_version",
             "incidence_version",
             "model_digest",
-            "resolution",
+            "quantum",
             "authoritative_log",
             "time",
             "reaches",
@@ -130,9 +130,9 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
 
     model_digest = _string(document["model_digest"], "model_digest")
     try:
-        resolution = Resolution(_string(document["resolution"], "resolution"))
+        quantum = ConservationQuantum(_string(document["quantum"], "quantum"))
     except ValueError as error:
-        raise SavedRunFormatError(f"unknown saved-run resolution {document['resolution']!r}") from error
+        raise SavedRunFormatError(f"unknown saved-run quantum {document['quantum']!r}") from error
     log = _read_log(document["authoritative_log"])
     time = _read_time(document["time"])
     reaches = _string_list(document["reaches"], "reaches")
@@ -146,11 +146,11 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
     if set(retained_documents) != set(reaches):
         _malformed("retained must contain exactly the declared reaches")
     retained = {reach: _read_series(retained_documents[reach], time, f"retained.{reach}") for reach in reaches}
-    return BasinRun._from_cache(
+    return WaterSystemRun._from_cache(
         model_digest=model_digest,
         authoritative_log=log,
         time=time,
-        resolution=resolution,
+        quantum=quantum,
         flows=flows,
         retained=retained,
     )
@@ -192,9 +192,7 @@ def _read_time(raw: Any) -> TimeAxis:
     steps = _integer(document["steps"], "time.steps")
     seconds = _integer(document["timestep_seconds"], "time.timestep_seconds")
     try:
-        from datetime import timedelta
-
-        return TimeAxis(start, steps, timedelta(seconds=seconds))
+        return TimeAxis(start, periods=steps, frequency=f"{seconds}s")
     except ValueError as error:
         raise SavedRunFormatError(f"invalid saved time axis: {error}") from error
 
