@@ -1,26 +1,22 @@
 """Taqsim is a water-modelling and rule-authoring layer over incidence."""
 
-from .basin import (
-    Basin,
-    BasinRun,
-    BuiltBasin,
-    Presence,
-    Reach,
-    Resolution,
-    RuleParameter,
-    Sink,
-    Source,
-    TimeAxis,
-    WaterSeries,
-    WaterValue,
-    WaterValues,
-)
 from .docs import get_docs_path
+from .inputs import (
+    CanalSeepageCoefficient,
+    IntervalMeanRate,
+    IntervalVolume,
+    Length,
+    SourceProvenance,
+    SurfaceArea,
+    VolumetricRate,
+    WaterDepth,
+    WaterVolume,
+)
 from .optimization import (
-    BasinObjective,
-    BasinOptimizeResult,
-    BasinSolution,
-    optimize_basin,
+    WaterSystemObjective,
+    WaterSystemOptimizeResult,
+    WaterSystemSolution,
+    optimize_water_system,
 )
 from .persistence import (
     IncidenceVersionMismatchError,
@@ -44,14 +40,29 @@ from .vocabulary import (
     ZoneReleasePolicy,
     monthly_parameters,
 )
+from .water_system import (
+    BuiltWaterSystem,
+    ConservationQuantum,
+    Presence,
+    Reach,
+    RuleParameter,
+    Sink,
+    Source,
+    TimeAxis,
+    WaterSeries,
+    WaterSystem,
+    WaterSystemRun,
+    WaterValue,
+    WaterValues,
+)
 
 __all__ = [
-    "Basin",
-    "BasinRun",
-    "BuiltBasin",
+    "WaterSystem",
+    "WaterSystemRun",
+    "BuiltWaterSystem",
     "Presence",
     "Reach",
-    "Resolution",
+    "ConservationQuantum",
     "RuleParameter",
     "Sink",
     "Source",
@@ -59,6 +70,15 @@ __all__ = [
     "WaterSeries",
     "WaterValue",
     "WaterValues",
+    "IntervalVolume",
+    "IntervalMeanRate",
+    "SourceProvenance",
+    "WaterVolume",
+    "VolumetricRate",
+    "WaterDepth",
+    "Length",
+    "SurfaceArea",
+    "CanalSeepageCoefficient",
     "Parameter",
     "monthly_parameters",
     "ZoneRelease",
@@ -77,10 +97,10 @@ __all__ = [
     "SavedRunError",
     "SavedRunFormatError",
     "IncidenceVersionMismatchError",
-    "BasinObjective",
-    "BasinOptimizeResult",
-    "BasinSolution",
-    "optimize_basin",
+    "WaterSystemObjective",
+    "WaterSystemOptimizeResult",
+    "WaterSystemSolution",
+    "optimize_water_system",
     "get_docs_path",
 ]
 

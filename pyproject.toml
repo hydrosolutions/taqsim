@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "networkx>=3.0",
-    "pandas>=2.0",
     "numpy>=1.24",
     "scipy>=1.10",
     "matplotlib>=3.7",
@@ -17,6 +16,7 @@ dependencies = [
     "ipykernel>=7.1.0",
     "ctrl-freak>=0.1.0",
     "incidence",
+    "polars>=1.35.2",
 ]
 
 [build-system]
@@ -28,10 +28,10 @@ dev = [
     "altair>=6.0.0",
     "bump-my-version>=1.2.7",
     "marimo>=0.18.1",
-    "polars>=1.35.2",
     "pytest>=8.3", # tests
     "pytest-cov>=6.2.1",
     "ruff>=0.12", # linter + formatter
+    "ty>=0.0.77",
 ]
 
 # -----------------------

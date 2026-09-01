@@ -2,7 +2,7 @@
 
 import argparse
 
-from taqsim import Basin
+from _inputs import interval_volume, make_water_system
 
 
 def main() -> None:
@@ -10,14 +10,14 @@ def main() -> None:
     parser.add_argument("--require-quantum-field", action="store_true", required=True)
     parser.parse_args()
 
-    basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 L")
-    basin.source("river", [1.0])
-    basin.sink("sea")
-    basin.reach("channel", "river", "sea")
-    built = basin.build()
+    water_system = make_water_system(1, "1 L")
+    water_system.source("river", interval_volume([1.0]))
+    water_system.sink("sea")
+    water_system.reach("channel", "river", "sea")
+    built = water_system.build()
     run = built.run(bytes([91]) * 16)
-    if built.resolution.quantum_m3 != 1e-3 or run.resolution is not built.resolution:
-        raise RuntimeError(f"model/run resolution mismatch: model={built.resolution!r}, run={run.resolution!r}")
+    if built.quantum.quantum_m3 != 1e-3 or run.quantum is not built.quantum:
+        raise RuntimeError(f"model/run quantum mismatch: model={built.quantum!r}, run={run.quantum!r}")
 
 
 if __name__ == "__main__":

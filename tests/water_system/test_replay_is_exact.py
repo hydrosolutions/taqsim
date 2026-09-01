@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from taqsim import Basin
+from tests import make_water_system
 
 
 def test_the_same_model_and_run_id_have_the_same_authoritative_digest() -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=3, resolution="1 mL")
-    basin.add_reach("reach", "river", "farm")
-    model = basin.build()
+    water_system = make_water_system(3, "1 mL")
+    water_system.add_reach("reach", "river", "farm")
+    model = water_system.build()
     run_id = bytes(range(16))
 
     first = model.run(run_id)

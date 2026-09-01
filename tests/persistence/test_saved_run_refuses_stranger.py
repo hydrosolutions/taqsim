@@ -5,16 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from taqsim import Basin, IncidenceVersionMismatchError, load_run
+from taqsim import IncidenceVersionMismatchError, load_run
+from tests import interval_volume, make_water_system
 
 
 def test_saved_run_refuses_a_different_incidence_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=2, resolution="1 mL")
-    basin.source("river", flow=[4.0, 0.0])
-    basin.sink("farm")
-    basin.add_reach("canal", "river", "farm")
+    water_system = make_water_system(2, "1 mL")
+    water_system.source("river", interval_volume([4.0, 0.0]))
+    water_system.sink("farm")
+    water_system.add_reach("canal", "river", "farm")
     saved = tmp_path / "run.json"
-    basin.build().run(bytes(16)).save(saved)
+    water_system.build().run(bytes(16)).save(saved)
 
     document = json.loads(saved.read_text())
     document["incidence_version"] = "999.0.0-stranger"
@@ -27,7 +28,7 @@ def test_saved_run_refuses_a_different_incidence_version(tmp_path: Path, monkeyp
         reconstructed = True
         raise AssertionError("a foreign cache must be rejected before run reconstruction")
 
-    monkeypatch.setattr("taqsim.basin.BasinRun._from_cache", reject_reconstruction)
+    monkeypatch.setattr("taqsim.water_system.WaterSystemRun._from_cache", reject_reconstruction)
     with pytest.raises(IncidenceVersionMismatchError, match=r"999\.0\.0-stranger.*installed version"):
         load_run(saved)
     assert not reconstructed

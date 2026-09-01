@@ -1,5 +1,5 @@
-"""Parameter optimization for built basin models."""
+"""Parameter optimization for built WaterSystem models."""
 
-from .basin import BasinObjective, BasinOptimizeResult, BasinSolution, optimize_basin
+from .water_system import WaterSystemObjective, WaterSystemOptimizeResult, WaterSystemSolution, optimize_water_system
 
-__all__ = ["BasinObjective", "BasinOptimizeResult", "BasinSolution", "optimize_basin"]
+__all__ = ["WaterSystemObjective", "WaterSystemOptimizeResult", "WaterSystemSolution", "optimize_water_system"]

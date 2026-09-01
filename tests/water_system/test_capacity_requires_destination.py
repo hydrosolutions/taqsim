@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from taqsim import Basin, Reach
+from taqsim import Reach, WaterVolume
+from tests import make_water_system
 
 
 def test_capacity_requires_a_named_overflow_destination(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -12,11 +13,11 @@ def test_capacity_requires_a_named_overflow_destination(monkeypatch: pytest.Monk
         nonlocal compiled
         compiled = True
 
-    monkeypatch.setattr("taqsim.basin.incidence.compile_model", compile_model)
-    basin = Basin(start_date="2020-01-01", timesteps=3, resolution="1 mL")
-    basin.add_reach(Reach("capacity-limited-canal", "river", "farm", capacity=10.0))
+    monkeypatch.setattr("taqsim.water_system.incidence.compile_model", compile_model)
+    water_system = make_water_system(3, "1 mL")
+    water_system.add_reach(Reach("capacity-limited-canal", "river", "farm", capacity=WaterVolume(10.0, "m3")))
 
     with pytest.raises(ValueError, match="capacity-limited-canal.*overflow destination"):
-        basin.build()
+        water_system.build()
 
     assert not compiled

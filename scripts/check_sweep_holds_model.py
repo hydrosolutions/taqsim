@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 
 import incidence
+from _inputs import interval_volume, make_water_system
 
-from taqsim import Basin, Parameter, ZoneRelease
+from taqsim import Parameter, VolumetricRate, WaterVolume, ZoneRelease
 
 
 def main() -> None:
@@ -38,18 +39,23 @@ def main() -> None:
 
     incidence.compile_model = observed_compile
     try:
-        basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
-        basin.source("river", [100.0])
-        basin.reach(
+        water_system = make_water_system(1, "1 mL")
+        water_system.source("river", interval_volume([100.0]))
+        water_system.reach(
             "reservoir",
             "river",
             "downstream",
-            rule=ZoneRelease(0.0, 0.0, 1_000.0, Parameter("release-rate", 1.0, (0.0, 2.0))),
+            rule=ZoneRelease(
+                WaterVolume(0.0, "m3"),
+                WaterVolume(0.0, "m3"),
+                WaterVolume(1_000.0, "m3"),
+                VolumetricRate(Parameter("release-rate", 1.0, (0.0, 2.0)), "m3/s"),
+            ),
         )
-        model = basin.build()
+        model = water_system.build()
         runs = model.sweep(
             "reservoir.release-rate",
-            (2.0 * trial / (args.trials - 1) for trial in range(args.trials)),
+            (VolumetricRate(2.0 * trial / (args.trials - 1), "m3/s") for trial in range(args.trials)),
         )
     finally:
         incidence.compile_model = original_compile

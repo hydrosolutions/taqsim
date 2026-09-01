@@ -5,15 +5,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-from taqsim import Basin, Presence, load_run
+from taqsim import Presence, load_run
+from tests import interval_volume, make_water_system
 
 
 def test_saved_run_reopens_in_a_fresh_process_without_running(tmp_path: Path) -> None:
-    basin = Basin(start_date="2020-01-01", timesteps=3, resolution="1 mL")
-    basin.source("river", flow=[5.0, 0.0, 2.0])
-    basin.sink("farm")
-    basin.add_reach("canal", "river", "farm")
-    original = basin.build().run(bytes(range(16)))
+    water_system = make_water_system(3, "1 mL")
+    water_system.source("river", interval_volume([5.0, 0.0, 2.0]))
+    water_system.sink("farm")
+    water_system.add_reach("canal", "river", "farm")
+    original = water_system.build().run(bytes(range(16)))
     saved = tmp_path / "run.json"
     original.save(saved)
 

@@ -1,7 +1,7 @@
-"""check_seepage_law : DrawCount × Resolution × ToleranceUnits → None.
+"""check_seepage_law : DrawCount × ConservationQuantum × ToleranceUnits → None.
 
 Sample physically admissible canals and fail if their recorded seepage is farther
-from the hydraulic law than the requested number of resolution units.
+from the hydraulic law than the requested number of quantum units.
 """
 
 from __future__ import annotations
@@ -11,7 +11,9 @@ import math
 import random
 from dataclasses import dataclass
 
-from taqsim import Basin, CanalLosses, Resolution
+from _inputs import interval_volume, make_water_system
+
+from taqsim import CanalLosses, CanalSeepageCoefficient, ConservationQuantum, Length
 
 _SEED = 11
 _SECONDS_PER_TIMESTEP = 86_400.0
@@ -44,14 +46,14 @@ def _non_negative_float(value: str) -> float:
     return parsed
 
 
-def _draw_canals(count: int, resolution: Resolution) -> tuple[Draw, ...]:
+def _draw_canals(count: int, quantum: ConservationQuantum) -> tuple[Draw, ...]:
     generator = random.Random(_SEED)
     draws: list[Draw] = []
     while len(draws) < count:
         coefficient = generator.uniform(*_COEFFICIENT_RANGE)
         length_km = generator.uniform(*_LENGTH_KM_RANGE)
         sampled_flow = generator.uniform(*_FLOW_RANGE)
-        flow_m3 = math.floor(sampled_flow / resolution.quantum_m3) * resolution.quantum_m3
+        flow_m3 = math.floor(sampled_flow / quantum.quantum_m3) * quantum.quantum_m3
         flow_m3s = flow_m3 / _SECONDS_PER_TIMESTEP
         expected = coefficient * math.sqrt(flow_m3s) * length_km * _SECONDS_PER_TIMESTEP
         # CanalLosses deliberately caps seepage at the available stock. The gate
@@ -61,11 +63,16 @@ def _draw_canals(count: int, resolution: Resolution) -> tuple[Draw, ...]:
     return tuple(draws)
 
 
-def _recorded_seepage(draw: Draw, resolution: Resolution, run_number: int) -> float:
-    basin = Basin(start_date="2020-01-01", timesteps=1, resolution=resolution)
-    basin.source("river", [draw.flow_m3])
-    basin.reach("canal", "river", "farm", rule=CanalLosses(draw.coefficient, draw.length_km))
-    run = basin.build().run(run_number.to_bytes(16, "big"))
+def _recorded_seepage(draw: Draw, quantum: ConservationQuantum, run_number: int) -> float:
+    water_system = make_water_system(1, quantum)
+    water_system.source("river", interval_volume([draw.flow_m3]))
+    water_system.reach(
+        "canal",
+        "river",
+        "farm",
+        rule=CanalLosses(CanalSeepageCoefficient(draw.coefficient, "sqrt(m3/s)/km"), Length(draw.length_km, "km")),
+    )
+    run = water_system.build().run(run_number.to_bytes(16, "big"))
     recorded = run.arrivals("seepage").values[0]
     if recorded is None:
         raise RuntimeError(f"draw {run_number} returned absent seepage")
@@ -75,14 +82,14 @@ def _recorded_seepage(draw: Draw, resolution: Resolution, run_number: int) -> fl
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--draws", type=_positive_int, required=True)
-    parser.add_argument("--resolution", choices=tuple(item.value for item in Resolution), required=True)
+    parser.add_argument("--quantum", choices=tuple(item.value for item in ConservationQuantum), required=True)
     parser.add_argument("--tolerance-units", type=_non_negative_float, required=True)
     arguments = parser.parse_args()
 
-    resolution = Resolution(arguments.resolution)
-    tolerance_m3 = arguments.tolerance_units * resolution.quantum_m3
-    for run_number, draw in enumerate(_draw_canals(arguments.draws, resolution), start=1):
-        recorded = _recorded_seepage(draw, resolution, run_number)
+    quantum = ConservationQuantum(arguments.quantum)
+    tolerance_m3 = arguments.tolerance_units * quantum.quantum_m3
+    for run_number, draw in enumerate(_draw_canals(arguments.draws, quantum), start=1):
+        recorded = _recorded_seepage(draw, quantum, run_number)
         error = abs(recorded - draw.expected_seepage_m3)
         if not math.isfinite(recorded) or error >= tolerance_m3:
             raise RuntimeError(

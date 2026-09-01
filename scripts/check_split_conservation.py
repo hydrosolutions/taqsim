@@ -1,12 +1,14 @@
 import argparse
 
-from taqsim import Basin, MonthlyDistribution
+from _inputs import interval_volume, make_water_system
+
+from taqsim import MonthlyDistribution
 
 p = argparse.ArgumentParser()
 p.add_argument("--claim-factor", type=float, required=True)
 a = p.parse_args()
-b = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
-b.source("river", [100.0])
+b = make_water_system(1, "1 mL")
+b.source("river", interval_volume([100.0]))
 b.reach(
     "diversion",
     "river",
