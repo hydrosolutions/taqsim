@@ -5,7 +5,7 @@ from taqsim import Basin, MonthlyDistribution
 p = argparse.ArgumentParser()
 p.add_argument("--claim-factor", type=float, required=True)
 a = p.parse_args()
-b = Basin(start_date="2020-01-01", timesteps=1)
+b = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
 b.source("river", [100.0])
 b.reach(
     "diversion",

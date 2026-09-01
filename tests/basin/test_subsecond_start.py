@@ -15,7 +15,7 @@ def test_build_refuses_a_subsecond_start_before_compilation(monkeypatch: pytest.
         compiled = True
 
     monkeypatch.setattr("taqsim.basin.incidence.compile_model", compile_model)
-    basin = Basin(start_date=datetime(2020, 1, 1, microsecond=1, tzinfo=UTC), timesteps=3)
+    basin = Basin(start_date=datetime(2020, 1, 1, microsecond=1, tzinfo=UTC), timesteps=3, resolution="1 mL")
 
     with pytest.raises(ValueError, match="start.*whole second"):
         basin.build()

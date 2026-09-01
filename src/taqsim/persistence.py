@@ -12,10 +12,10 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, NoReturn
 
-from .basin import BasinRun, Presence, TimeAxis, WaterSeries
+from .basin import BasinRun, Presence, Resolution, TimeAxis, WaterSeries
 
 _FORMAT = "taqsim.saved-run"
-_FORMAT_VERSION = 2
+_FORMAT_VERSION = 3
 _ARTIFACT_DIGEST_FIELD = "artifact_sha256"
 
 
@@ -43,11 +43,13 @@ def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
     """Write a completed run cache atomically at an explicitly supplied path."""
     log_bytes, log_digest = run.authoritative_log()
     flows = {reach: _series_document(run.flow(reach)) for reach in sorted(run.reaches)}
+    retained = {reach: _series_document(run.retained(reach)) for reach in sorted(run.reaches)}
     payload = {
         "format": _FORMAT,
         "format_version": _FORMAT_VERSION,
         "incidence_version": incidence_version(),
         "model_digest": run.model_digest,
+        "resolution": run.resolution.value,
         "authoritative_log": {
             "encoding": "base64",
             "sha256": log_digest,
@@ -60,6 +62,7 @@ def save_run(run: BasinRun, path: str | PathLike[str]) -> None:
         },
         "reaches": sorted(run.reaches),
         "flows": flows,
+        "retained": retained,
     }
     document = {**payload, _ARTIFACT_DIGEST_FIELD: _artifact_digest(payload)}
     target = Path(path)
@@ -105,10 +108,12 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
             "format_version",
             "incidence_version",
             "model_digest",
+            "resolution",
             "authoritative_log",
             "time",
             "reaches",
             "flows",
+            "retained",
             _ARTIFACT_DIGEST_FIELD,
         },
         "saved run",
@@ -124,6 +129,10 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
         _malformed(f"artifact digest mismatch: declared {declared_digest!r}, computed {actual_digest!r}")
 
     model_digest = _string(document["model_digest"], "model_digest")
+    try:
+        resolution = Resolution(_string(document["resolution"], "resolution"))
+    except ValueError as error:
+        raise SavedRunFormatError(f"unknown saved-run resolution {document['resolution']!r}") from error
     log = _read_log(document["authoritative_log"])
     time = _read_time(document["time"])
     reaches = _string_list(document["reaches"], "reaches")
@@ -133,7 +142,18 @@ def load_run(path: str | PathLike[str]) -> BasinRun:
     if set(flow_documents) != set(reaches):
         _malformed("flows must contain exactly the declared reaches")
     flows = {reach: _read_series(flow_documents[reach], time, reach) for reach in reaches}
-    return BasinRun._from_cache(model_digest=model_digest, authoritative_log=log, time=time, flows=flows)
+    retained_documents = _object(document["retained"], "retained")
+    if set(retained_documents) != set(reaches):
+        _malformed("retained must contain exactly the declared reaches")
+    retained = {reach: _read_series(retained_documents[reach], time, f"retained.{reach}") for reach in reaches}
+    return BasinRun._from_cache(
+        model_digest=model_digest,
+        authoritative_log=log,
+        time=time,
+        resolution=resolution,
+        flows=flows,
+        retained=retained,
+    )
 
 
 def _artifact_digest(payload: dict[str, Any]) -> str:

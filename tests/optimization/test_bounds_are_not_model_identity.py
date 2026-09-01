@@ -2,7 +2,7 @@ from taqsim import Basin, Parameter, ZoneRelease
 
 
 def build_with_bounds(bounds: tuple[float, float]):
-    basin = Basin(start_date="2020-01-01", timesteps=1)
+    basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
     basin.source("river", [100.0])
     basin.reach(
         "reservoir",

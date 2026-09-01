@@ -7,6 +7,4 @@ from pathlib import Path
 def test_distribution_describes_modelling_layer() -> None:
     pyproject = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert pyproject["project"]["description"] == (
-        "Water-modelling and rule-authoring layer over the incidence engine"
-    )
+    assert pyproject["project"]["description"] == ("Water-modelling and rule-authoring layer over the incidence engine")

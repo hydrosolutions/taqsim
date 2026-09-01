@@ -25,6 +25,9 @@ def main() -> None:
             self._compiled = compiled
             self.model_digest = compiled.model_digest
 
+        def quantum(self, substance: str) -> float:
+            return self._compiled.quantum(substance)
+
         def run(self, run_id: bytes, *, substitutions: list[dict[str, object]]) -> incidence.CompletedRun:
             run_calls.append((run_id, substitutions))
             return self._compiled.run(run_id, substitutions=substitutions)
@@ -35,7 +38,7 @@ def main() -> None:
 
     incidence.compile_model = observed_compile
     try:
-        basin = Basin(start_date="2020-01-01", timesteps=1)
+        basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
         basin.source("river", [100.0])
         basin.reach(
             "reservoir",

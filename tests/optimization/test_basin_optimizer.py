@@ -6,7 +6,7 @@ from taqsim import Basin, BasinObjective, Parameter, ZoneRelease, optimize_basin
 
 
 def bounded_basin():
-    basin = Basin(start_date="2020-01-01", timesteps=1)
+    basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
     basin.source("river", [100.0])
     basin.reach(
         "reservoir",
@@ -45,7 +45,9 @@ def test_optimizer_solution_parameters_cannot_be_changed_after_evaluation() -> N
     solution = result.solutions[0]
 
     with pytest.raises(TypeError):
-        operator.setitem(solution.parameters, "reservoir.release-rate", 1_000.0)
+        operator.setitem(  # ty: ignore[no-matching-overload]
+            solution.parameters, "reservoir.release-rate", 1_000.0
+        )
 
 
 def test_unknown_and_non_finite_substitutions_fail_before_execution() -> None:

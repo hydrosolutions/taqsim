@@ -7,7 +7,7 @@ p = argparse.ArgumentParser()
 p.add_argument("--atol", type=float, required=True)
 a = p.parse_args()
 flows = [15.0, 25.0, 7.0, 30.0]
-b = Basin(start_date="2020-01-01", timesteps=len(flows))
+b = Basin(start_date="2020-01-01", timesteps=len(flows), resolution="1 mL")
 b.source("river", flows)
 b.reach("canal", "river", "farm", capacity=10.0, overflow_destination="floodplain")
 run = b.build().run(bytes([23]) * 16)

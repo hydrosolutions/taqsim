@@ -16,7 +16,7 @@ RUN_IDS = [bytes([item]) * 16 for item in range(1, 7)]
 
 
 def _run(rule: object, amount: float = 100.0):
-    basin = Basin(start_date="2020-01-01", timesteps=1)
+    basin = Basin(start_date="2020-01-01", timesteps=1, resolution="1 mL")
     basin.source("source", [amount])
     basin.reach("structure", "source", "downstream", rule=rule)
     return basin.build().run(RUN_IDS.pop(0))
