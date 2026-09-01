@@ -869,7 +869,8 @@ def _require_unambiguous_projection(count: int, resolution: Resolution, carrier:
     projected = _amount_from_count(count, resolution)
     collision_below = count > 0 and _float_bits(_amount_from_count(count - 1, resolution)) == _float_bits(projected)
     collision_above = count < 2**53 and _float_bits(_amount_from_count(count + 1, resolution)) == _float_bits(projected)
-    if collision_below or collision_above:
+    decoded_count = round(projected / resolution.quantum_m3)
+    if decoded_count != count or collision_below or collision_above:
         raise ValueError(
             f"{carrier} has quantum count {count}, whose public value {projected!r} does not identify one count "
             f"at quantum {resolution.quantum_m3!r}"
