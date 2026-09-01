@@ -248,7 +248,7 @@ class IntervalVolume:
 
     def aggregate_to(self, axis: TimeAxis, *, unit: str | None = None) -> IntervalVolume:
         """Convert and sum exact source intervals into an explicitly supplied target axis."""
-        target_unit = self.unit if unit is None else unit
+        target_unit = "m3" if unit is None else unit
         return _aggregate(self, axis, target_unit)
 
     def to_unit(self, unit: str) -> IntervalVolume:
@@ -291,8 +291,7 @@ class IntervalMeanRate:
 
     def aggregate_to(self, axis: TimeAxis, *, unit: str | None = None) -> IntervalVolume:
         """Integrate rates and sum exact source intervals into an explicitly supplied target axis."""
-        source_volume = self.unit.split("/", 1)[0]
-        return _aggregate(self, axis, source_volume if unit is None else unit)
+        return _aggregate(self, axis, "m3" if unit is None else unit)
 
 
 def _aggregate(source: IntervalVolume | IntervalMeanRate, axis: TimeAxis, target_unit: str) -> IntervalVolume:

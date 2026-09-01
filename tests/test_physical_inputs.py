@@ -238,3 +238,16 @@ def test_decimal_grid_aggregation_remains_quantum_representable() -> None:
     system.source("river", prepared)
     system.reach("canal", "river", "farm")
     assert system.build().run(bytes(16)).arrivals("farm").values[0] == 0.3
+
+
+def test_common_rate_unit_aggregation_defaults_to_model_ready_cubic_metres() -> None:
+    litres_per_second = IntervalMeanRate(
+        data=frame("2020-01-01", 24, "1h", [1.0] * 24),
+        unit="L/s",
+        cadence="1h",
+        data_resolution="0.1 L/s",
+    )
+    daily = litres_per_second.aggregate_to(TimeAxis("2020-01-01", periods=1, frequency="1d"))
+    assert daily.unit == "m3"
+    assert daily.data["value"].to_list() == [86.4]
+    assert daily.data_resolution == WaterVolume(0.36, "m3")
