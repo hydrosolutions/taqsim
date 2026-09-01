@@ -234,3 +234,27 @@ def test_multibranch_residual_is_retained_and_used_on_the_next_timestep() -> Non
     right_counts = np.array([_count(value, Resolution.LITRE) for value in run.arrivals("right").values])
     retained = np.array([_count(value, Resolution.LITRE) for value in run.retained("split").values])
     np.testing.assert_array_equal(incoming + np.array([0, 2]), left_counts + right_counts + retained)
+
+
+def test_ambiguous_aggregate_initial_stock_is_refused_before_compilation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    count = 4_394_222_044_288_838
+    value = _count_value(count, Resolution.MILLILITRE)
+    basin = _basin(steps=2, resolution=Resolution.MILLILITRE)
+    basin.source("river", [value, value])
+    basin.reach("canal", "river", "farm")
+    compiled = False
+
+    def compile_model(document: object) -> None:
+        nonlocal compiled
+        compiled = True
+        raise AssertionError("ambiguous aggregate reached incidence")
+
+    monkeypatch.setattr("taqsim.basin.incidence.compile_model", compile_model)
+    with pytest.raises(
+        ValueError,
+        match=r"source 'river' aggregate initial stock at position 0.*8788444088577676.*quantum 1e-06",
+    ):
+        basin.build()
+    assert not compiled
