@@ -5,15 +5,7 @@ description = "Water-modelling and rule-authoring layer over the incidence engin
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "networkx>=3.0",
     "numpy>=1.24",
-    "scipy>=1.10",
-    "matplotlib>=3.7",
-    "seaborn>=0.12",
-    "plotly>=5.14",
-    "deap>=1.4",
-    "pyzmq>=27.1.0",
-    "ipykernel>=7.1.0",
     "ctrl-freak>=0.1.0",
     "incidence",
     "polars>=1.35.2",
