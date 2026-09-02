@@ -83,7 +83,7 @@ The retired graph workflow stopped and must not be resumed, but it produced work
 
 ### incidence
 
-Remote commit `0e4283abc3acc1b08d7968b32aaff58568dcf1d4` contains the completed quantum declaration, exact quantum-count transfer arithmetic, residual handling, ceiling checks, and gate repairs from the old `IQ1` and `IQ2` packages. It is published under the old conservation branch namespace in `CooperBigFoot/incidence`.
+Remote commit `0e4283abc3acc1b08d7968b32aaff58568dcf1d4` contains the completed quantum declaration, exact quantum-count transfer arithmetic, residual handling, ceiling checks, and gate repairs from the old `IQ1` and `IQ2` packages. It is published under the old conservation branch namespace in `hydrosolutions/incidence`.
 
 ### taqsim
 

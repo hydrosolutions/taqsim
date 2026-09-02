@@ -3,7 +3,7 @@
 **Status: 🟢 Active** — Ongoing project — active development.
 
 Taqsim is a Python water-modelling and rule-authoring layer over the
-[incidence](https://github.com/CooperBigFoot/incidence) engine. Taqsim names water systems,
+[incidence](https://github.com/hydrosolutions/incidence) engine. Taqsim names water systems,
 physical inputs, topology, and hydrology rules. It compiles them to incidence, which owns
 execution semantics: conservation, exhaustive disposition, presence, and exact replay.
 Taqsim is a library. It has no CLI or configuration-file workflow.

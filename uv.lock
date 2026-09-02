@@ -254,7 +254,7 @@ wheels = [
 [[package]]
 name = "incidence"
 version = "0.1.4"
-source = { git = "https://github.com/CooperBigFoot/incidence.git?subdirectory=bindings%2Fpython&rev=ded06a5225b908ebaba5989aa5028df34cbdf026#ded06a5225b908ebaba5989aa5028df34cbdf026" }
+source = { git = "https://github.com/hydrosolutions/incidence.git?subdirectory=bindings%2Fpython&rev=ded06a5225b908ebaba5989aa5028df34cbdf026#ded06a5225b908ebaba5989aa5028df34cbdf026" }
 
 [[package]]
 name = "iniconfig"
@@ -1122,7 +1122,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ctrl-freak", specifier = ">=0.1.0" },
-    { name = "incidence", git = "https://github.com/CooperBigFoot/incidence.git?subdirectory=bindings%2Fpython&rev=ded06a5225b908ebaba5989aa5028df34cbdf026" },
+    { name = "incidence", git = "https://github.com/hydrosolutions/incidence.git?subdirectory=bindings%2Fpython&rev=ded06a5225b908ebaba5989aa5028df34cbdf026" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "polars", specifier = ">=1.35.2" },
 ]
