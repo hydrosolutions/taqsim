@@ -164,9 +164,11 @@ def test_existing_saved_water_projections_do_not_offer_mass_arrivals_or_restart(
     with pytest.raises(ValueError, match="unavailable from saved-run caches"):
         loaded.arrivals("outlet")
     artifact = json.loads(saved.read_text())
-    assert artifact["format_version"] == 4
+    assert artifact["format_version"] == 5
     assert set(artifact) == {
         "artifact_sha256",
+        "arrivals",
+        "physical",
         "authoritative_log",
         "flows",
         "format",
@@ -179,4 +181,5 @@ def test_existing_saved_water_projections_do_not_offer_mass_arrivals_or_restart(
         "time",
     }
     # The opaque log is preserved, not decoded into unoffered physical results.
-    assert "mass" not in artifact and "arrivals" not in artifact and "checkpoint" not in artifact
+    assert artifact["arrivals"] is None and artifact["physical"] is None
+    assert "mass" not in artifact and "checkpoint" not in artifact

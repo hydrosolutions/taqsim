@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Protocol
+from typing import Literal, Protocol
 
 import incidence
 
@@ -95,6 +95,8 @@ class RuleContext:
     parameter_descriptors: dict[str, Parameter] = field(default_factory=dict)
     forcings: dict[str, list[float]] = field(default_factory=dict)
     tables: list[dict[str, object]] = field(default_factory=list)
+    projections: list[dict[str, object]] = field(default_factory=list)
+    projection_states: list[dict[str, object]] = field(default_factory=list)
 
     @property
     def available(self) -> Expression:
@@ -145,6 +147,11 @@ class RulePlan:
     """Absolute branch amounts and their named water destinations."""
 
     branches: tuple[tuple[str, str, Expression], ...]
+    mixing_order: Literal["simultaneous", "sequential"] | None = None
+    branch_kinds: tuple[Literal["mixed", "evaporation"], ...] = ()
+    requested: tuple[float, ...] | None = None
+    delay_intervals: int = 0
+    requested_branch: str | None = None
 
 
 class WaterRule(Protocol):
@@ -208,7 +215,7 @@ class ZoneRelease:
             incidence.max(incidence.literal(0.0), subtract(available, dead)),
             incidence.max(incidence.literal(0.0), zoned),
         )
-        return RulePlan((("release", downstream, release),))
+        return RulePlan((("release", downstream, release),), "simultaneous", ("mixed",))
 
 
 ZoneReleasePolicy = ZoneRelease
@@ -232,7 +239,7 @@ class MonthlyDistribution:
             )
             for destination, values in self.ratios.items()
         )
-        return RulePlan(branches)
+        return RulePlan(branches, "simultaneous", ("mixed",) * len(branches))
 
 
 @dataclass(frozen=True)
@@ -257,7 +264,7 @@ class PriorityDistribution:
             (f"remainder-to-{destination}", destination, incidence.mul(remainder, context.scalar(ratio)))
             for destination, ratio in self.remainder_ratios.items()
         )
-        return RulePlan(tuple(branches))
+        return RulePlan(tuple(branches), "simultaneous", ("mixed",) * len(branches))
 
 
 @dataclass(frozen=True)
@@ -287,7 +294,7 @@ class EFlowSplit:
             (f"remainder-to-{destination}", destination, incidence.mul(remainder, context.scalar(ratio)))
             for destination, ratio in self.remainder_ratios.items()
         )
-        return RulePlan(tuple(branches))
+        return RulePlan(tuple(branches), "simultaneous", ("mixed",) * len(branches))
 
 
 EFlowSplitPolicy = EFlowSplit
@@ -334,7 +341,11 @@ class ReservoirEvaporation:
             incidence.mul(context.seasonal(_depth_values(self.evaporation_depths), "evaporation-depth"), area),
         )
         delivered = incidence.max(incidence.literal(0.0), subtract(context.available, loss))
-        return RulePlan((("evaporation", self.destination, loss), ("release", downstream, delivered)))
+        return RulePlan(
+            (("evaporation", self.destination, loss), ("release", downstream, delivered)),
+            "sequential",
+            ("evaporation", "mixed"),
+        )
 
 
 EvaporationLossRule = ReservoirEvaporation
@@ -400,8 +411,127 @@ class CanalLosses:
                 ("evaporation", self.evaporation_destination, evaporation),
                 ("operational-loss", self.operational_destination, operational),
                 ("release", downstream, delivered),
-            )
+            ),
+            "sequential",
+            ("mixed", "evaporation", "mixed", "mixed"),
         )
 
 
 CanalLossRule = CanalLosses
+
+
+@dataclass(frozen=True)
+class Release:
+    """Request an interval volume, capped by actual available water."""
+
+    amount: WaterVolume | tuple[WaterVolume, ...]
+
+    def __post_init__(self) -> None:
+        values = _volume_values(self.amount)
+        for value in values if isinstance(values, tuple) else (values,):
+            _fixed_physical(value, "release request")
+
+    def compile(self, context: RuleContext, downstream: str) -> RulePlan:
+        values = _volume_values(self.amount)
+        requested = (
+            tuple(float(_fixed_physical(v, "release request")) for v in values)
+            if isinstance(values, tuple)
+            else (float(_fixed_physical(values, "release request")),) * context.steps
+        )
+        if len(requested) != context.steps:
+            raise ValueError("release schedule must contain one volume per model interval")
+        identifier = f"{context.owner}-release-request"
+        context.forcings[identifier] = list(requested)
+        release = incidence.min(context.available, incidence.forcing(identifier))
+        return RulePlan(
+            (("release", downstream, release),), "simultaneous", ("mixed",), requested, requested_branch="release"
+        )
+
+
+@dataclass(frozen=True)
+class Hold:
+    """Retain all water in the declared compartment."""
+
+    def compile(self, context: RuleContext, downstream: str) -> RulePlan:
+        return RulePlan((("release", downstream, incidence.literal(0.0)),), "simultaneous", ("mixed",))
+
+
+@dataclass(frozen=True)
+class TravelDelay:
+    """Retain each incoming water cohort for a positive number of intervals."""
+
+    intervals: int
+
+    def __post_init__(self) -> None:
+        if isinstance(self.intervals, bool) or not isinstance(self.intervals, int) or self.intervals < 1:
+            raise ValueError("travel delay intervals must be a positive integer")
+
+    def compile(self, context: RuleContext, downstream: str) -> RulePlan:
+        identifier = f"{context.owner}-travel-delay"
+        context.projections.append(
+            {
+                "rule_ir_version": "v1",
+                "numerical_semantics_version": "v1",
+                "id": identifier,
+                "value_kind": "extensive",
+                "spec": {
+                    "kind": "bounded_lag",
+                    "steps": self.intervals,
+                    "source": {
+                        "kind": "authoritative_fact",
+                        "selector": {
+                            "kind": "incoming_transfer_amount",
+                            "compartment": context.owner,
+                            "substance": "water",
+                        },
+                    },
+                },
+            }
+        )
+        context.projection_states.append(
+            {"projection": identifier, "values": [{"kind": "extensive", "value": 0.0}] * self.intervals}
+        )
+        return RulePlan(
+            (("release", downstream, incidence.projection(identifier, "extensive")),),
+            "sequential",
+            ("mixed",),
+            delay_intervals=self.intervals,
+        )
+
+
+@dataclass(frozen=True)
+class EvaporateThenRelease:
+    """Remove salt-free water first, then cap a mixed release by remaining water."""
+
+    evaporation: WaterVolume | tuple[WaterVolume, ...]
+    release: WaterVolume | tuple[WaterVolume, ...]
+    evaporation_destination: str = "evaporation"
+
+    def __post_init__(self) -> None:
+        for amount in (self.evaporation, self.release):
+            Release(amount)
+        if not self.evaporation_destination:
+            raise ValueError("evaporation destination must not be empty")
+
+    def compile(self, context: RuleContext, downstream: str) -> RulePlan:
+        requested_plan = Release(self.release).compile(context, downstream)
+        evaporation_values = _volume_values(self.evaporation)
+        values = (
+            [float(_fixed_physical(v, "evaporation")) for v in evaporation_values]
+            if isinstance(evaporation_values, tuple)
+            else [float(_fixed_physical(evaporation_values, "evaporation"))] * context.steps
+        )
+        if len(values) != context.steps:
+            raise ValueError("evaporation schedule must contain one volume per model interval")
+        identifier = f"{context.owner}-evaporation-request"
+        context.forcings[identifier] = values
+        evaporated = incidence.min(context.available, incidence.forcing(identifier))
+        remaining = incidence.max(incidence.literal(0.0), subtract(context.available, evaporated))
+        release = incidence.min(remaining, incidence.forcing(f"{context.owner}-release-request"))
+        return RulePlan(
+            (("evaporation", self.evaporation_destination, evaporated), ("release", downstream, release)),
+            "sequential",
+            ("evaporation", "mixed"),
+            requested_plan.requested,
+            requested_branch="release",
+        )

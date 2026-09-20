@@ -7,15 +7,17 @@ import hashlib
 import json
 import os
 import tempfile
+from decimal import Decimal
 from importlib.metadata import PackageNotFoundError, version
 from os import PathLike
 from pathlib import Path
 from typing import Any, NoReturn
 
+from .physical_results import TransportResult
 from .water_system import ConservationQuantum, Presence, TimeAxis, WaterSeries, WaterSystemRun
 
 _FORMAT = "taqsim.saved-run"
-_FORMAT_VERSION = 4
+_FORMAT_VERSION = 5
 _ARTIFACT_DIGEST_FIELD = "artifact_sha256"
 
 
@@ -63,6 +65,10 @@ def save_run(run: WaterSystemRun, path: str | PathLike[str]) -> None:
         "reaches": sorted(run.reaches),
         "flows": flows,
         "retained": retained,
+        "arrivals": None
+        if run.endpoints is None
+        else {name: _series_document(run.arrivals(name)) for name in sorted(run.endpoints)},
+        "physical": None if run._physical is None else run._physical.to_dict(),
     }
     document = {**payload, _ARTIFACT_DIGEST_FIELD: _artifact_digest(payload)}
     target = Path(path)
@@ -101,6 +107,10 @@ def load_run(path: str | PathLike[str]) -> WaterSystemRun:
             f"artifact declares {stamped_version!r}, installed version is {installed_version!r}"
         )
 
+    format_version = _integer(_required(document, "format_version", "saved run"), "format_version")
+    if format_version not in (4, _FORMAT_VERSION):
+        _malformed(f"unsupported saved-run format version {format_version!r}")
+    additional = {"arrivals", "physical"} if format_version == _FORMAT_VERSION else set()
     _exact_keys(
         document,
         {
@@ -115,13 +125,12 @@ def load_run(path: str | PathLike[str]) -> WaterSystemRun:
             "flows",
             "retained",
             _ARTIFACT_DIGEST_FIELD,
-        },
+        }
+        | additional,
         "saved run",
     )
     if _string(document["format"], "format") != _FORMAT:
         _malformed(f"format must be {_FORMAT!r}")
-    if _integer(document["format_version"], "format_version") != _FORMAT_VERSION:
-        _malformed(f"unsupported saved-run format version {document['format_version']!r}")
     declared_digest = _string(document[_ARTIFACT_DIGEST_FIELD], _ARTIFACT_DIGEST_FIELD)
     payload = {key: value for key, value in document.items() if key != _ARTIFACT_DIGEST_FIELD}
     actual_digest = _artifact_digest(payload)
@@ -146,6 +155,21 @@ def load_run(path: str | PathLike[str]) -> WaterSystemRun:
     if set(retained_documents) != set(reaches):
         _malformed("retained must contain exactly the declared reaches")
     retained = {reach: _read_series(retained_documents[reach], time, f"retained.{reach}") for reach in reaches}
+    arrivals = None
+    physical = None
+    if format_version == _FORMAT_VERSION:
+        if document["arrivals"] is not None:
+            arrivals = {
+                name: _read_series(item, time, f"arrivals.{name}")
+                for name, item in _object(document["arrivals"], "arrivals").items()
+            }
+        if document["physical"] is not None:
+            try:
+                physical = TransportResult.from_dict(_object(document["physical"], "physical"))
+            except (ValueError, TypeError, KeyError) as error:
+                raise SavedRunFormatError(f"invalid physical projection: {error}") from error
+            if physical.time != time or physical.water_quantum != Decimal(str(quantum.quantum_m3)):
+                _malformed("physical projection time or water quantum differs from the run")
     return WaterSystemRun._from_cache(
         model_digest=model_digest,
         authoritative_log=log,
@@ -153,6 +177,8 @@ def load_run(path: str | PathLike[str]) -> WaterSystemRun:
         quantum=quantum,
         flows=flows,
         retained=retained,
+        arrivals=arrivals,
+        physical=physical,
     )
 
 

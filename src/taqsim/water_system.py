@@ -6,13 +6,14 @@ import math
 import struct
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
+from graphlib import CycleError, TopologicalSorter
 from os import PathLike
 from types import MappingProxyType
-from typing import Any, NewType, overload
+from typing import TYPE_CHECKING, Any, Literal, NewType, cast, overload
 from uuid import UUID
 
 import incidence
@@ -22,13 +23,79 @@ from .inputs import (
     IntervalVolume,
     Length,
     Parameter,
+    SourceProvenance,
     SurfaceArea,
     VolumetricRate,
     WaterDepth,
     WaterVolume,
     _frequency_seconds,
 )
-from .vocabulary import RuleContext, RulePlan, WaterRule, subtract
+from .vocabulary import RuleContext, RulePlan, TravelDelay, WaterRule, subtract
+
+if TYPE_CHECKING:
+    from .constituents import ConservativeTransport
+    from .physical_results import TransportResult
+
+
+class TransportObservation(StrEnum):
+    """Whether the compiler preserves per-branch physical water counts."""
+
+    DISABLED = "disabled"
+    BRANCH_COUNTS = "branch_counts"
+
+
+@dataclass(frozen=True)
+class TransportBranch:
+    """One original physical branch observed through an exact engine count."""
+
+    source: str
+    label: str
+    destination: str
+    observer: str
+    kind: Literal["mixed", "evaporation"]
+
+
+@dataclass(frozen=True)
+class ProcessExchange:
+    """The source and outgoing branch identities owned by one physical process."""
+
+    owner: str
+    sources: tuple[str, ...]
+    branches: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class TransportTopology:
+    """An immutable physical graph, excluding engine observation stores."""
+
+    order: tuple[str, ...]
+    branches: Mapping[str, tuple[TransportBranch, ...]]
+    sources: Mapping[str, str]
+    initial_counts: Mapping[str, int]
+    mixing: Mapping[str, Literal["simultaneous", "sequential"]]
+    requested: Mapping[str, tuple[float, ...]]
+    requested_branches: Mapping[str, str]
+    delays: Mapping[str, int]
+    source_counts: Mapping[str, tuple[int, ...]]
+    source_provenance: Mapping[str, SourceProvenance]
+    process_exchanges: Mapping[str, ProcessExchange]
+    replacements: tuple[tuple[str, str], ...]
+    disabled_sources: frozenset[str]
+
+    def __post_init__(self) -> None:
+        for field in (
+            "branches",
+            "sources",
+            "initial_counts",
+            "mixing",
+            "requested",
+            "requested_branches",
+            "delays",
+            "source_counts",
+            "source_provenance",
+            "process_exchanges",
+        ):
+            object.__setattr__(self, field, MappingProxyType(dict(getattr(self, field))))
 
 
 class Presence(StrEnum):
@@ -389,6 +456,8 @@ class WaterSystem:
     _reaches: list[Reach]
     _sources: list[Source]
     _sinks: list[Sink]
+    _transport: ConservativeTransport | None
+    _process_exchanges: dict[str, ProcessExchange]
 
     def __init__(
         self,
@@ -412,6 +481,26 @@ class WaterSystem:
         self._reaches = []
         self._sources = []
         self._sinks = []
+        self._transport = None
+        self._process_exchanges = {}
+
+    def process_exchange(
+        self, owner: str, *, sources: tuple[str, ...] = (), branches: tuple[tuple[str, str], ...] = ()
+    ) -> None:
+        """Assign both incoming and outgoing exchanges to one replaceable process."""
+        if not owner or owner in self._process_exchanges:
+            raise ValueError("process owner must be nonempty and unique")
+        if not sources and not branches:
+            raise ValueError("process ownership requires source or branch identities")
+        self._process_exchanges[owner] = ProcessExchange(owner, tuple(sources), tuple(branches))
+
+    def configure_transport(self, config: ConservativeTransport) -> None:
+        """Attach explicit conservative constituent declarations to this water graph."""
+        from .constituents import ConservativeTransport
+
+        if not isinstance(config, ConservativeTransport):
+            raise TypeError("transport configuration must be ConservativeTransport")
+        self._transport = config
 
     @property
     def reaches(self) -> tuple[Reach, ...]:
@@ -462,8 +551,18 @@ class WaterSystem:
         _require_closed_capacity(self._reaches)
         _require_source_horizons(self._sources, self.time)
         source_counts, initial_counts = _external_water_counts(self._reaches, self._sources, self.time, self.quantum)
+        replacements = (
+            ()
+            if self._transport is None
+            else tuple((item.owner, item.replacement_owner) for item in self._transport.replacements)
+        )
+        disabled_sources, disabled_branches = _replaced_exchanges(
+            self._process_exchanges, replacements, frozenset(source_counts)
+        )
+        for name in disabled_sources:
+            source_counts[name] = (WaterQuantumCount(0),) * self.time.steps
         _require_countable_initial_total(source_counts, initial_counts, self.quantum)
-        document, parameters = _model_document(
+        document, parameters, topology = _model_document(
             tuple(self._reaches),
             tuple(self._sources),
             tuple(self._sinks),
@@ -471,7 +570,19 @@ class WaterSystem:
             self.quantum,
             source_counts,
             initial_counts,
+            TransportObservation.BRANCH_COUNTS if self._transport is not None else TransportObservation.DISABLED,
+            self._process_exchanges,
+            replacements,
+            disabled_sources,
+            disabled_branches,
         )
+        if self._transport is not None:
+            self._transport.validate_network(
+                tuple(reach.name for reach in self._reaches),
+                tuple(source.name for source in self._sources),
+                self.time.steps,
+                tuple(document["boundary_accounts"]),
+            )
         return BuiltWaterSystem(
             document,
             incidence.compile_model(document),
@@ -480,6 +591,8 @@ class WaterSystem:
             frozenset(reach.name for reach in self._reaches),
             initial_counts,
             parameters,
+            topology,
+            self._transport,
         )
 
 
@@ -494,6 +607,8 @@ class BuiltWaterSystem:
     reaches: frozenset[str]
     _initial_counts: Mapping[str, WaterQuantumCount]
     parameters: tuple[RuleParameter, ...]
+    _topology: TransportTopology | None
+    _transport: ConservativeTransport | None
 
     def __init__(
         self,
@@ -504,6 +619,8 @@ class BuiltWaterSystem:
         reaches: frozenset[str],
         initial_counts: Mapping[str, WaterQuantumCount],
         parameters: tuple[RuleParameter, ...],
+        topology: TransportTopology | None = None,
+        transport: ConservativeTransport | None = None,
     ):
         paths = [parameter.path for parameter in parameters]
         if len(paths) != len(set(paths)):
@@ -517,6 +634,8 @@ class BuiltWaterSystem:
         object.__setattr__(self, "reaches", reaches)
         object.__setattr__(self, "_initial_counts", MappingProxyType(dict(initial_counts)))
         object.__setattr__(self, "parameters", parameters)
+        object.__setattr__(self, "_topology", topology)
+        object.__setattr__(self, "_transport", transport)
 
     @property
     def document(self) -> Mapping[str, Any]:
@@ -542,7 +661,27 @@ class BuiltWaterSystem:
         """Execute one run, optionally substituting addressed rule parameters."""
         substitutions = self._substitutions(parameters or {})
         completed = self._compiled.run(_engine_run_id(run_id), substitutions=substitutions)
-        return WaterSystemRun(completed, self.time, self.quantum, self.reaches, self._initial_counts)
+        physical = None
+        if self._transport is not None:
+            from .conservative_transport import compute_transport
+
+            if self._topology is None:
+                raise RuntimeError("configured transport requires compiled physical topology")
+            physical = compute_transport(completed, self.time, self.quantum, self._topology, self._transport)
+        endpoints = set(self._document["finite_compartments"]) | set(self._document["boundary_accounts"])
+        if self._topology is not None:
+            endpoints.difference_update(
+                branch.observer for branches in self._topology.branches.values() for branch in branches
+            )
+        return WaterSystemRun(
+            completed,
+            self.time,
+            self.quantum,
+            self.reaches,
+            self._initial_counts,
+            physical,
+            endpoints=frozenset(endpoints),
+        )
 
     def sweep(self, parameter: str | RuleParameter, values: Iterable[RuleScalar]) -> tuple[WaterSystemRun, ...]:
         """Run a one-dimensional parameter sweep while holding the compiled model."""
@@ -575,6 +714,9 @@ class BuiltWaterSystem:
 class WaterSystemRun:
     """An immutable live or cached run interpreted through WaterSystem dates and water names."""
 
+    _physical: TransportResult | None
+    endpoints: frozenset[str] | None
+    _cached_arrivals: Mapping[str, WaterSeries] | None
     _completed: incidence.CompletedRun | None
     _cached_flows: Mapping[str, WaterSeries]
     _cached_retained: Mapping[str, WaterSeries]
@@ -592,9 +734,15 @@ class WaterSystemRun:
         quantum: ConservationQuantum,
         reaches: frozenset[str],
         initial_counts: Mapping[str, WaterQuantumCount],
+        physical: TransportResult | None = None,
+        *,
+        endpoints: frozenset[str] | None = None,
     ):
         if completed.quantum("water") != quantum.quantum_m3:
             raise ValueError("completed-run water quantum differs from the model quantum")
+        object.__setattr__(self, "_physical", physical)
+        object.__setattr__(self, "endpoints", None if endpoints is None else frozenset(endpoints))
+        object.__setattr__(self, "_cached_arrivals", None)
         object.__setattr__(self, "_completed", completed)
         object.__setattr__(self, "_cached_flows", MappingProxyType({}))
         object.__setattr__(self, "_cached_retained", MappingProxyType({}))
@@ -615,8 +763,13 @@ class WaterSystemRun:
         quantum: ConservationQuantum,
         flows: Mapping[str, WaterSeries],
         retained: Mapping[str, WaterSeries],
+        arrivals: Mapping[str, WaterSeries] | None = None,
+        physical: TransportResult | None = None,
     ) -> WaterSystemRun:
         run = object.__new__(cls)
+        object.__setattr__(run, "_physical", physical)
+        object.__setattr__(run, "endpoints", None if arrivals is None else frozenset(arrivals))
+        object.__setattr__(run, "_cached_arrivals", None if arrivals is None else MappingProxyType(dict(arrivals)))
         object.__setattr__(run, "_completed", None)
         object.__setattr__(run, "_cached_flows", MappingProxyType(dict(flows)))
         object.__setattr__(run, "_cached_retained", MappingProxyType(dict(retained)))
@@ -627,6 +780,13 @@ class WaterSystemRun:
         object.__setattr__(run, "quantum", quantum)
         object.__setattr__(run, "reaches", frozenset(flows))
         return run
+
+    @property
+    def physical(self) -> TransportResult:
+        """Return immutable physical accounting, when explicitly configured."""
+        if self._physical is None:
+            raise ValueError("this run has no configured constituent transport")
+        return self._physical
 
     @classmethod
     def load(cls, path: str | PathLike[str]) -> WaterSystemRun:
@@ -788,7 +948,15 @@ class WaterSystemRun:
         if last < first:
             raise ValueError("arrival end precedes arrival start")
         if self._completed is None:
-            raise ValueError("arrival reads are unavailable from saved-run caches")
+            if self._cached_arrivals is None:
+                raise ValueError(
+                    "arrival reads are unavailable from saved-run caches with undeclared endpoints (legacy output)"
+                )
+            if endpoint not in self._cached_arrivals:
+                raise KeyError(f"unknown endpoint {endpoint!r}")
+            cached = self._cached_arrivals[endpoint]
+            dates = tuple(self.time.datetime_at(step) for step in range(first, last + 1))
+            return WaterSeries(dates, cached.values[first : last + 1], cached.presence[first : last + 1])
         series: incidence.PresenceSeries = self._completed.transfer_series(
             endpoint, "water", direction="incoming", first=first, last=last
         )
@@ -958,7 +1126,12 @@ def _model_document(
     quantum: ConservationQuantum,
     source_counts: Mapping[str, Sequence[WaterQuantumCount]],
     initial_counts: Mapping[str, WaterQuantumCount],
-) -> tuple[dict[str, Any], tuple[RuleParameter, ...]]:
+    observation: TransportObservation,
+    process_exchanges: Mapping[str, ProcessExchange],
+    replacements: tuple[tuple[str, str], ...],
+    disabled_sources: frozenset[str],
+    disabled_branches: frozenset[tuple[str, str]],
+) -> tuple[dict[str, Any], tuple[RuleParameter, ...], TransportTopology | None]:
     reach_names = {reach.name for reach in reaches}
     source_names = {source.name for source in sources}
     finite_names = reach_names | source_names
@@ -977,6 +1150,8 @@ def _model_document(
         if reach.rule is not None:
             if reach.capacity is not None:
                 raise ValueError(f"reach {reach.name!r} cannot combine a capacity with a custom water rule")
+            if isinstance(reach.rule, TravelDelay) and initial_counts[reach.name] != 0:
+                raise ValueError("TravelDelay requires an initially empty transit compartment")
             plans[reach.name] = reach.rule.compile(context, reach.destination)
         elif reach.capacity is not None:
             available = context.available
@@ -986,10 +1161,27 @@ def _model_document(
                 (
                     ("out", reach.destination, normal),
                     ("overflow", reach.overflow_destination or "", overflow),
-                )
+                ),
+                "simultaneous",
+                ("mixed", "mixed"),
             )
         else:
-            plans[reach.name] = RulePlan((("out", reach.destination, context.available),))
+            plans[reach.name] = RulePlan((("out", reach.destination, context.available),), "simultaneous", ("mixed",))
+
+    declared_branches = {(name, label) for name, plan in plans.items() for label, _, _ in plan.branches}
+    for exchange in process_exchanges.values():
+        for branch in exchange.branches:
+            if branch not in declared_branches:
+                raise ValueError(f"process {exchange.owner!r} names unknown branch {branch!r}")
+    for name, plan in tuple(plans.items()):
+        if any((name, label) in disabled_branches for label, _, _ in plan.branches):
+            plans[name] = replace(
+                plan,
+                branches=tuple(
+                    (label, destination, incidence.literal(0.0) if (name, label) in disabled_branches else expression)
+                    for label, destination, expression in plan.branches
+                ),
+            )
 
     rule_destinations = {destination for plan in plans.values() for _, destination, _ in plan.branches}
     declared_endpoints = {reach.source for reach in reaches} | rule_destinations
@@ -1063,7 +1255,8 @@ def _model_document(
         },
         horizon={"first": 0, "last": time.steps - 1},
         projections={
-            "specifications": [_available_projection(reach) for reach in reaches],
+            "specifications": [_available_projection(reach) for reach in reaches]
+            + [projection for context in contexts.values() for projection in context.projections],
             "initial_states": [
                 {
                     "projection": f"{reach.name}-available",
@@ -1075,7 +1268,8 @@ def _model_document(
                     ],
                 }
                 for reach in reaches
-            ],
+            ]
+            + [state for context in contexts.values() for state in context.projection_states],
         },
         forcings=[
             {
@@ -1128,7 +1322,22 @@ def _model_document(
         for reach in reaches
         for name in contexts[reach.name].parameters
     )
-    return document, parameters
+    topology = (
+        _observe_branches(
+            document,
+            reaches,
+            sources,
+            plans,
+            initial_counts,
+            source_counts,
+            process_exchanges,
+            replacements,
+            disabled_sources,
+        )
+        if observation is TransportObservation.BRANCH_COUNTS
+        else None
+    )
+    return document, parameters, topology
 
 
 def _fixed_rule_quantity(
@@ -1254,3 +1463,147 @@ def _engine_run_id(run_id: RunId) -> bytes | str:
     if isinstance(run_id, bytearray):
         return bytes(run_id)
     return run_id
+
+
+def _observe_branches(
+    document: dict[str, Any],
+    reaches: tuple[Reach, ...],
+    sources: tuple[Source, ...],
+    plans: Mapping[str, RulePlan],
+    initial_counts: Mapping[str, WaterQuantumCount],
+    source_counts: Mapping[str, Sequence[WaterQuantumCount]],
+    process_exchanges: Mapping[str, ProcessExchange],
+    replacements: tuple[tuple[str, str], ...],
+    disabled_sources: frozenset[str],
+) -> TransportTopology:
+    """observe : WaterDocument × PhysicalDeclarations → ExactBranchTopology."""
+    names = {reach.name for reach in reaches}
+    dependencies: dict[str, set[str]] = {name: set() for name in sorted(names)}
+    for name, plan in plans.items():
+        if plan.mixing_order not in {"simultaneous", "sequential"} or len(plan.branch_kinds) != len(plan.branches):
+            raise ValueError(f"rule on {name!r} must explicitly declare physical mixing order and branch kinds")
+        if plan.requested is not None and plan.requested_branch not in {label for label, _, _ in plan.branches}:
+            raise ValueError(f"requested volume on {name!r} must identify its delivery branch")
+        if any(kind not in {"mixed", "evaporation"} for kind in plan.branch_kinds):
+            raise ValueError(f"rule on {name!r} declares an unsupported physical branch kind")
+        for _, destination, _ in plan.branches:
+            if destination in names:
+                dependencies[destination].add(name)
+    try:
+        order = tuple(
+            TopologicalSorter({name: sorted(parents) for name, parents in dependencies.items()}).static_order()
+        )
+    except CycleError as error:
+        raise ValueError("conservative transport requires an acyclic physical graph") from error
+    branches: dict[str, tuple[TransportBranch, ...]] = {}
+    occupied = set(document["finite_compartments"]) | set(document["boundary_accounts"])
+    for reach in reaches:
+        entries = []
+        plan = plans[reach.name]
+        for index, ((label, destination, _), kind) in enumerate(zip(plan.branches, plan.branch_kinds, strict=True)):
+            observer = f"{reach.name}-branch-{index}-observation"
+            if observer in occupied:
+                raise ValueError(f"physical observation name {observer!r} conflicts with a declared location")
+            occupied.add(observer)
+            entries.append(TransportBranch(reach.name, label, destination, observer, kind))
+            for binding in document["transfer_bindings"]:
+                if binding["compartment"] == reach.name and binding["branch"] == label:
+                    binding["destination"] = observer
+            document["finite_compartments"].append(observer)
+            document["initial_stocks"].append(
+                {"compartment": observer, "amounts": [{"substance": "water", "amount": 0.0}]}
+            )
+            # A one-interval authoritative projection preserves Incidence's count token.
+            # A stock recurrence would round-trip counts through float arithmetic.
+            document["projections"]["specifications"].append(
+                {
+                    "rule_ir_version": "v1",
+                    "numerical_semantics_version": "v1",
+                    "id": f"{observer}-available",
+                    "value_kind": "extensive",
+                    "spec": {
+                        "kind": "ordered_rolling_aggregate",
+                        "window": 1,
+                        "aggregate": "sum_oldest_to_newest",
+                        "source": {
+                            "kind": "authoritative_fact",
+                            "selector": {
+                                "kind": "incoming_transfer_amount",
+                                "compartment": observer,
+                                "substance": "water",
+                            },
+                        },
+                    },
+                }
+            )
+            document["projections"]["initial_states"].append({"projection": f"{observer}-available", "values": []})
+            disposition = {
+                "rule_ir_version": "v1",
+                "numerical_semantics_version": "v1",
+                "partition": {
+                    "kind": "expression_partition",
+                    "branches": [
+                        {"branch": "forward", "expression": incidence.projection(f"{observer}-available", "extensive")}
+                    ],
+                },
+            }
+            document["rules"].append(incidence.rule(observer, "water", incidence.literal(0.0), disposition))
+            document["transfer_bindings"].append(
+                {"compartment": observer, "substance": "water", "branch": "forward", "destination": destination}
+            )
+        branches[reach.name] = tuple(entries)
+    document["connections"] = _unique_connections(
+        [
+            {"source": binding["compartment"], "target": binding["destination"]}
+            for binding in document["transfer_bindings"]
+        ]
+    )
+    document["finite_compartments"].sort()
+    return TransportTopology(
+        order=order,
+        branches=branches,
+        sources={
+            source.name: next(reach.name for reach in reaches if reach.source == source.name) for source in sources
+        },
+        initial_counts={name: int(count) for name, count in initial_counts.items()},
+        mixing={name: cast(Literal["simultaneous", "sequential"], plan.mixing_order) for name, plan in plans.items()},
+        requested={name: plan.requested for name, plan in plans.items() if plan.requested is not None},
+        requested_branches={
+            name: plan.requested_branch for name, plan in plans.items() if plan.requested_branch is not None
+        },
+        delays={name: plan.delay_intervals for name, plan in plans.items() if plan.delay_intervals},
+        source_counts={name: tuple(int(count) for count in counts) for name, counts in source_counts.items()},
+        source_provenance={source.name: source.data.source_provenance for source in sources},
+        process_exchanges=process_exchanges,
+        replacements=replacements,
+        disabled_sources=disabled_sources,
+    )
+
+
+def _replaced_exchanges(
+    declarations: Mapping[str, ProcessExchange],
+    replacements: tuple[tuple[str, str], ...],
+    sources: frozenset[str],
+) -> tuple[frozenset[str], frozenset[tuple[str, str]]]:
+    """resolve_owners : ProcessDeclarations × Replacements → DisabledExchanges."""
+    owned_sources: set[str] = set()
+    owned_branches: set[tuple[str, str]] = set()
+    for exchange in declarations.values():
+        for source in exchange.sources:
+            if source not in sources:
+                raise ValueError(f"process {exchange.owner!r} names unknown source {source!r}")
+            if source in owned_sources:
+                raise ValueError(f"source {source!r} has duplicate process ownership")
+            owned_sources.add(source)
+        for branch in exchange.branches:
+            if branch in owned_branches:
+                raise ValueError(f"branch {branch!r} has duplicate process ownership")
+            owned_branches.add(branch)
+    disabled_sources: set[str] = set()
+    disabled_branches: set[tuple[str, str]] = set()
+    for owner, replacement in replacements:
+        if owner not in declarations or replacement not in declarations:
+            raise ValueError("replacement must identify two declared process owners")
+        disabled_sources.update(declarations[owner].sources)
+        disabled_branches.update(declarations[owner].branches)
+    return frozenset(disabled_sources), frozenset(disabled_branches)
