@@ -74,6 +74,7 @@ class TransportTopology:
     initial_counts: Mapping[str, int]
     mixing: Mapping[str, Literal["simultaneous", "sequential"]]
     requested: Mapping[str, tuple[float, ...]]
+    requested_branches: Mapping[str, str]
     delays: Mapping[str, int]
     source_counts: Mapping[str, tuple[int, ...]]
     source_provenance: Mapping[str, SourceProvenance]
@@ -88,6 +89,7 @@ class TransportTopology:
             "initial_counts",
             "mixing",
             "requested",
+            "requested_branches",
             "delays",
             "source_counts",
             "source_provenance",
@@ -1483,6 +1485,8 @@ def _observe_branches(
     for name, plan in plans.items():
         if plan.mixing_order not in {"simultaneous", "sequential"} or len(plan.branch_kinds) != len(plan.branches):
             raise ValueError(f"rule on {name!r} must explicitly declare physical mixing order and branch kinds")
+        if plan.requested is not None and plan.requested_branch not in {label for label, _, _ in plan.branches}:
+            raise ValueError(f"requested volume on {name!r} must identify its delivery branch")
         if any(kind not in {"mixed", "evaporation"} for kind in plan.branch_kinds):
             raise ValueError(f"rule on {name!r} declares an unsupported physical branch kind")
         for _, destination, _ in plan.branches:
@@ -1567,6 +1571,9 @@ def _observe_branches(
         initial_counts={name: int(count) for name, count in initial_counts.items()},
         mixing={name: cast(Literal["simultaneous", "sequential"], plan.mixing_order) for name, plan in plans.items()},
         requested={name: plan.requested for name, plan in plans.items() if plan.requested is not None},
+        requested_branches={
+            name: plan.requested_branch for name, plan in plans.items() if plan.requested_branch is not None
+        },
         delays={name: plan.delay_intervals for name, plan in plans.items() if plan.delay_intervals},
         source_counts={name: tuple(int(count) for count in counts) for name, counts in source_counts.items()},
         source_provenance={source.name: source.data.source_provenance for source in sources},

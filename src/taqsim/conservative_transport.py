@@ -197,6 +197,8 @@ def compute_transport(
     balances: list[Balance] = []
     basin_balances: list[Balance] = []
     parcels: dict[str, dict[int, PhysicalSample]] = {n: {} for n in topology.delays}
+    transit_deposits: dict[str, dict[str, int | None]] = {n: dict.fromkeys(species, 0) for n in topology.delays}
+    deposit_support = {n: dict.fromkeys(species, DomainSupport.SUPPORTED) for n in topology.delays}
     quantisation: list[dict[str, Any]] = []
     for n, composition in config.initial.items():
         for c in species:
@@ -272,6 +274,34 @@ def compute_transport(
         )
         return sample(n, step, water, mass, supportedness, water_state)
 
+    def apply_account_checks(part: PhysicalSample, owner: str, step: int) -> PhysicalSample:
+        """Narrow current account checks onto this parcel without replacing its support."""
+        if part.water_count is None:
+            raise RuntimeError("physical transfer requires an authoritative water count")
+        constituent_support = {}
+        for c in species:
+            existing = (
+                DomainSupport.UNSUPPORTED if part.quality[c] == QualityState.UNSUPPORTED else DomainSupport.SUPPORTED
+            )
+            current = (
+                account_support(owner, step, c)
+                if part.water_count != 0 or part.mass_counts[c] != 0
+                else DomainSupport.SUPPORTED
+            )
+            constituent_support[c] = combined_support(existing, current)
+        existing_water = (
+            DomainSupport.UNSUPPORTED if part.water_quality == QualityState.UNSUPPORTED else DomainSupport.SUPPORTED
+        )
+        current_water = account_support(owner, step, "water") if part.water_count != 0 else DomainSupport.SUPPORTED
+        return sample(
+            part.location,
+            step,
+            part.water_count,
+            part.mass_counts,
+            constituent_support,
+            combined_support(existing_water, current_water),
+        )
+
     for step in range(time.steps):
         incoming_parts: dict[str, list[PhysicalSample]] = {n: [] for n in endpoints}
         start_water = dict(water_stock)
@@ -333,7 +363,8 @@ def compute_transport(
                     support[n][c] = DomainSupport.UNSUPPORTED
                 old_mass = mass_stock[n][c]
                 if (
-                    water_stock[n] == 0
+                    n not in topology.delays
+                    and water_stock[n] == 0
                     and old_mass is not None
                     and old_mass > 0
                     and available_water > 0
@@ -345,7 +376,40 @@ def compute_transport(
             original_mass = dict(available_mass)
             released_parts: list[PhysicalSample] = []
             if n in topology.delays:
-                parcels[n][step] = arrival
+                if arrival.water_count == 0:
+                    for c in species:
+                        transit_deposits[n][c] = _sum([transit_deposits[n][c], arrival.mass_counts[c]])
+                        if arrival.quality[c] == QualityState.UNSUPPORTED and arrival.mass_counts[c] != 0:
+                            deposit_support[n][c] = DomainSupport.UNSUPPORTED
+                else:
+                    cohort_mass = dict(arrival.mass_counts)
+                    cohort_support = {
+                        c: DomainSupport.UNSUPPORTED
+                        if arrival.quality[c] == QualityState.UNSUPPORTED
+                        else DomainSupport.SUPPORTED
+                        for c in species
+                    }
+                    for c in species:
+                        if transit_deposits[n][c] != 0:
+                            if config.remobilisation.get(n, Remobilisation.UNRESOLVED) == Remobilisation.COMPLETE:
+                                cohort_mass[c] = _sum([cohort_mass[c], transit_deposits[n][c]])
+                                cohort_support[c] = combined_support(cohort_support[c], deposit_support[n][c])
+                                transit_deposits[n][c] = 0
+                                deposit_support[n][c] = DomainSupport.SUPPORTED
+                            else:
+                                cohort_support[c] = combined_support(cohort_support[c], DomainSupport.UNRESOLVED)
+                    if arrival.water_count is None:
+                        raise RuntimeError("delay arrival requires an authoritative water count")
+                    parcels[n][step] = sample(
+                        n,
+                        step,
+                        arrival.water_count,
+                        cohort_mass,
+                        cohort_support,
+                        DomainSupport.UNSUPPORTED
+                        if arrival.water_quality == QualityState.UNSUPPORTED
+                        else DomainSupport.SUPPORTED,
+                    )
             for branch in topology.branches[n]:
                 old: PhysicalSample | None = None
                 water = branch_water[branch.observer][step]
@@ -396,11 +460,14 @@ def compute_transport(
                     raise ValueError(f"negative constituent inventory at {n!r}")
             if n in topology.delays:
                 remaining_parcels = list(parcels[n].values())
-                available_mass = {c: _sum([parcel.mass_counts[c] for parcel in remaining_parcels]) for c in species}
+                available_mass = {
+                    c: _sum([transit_deposits[n][c], *[parcel.mass_counts[c] for parcel in remaining_parcels]])
+                    for c in species
+                }
                 support[n] = {
                     c: DomainSupport.UNSUPPORTED
                     if any(parcel.quality[c] == QualityState.UNSUPPORTED for parcel in remaining_parcels)
-                    else config.metadata.support
+                    else combined_support(config.metadata.support, deposit_support[n][c])
                     for c in species
                 }
                 water_support[n] = (
@@ -422,26 +489,13 @@ def compute_transport(
             water_support[n] = combined_support(water_support[n], account_support(n, step, "water"))
             for c in species:
                 support[n][c] = combined_support(support[n][c], account_support(n, step, c))
+            if n in topology.delays and step in parcels[n]:
+                parcels[n][step] = apply_account_checks(parcels[n][step], n, step)
             checked_parts = []
             for branch, part in zip(topology.branches[n], released_parts, strict=True):
                 if part.water_count is None:
                     raise RuntimeError("realised branch lost its authoritative water count")
-                checked = sample(
-                    branch.destination,
-                    step,
-                    part.water_count,
-                    part.mass_counts,
-                    {
-                        c: support[n][c]
-                        if part.water_count != 0 and branch.kind != "evaporation"
-                        else DomainSupport.SUPPORTED
-                        for c in species
-                    },
-                    water_support[n] if part.water_count != 0 else DomainSupport.SUPPORTED,
-                )
-                # Parcel support belongs to its departure cohort, not newer stored water.
-                if n in topology.delays and not any(a.location == n and a.step == step for a in active_accounts):
-                    checked = part
+                checked = apply_account_checks(part, n, step)
                 checked_parts.append(checked)
                 incoming_parts[branch.destination].append(checked)
                 transfers.append(TransferRecord(n, branch.destination, branch.label, step, branch.kind, checked))
@@ -455,7 +509,13 @@ def compute_transport(
             if water_stock[n] < 0:
                 raise ValueError(f"negative authoritative physical water inventory at {n!r}")
             mass_stock[n] = available_mass
-            dry_stocks[n].append(dict(available_mass) if water_stock[n] == 0 else dict(dry_inventory[n]))
+            dry_stocks[n].append(
+                dict(transit_deposits[n])
+                if n in topology.delays
+                else dict(available_mass)
+                if water_stock[n] == 0
+                else dict(dry_inventory[n])
+            )
             storage[n].append(sample(n, step, water_stock[n], available_mass, support[n], water_support[n]))
             balances.append(
                 Balance(n, step, "water", start_water[n], water_stock[n], arrival.water_count, departure.water_count)
@@ -468,7 +528,11 @@ def compute_transport(
                 )
             if n in deficits:
                 requested = Decimal(str(topology.requested[n][step]))
-                deficits[n].append(str(max(Decimal(0), requested - Decimal(water_out[n][step]) * water_quantum)))
+                delivery = next(
+                    branch for branch in topology.branches[n] if branch.label == topology.requested_branches[n]
+                )
+                delivered_count = branch_water[delivery.observer][step]
+                deficits[n].append(str(max(Decimal(0), requested - Decimal(delivered_count) * water_quantum)))
         for n in sorted(set(endpoints) - set(names)):
             arrival = merge(n, step, incoming_parts[n])
             check_exchanges(n, step, {"incoming": {"water": arrival.water_count, **arrival.mass_counts}})

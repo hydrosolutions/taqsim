@@ -186,6 +186,8 @@ class Constituent:
     def __post_init__(self) -> None:
         for attribute in ("id", "chemical_form", "reporting_basis"):
             _name(getattr(self, attribute), attribute)
+        if self.id == "water":
+            raise ValueError("constituent identity 'water' is reserved for the carrier quantity")
         quantum = _decimal(self.quantum_kg, "mass quantum")
         if quantum == 0:
             raise ValueError("mass quantum must be positive")

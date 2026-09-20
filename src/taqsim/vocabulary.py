@@ -151,6 +151,7 @@ class RulePlan:
     branch_kinds: tuple[Literal["mixed", "evaporation"], ...] = ()
     requested: tuple[float, ...] | None = None
     delay_intervals: int = 0
+    requested_branch: str | None = None
 
 
 class WaterRule(Protocol):
@@ -442,7 +443,9 @@ class Release:
         identifier = f"{context.owner}-release-request"
         context.forcings[identifier] = list(requested)
         release = incidence.min(context.available, incidence.forcing(identifier))
-        return RulePlan((("release", downstream, release),), "simultaneous", ("mixed",), requested)
+        return RulePlan(
+            (("release", downstream, release),), "simultaneous", ("mixed",), requested, requested_branch="release"
+        )
 
 
 @dataclass(frozen=True)
@@ -530,4 +533,5 @@ class EvaporateThenRelease:
             "sequential",
             ("evaporation", "mixed"),
             requested_plan.requested,
+            requested_branch="release",
         )
