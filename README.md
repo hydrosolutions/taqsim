@@ -54,6 +54,10 @@ The public surface also supports serialisable hydrology rule vocabulary, paramet
 water-system optimization, and version-checked saved-run caches. A loaded cache supports stored
 flow and retained-stock projections. Arrival projections require a live run.
 
+[Conserved-transfer boundary proofs](docs/conserved-transfers.md) describe the generic
+Incidence coupling capability, exact counts, temporal inventory, and the water-only
+saved-output boundary. `WaterSystem` remains a water-only authoring API.
+
 ## Invariants that affect changes
 
 - Source data carries interval meaning, units, cadence, resolution, and original provenance.
