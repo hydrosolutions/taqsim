@@ -489,8 +489,13 @@ def compute_transport(
             water_support[n] = combined_support(water_support[n], account_support(n, step, "water"))
             for c in species:
                 support[n][c] = combined_support(support[n][c], account_support(n, step, c))
-            if n in topology.delays and step in parcels[n]:
-                parcels[n][step] = apply_account_checks(parcels[n][step], n, step)
+            if n in topology.delays:
+                for entry_step, retained_parcel in tuple(parcels[n].items()):
+                    parcels[n][entry_step] = apply_account_checks(retained_parcel, n, step)
+                for c in species:
+                    if transit_deposits[n][c] != 0:
+                        current_check = combined_support(account_support(n, step, c), account_support(n, step, "water"))
+                        deposit_support[n][c] = combined_support(deposit_support[n][c], current_check)
             checked_parts = []
             for branch, part in zip(topology.branches[n], released_parts, strict=True):
                 if part.water_count is None:
@@ -516,7 +521,12 @@ def compute_transport(
                 if water_stock[n] == 0
                 else dict(dry_inventory[n])
             )
-            storage[n].append(sample(n, step, water_stock[n], available_mass, support[n], water_support[n]))
+            storage_support = dict(support[n])
+            if n in topology.delays and water_stock[n] > 0:
+                for c in species:
+                    if transit_deposits[n][c] != 0:
+                        storage_support[c] = combined_support(storage_support[c], DomainSupport.UNRESOLVED)
+            storage[n].append(sample(n, step, water_stock[n], available_mass, storage_support, water_support[n]))
             balances.append(
                 Balance(n, step, "water", start_water[n], water_stock[n], arrival.water_count, departure.water_count)
             )

@@ -6,7 +6,7 @@ import math
 import struct
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
@@ -1175,15 +1175,12 @@ def _model_document(
                 raise ValueError(f"process {exchange.owner!r} names unknown branch {branch!r}")
     for name, plan in tuple(plans.items()):
         if any((name, label) in disabled_branches for label, _, _ in plan.branches):
-            plans[name] = RulePlan(
-                tuple(
+            plans[name] = replace(
+                plan,
+                branches=tuple(
                     (label, destination, incidence.literal(0.0) if (name, label) in disabled_branches else expression)
                     for label, destination, expression in plan.branches
                 ),
-                plan.mixing_order,
-                plan.branch_kinds,
-                plan.requested,
-                plan.delay_intervals,
             )
 
     rule_destinations = {destination for plan in plans.values() for _, destination, _ in plan.branches}

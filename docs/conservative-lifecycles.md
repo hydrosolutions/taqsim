@@ -59,7 +59,10 @@ has undefined aqueous concentration. Missing chemistry remains distinct from bot
 well-mixed delay tank. Salt-only inputs at its entry remain separate deposits:
 zero water never transports mass. A later water-bearing parcel incorporates those
 deposits only under explicit complete remobilisation. Otherwise the deposits stay
-retained and dependent concentration remains unresolved. Account checks may narrow
+retained and dependent concentration remains unresolved. Total transit inventory
+includes dry deposits, but it does not define an aqueous concentration while those
+deposits coexist with stored water. Account validity remains attached to every
+affected retained cohort and deposit. Account checks may narrow
 a departing parcel's support, but cannot replace it with newer stored-water support.
 `Hold` exposes retained stock. Dry salt remains inventory.
 Rewetting requires explicit `Remobilisation.COMPLETE` for complete dissolution.
@@ -159,6 +162,9 @@ engine count interface in addition to public water outputs.
 | T2/T3 zero-carrier delays | `test_review_regressions.py`: `zero_water_delayed_load_is_retained_not_advected`, `delayed_dry_load_rewetting_keeps_explicit_mobile_and_dry_inventory` | Salt-only 1 kg stays stored; later 4 m³/2 kg parcel carries 3 kg only with explicit dissolution, otherwise 2 kg and unsupported concentration |
 | T5 parcel-local support | Same module: `matching_delay_account_preserves_departing_cohort_support` | Matching water account neither authenticates an unsupported departing parcel nor contaminates it from an unsupported newer parcel |
 | T2 requested delivery | Same module: `release_deficit_does_not_count_evaporation_as_delivery` | Supply 10, evaporate 4, request release 10: delivery 6 and deficit 4, not 0 |
+| T3/T5 delayed transition matrix | `test_transport_state_transitions.py`: `delayed_inventory_and_evidence_transition_matrix` | 54 combinations of dry-first/late-dry/wet-only storage, remobilisation, input evidence and account evidence preserve exact delivery, dry stock, and selective validity |
+| T2/T6 replacement plan preservation | Same module: `replacement_preserves_requested_branch_and_other_rule_plan_fields`, `replacement_retains_every_native_rule_physical_plan_field` | Both request rules and all 11 native configurations preserve branch identity, mixing order, request schedule and travel delay when an old process is disabled |
+| T5 retained inventory evidence | `test_review_repair_edges.py` | Late dry mass is not reported as dissolved storage concentration; failed/incomplete account evidence remains attached to retained dry deposits and older wet cohorts through later delivery |
 | T1 reserved quantity | Same module: `water_cannot_be_registered_as_constituent_identity` | Carrier identity `water` cannot also name a constituent |
 | T2/T4 existing rule chemistry | `test_review_native_rules.py` | Existing reservoir evaporation and sequential canal loss rules preserve salt and use the post-loss concentration |
 | T6/T7 separate imported diagnostics | Same module: `process_balance_is_separate_and_invalidates_affected_output`; `test_constituent_inputs.py`: `supplied_process_accounts_are_exact_independent_diagnostics` | Independent imported counts and residuals remain explicit; only dependent result support is invalidated |
@@ -172,7 +178,7 @@ uv run pytest tests/test_conservative_lifecycles.py tests/test_constituent_input
 This is focused physical-stack evidence, not a claim that every project regression
 or scientific application is covered by these five modules. The A-series suite
 contributes 27 cases to this run. The maintained independent-review modules add
-nine physical-path checks; the full project suite now passes 244 tests. The runnable example also produces its asserted
+nine physical-path checks; the full project suite now passes 315 tests. The runnable example also produces its asserted
 15 m³/9 kg outlet and zero water/salt basin residuals.
 
 ## Reproducibility and limits
