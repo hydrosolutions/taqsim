@@ -52,11 +52,17 @@ assert tuple(run.arrivals("farm").values) == (100.0, 80.0)
 
 The public surface also supports serialisable hydrology rule vocabulary, parameter sweeps,
 water-system optimization, and version-checked saved-run caches. A loaded cache supports stored
-flow and retained-stock projections. Arrival projections require a live run.
+flow, arrival and retained-stock projections. Legacy caches retain only their original projections.
 
-[Conserved-transfer boundary proofs](docs/conserved-transfers.md) describe the generic
-Incidence coupling capability, exact counts, temporal inventory, and the water-only
-saved-output boundary. `WaterSystem` remains a water-only authoring API.
+Attach `ConservativeTransport` to model multiple conservative constituents through realised
+allocation, storage, evaporation, delays and returns. Exact-count physical results include
+local and basin accounts, dry inventories and selective quality support. Supported physical
+projections survive save/load; saved output is not a restart checkpoint.
+See [conservative lifecycle modelling](docs/conservative-lifecycles.md) and the
+[executable example](examples/conservative_lifecycles.py).
+
+[Conserved-transfer boundary proofs](docs/conserved-transfers.md) document the underlying
+Incidence coupling and exact-count interface.
 
 ## Invariants that affect changes
 

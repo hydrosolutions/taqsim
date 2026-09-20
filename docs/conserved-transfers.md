@@ -1,10 +1,16 @@
 # Conserved transfers through the Incidence boundary
 
 Incidence can allocate a dependent conserved quantity from the **realised carrier
-counts** in the same compartment and timestep. Taqsim's transport tests exercise
-that generic capability through the public Python binding. `WaterSystem` remains
-a water-only authoring API. These tests do not introduce physical constituent,
-chemistry, evaporation or return-flow APIs.
+counts** in the same compartment and timestep. Taqsim's generic transport tests
+exercise that capability through the public Python binding.
+
+For the current physical `WaterSystem` API, typed chemistry, supported losses,
+returns, dry inventories and saved quality results, see
+[Conservative water and constituent lifecycles](conservative-lifecycles.md).
+
+This page preserves the historical Effort #22 foundation and its executed evidence.
+At that delivery, `WaterSystem` was water-only. The historical test-owned chemistry
+metadata and v4 cache limits below are not limits of the current physical API.
 
 ## Declare the coupling
 
@@ -100,7 +106,7 @@ Taqsim's calendar-indexed water series labels out-of-horizon dates `not_modelled
 An unknown reach lookup is refused. Preserve query and horizon context when
 crossing these existing boundaries; matching enum strings are not sufficient.
 
-Missing chemistry and unsupported remobilisation in the tests are **test-owned
+In the historical #22 tests, missing chemistry and unsupported remobilisation are **test-owned
 physical metadata**, not new Taqsim features. The missing-chloride witness does not
 register chloride with a fictitious zero inventory. Known water and sulphate run
 independently; the chloride query remains unmodelled and its physical reason stays
@@ -115,7 +121,7 @@ Initial inventory and precision changes also produce different identities.
 Identical model and run ID reproduce canonical log bytes and digest.
 `replay_against` refuses a different model artifact.
 
-The existing Taqsim v4 saved artifact is a **water-output cache, not a checkpoint**.
+The historical Taqsim v4 saved artifact was a **water-output cache, not a checkpoint**.
 It preserves offered water flow, retained-water stock, presence, time, quantum,
 model identity, engine version and opaque authoritative log bytes. The test uses
 the public `WaterSystemRun` constructor with a generic completed run to verify
@@ -125,7 +131,7 @@ or resume execution. Generic mass/count readback is tested live and by rerunning
 the declared model. Durable supported physical quality results belong to the
 physical constituent API work.
 
-## Executable acceptance crosswalk
+## Historical #22 executable acceptance crosswalk
 
 Run `uv run pytest tests/transport` with the committed Incidence dependency.
 
