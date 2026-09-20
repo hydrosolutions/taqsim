@@ -9,6 +9,14 @@ Build the new `hydrosolutions/fishy` library from its fresh pyplate scaffold. A 
 
 This vision commissions implementation in `hydrosolutions/fishy`, not a rewrite of Taqsim or preservation of `fishy-deprecated`. The planning record remains in Taqsim alongside its Program. No deprecated API compatibility, package-registry publication, or Zarafshan application port is required. Public signatures and reversible engineering mechanisms are not frozen here.
 
+## Approved diagnostic scope revision
+
+The owner approved omitting DHRAM from this delivery after source investigation. The supplied Black et al. (2005) paper lists 32 descriptors in Table 1, but its worked examples in Tables 5–6 score 31. Historical timing dispersion and general zero-denominator handling remain insufficiently specified. The original 2000 SNIFFER user manual, report SR(00)01/2F, was identified in catalogue records but no readable copy was obtained. No claim is made that no copy exists.
+
+Deliver IHA and IARI. Remove DHRAM, including supplied-summary scoring, from the supported public API, maintained product examples and delivery acceptance. Preserve the investigation and existing experimental tests in historical Git or local research evidence, not as an advertised feature or a substitute implementation. Do not choose an undocumented DHRAM interpretation, contact authors, or require obtaining the manual to complete this Effort. DHRAM can be reconsidered in separately approved work if sufficient evidence becomes available.
+
+This approved scope change supersedes DHRAM requirements in the original handover for this delivery. All other foundation, integration, evidence and IHA/IARI obligations remain unchanged.
+
 ## Source authority and required reading
 
 The sole handover requirements source is the owner-approved directory:
@@ -34,9 +42,9 @@ Within that directory, read these actual report sections, not just the brief:
 
 This vision durably records the relevant foundation contracts below. Full handover originals remain locally supplied, not falsely described as repository-hosted. If originals are unavailable or checksums differ, obtain the same material rather than substituting a superseded archive. Do not upload restricted report material or papers merely to make a public planning record self-contained.
 
-### User-supplied diagnostic papers: mandatory reading
+### Diagnostic sources and retained DHRAM investigation
 
-The owner supplied these two PDFs during discovery specifically so implementing agents can read them. Their identities were checked from the actual PDFs, not inferred from old Fishy citations. Local paths are access locations on the supplied workstation; DOI links provide durable bibliographic identity, not a guarantee of unrestricted access elsewhere.
+The owner supplied these two PDFs during discovery. Greco et al. remains required reading for IHA/IARI verification; Black et al. is retained as the evidence behind the approved DHRAM omission, not an implementation requirement. Their identities were checked from the actual PDFs, not inferred from old Fishy citations. Local paths are access locations on the supplied workstation; DOI links provide durable bibliographic identity, not a guarantee of unrestricted access elsewhere.
 
 1. **Greco, Michele; Arbia, Francesco; Giampietro, Raffaele (2021).** *Definition of Ecological Flow Using IHA and IARI as an Operative Procedure for Water Management*. **Environments 8(8), 77**. DOI: <https://doi.org/10.3390/environments8080077>.
    - Supplied file: `/Users/nicolaslazaro/Downloads/environments-08-00077-v2 (1).pdf`
@@ -47,12 +55,12 @@ The owner supplied these two PDFs during discovery specifically so implementing 
 2. **Black, A. R.; Rowan, J. S.; Duck, R. W.; Bragg, O. M.; Clelland, B. E. (2005).** *DHRAM: a method for classifying river flow regime alterations for the EC Water Framework Directive*. **Aquatic Conservation: Marine and Freshwater Ecosystems 15, 427–446**. DOI: <https://doi.org/10.1002/aqc.707>.
    - Supplied file: `/Users/nicolaslazaro/Downloads/2005Blacketal.AC.pdf`
    - SHA-256: `8ea9d281675cdd488bc463c451b309fc25f036d66e73d66a09584293db5e5d44`; 267,274 bytes.
-   - Read the parameter definitions, summary indicators, threshold and classification tables, within-day/intermittency adjustments, data-availability routes and worked case studies. Check original tables visually where extraction loses alignment or symbols.
+   - The investigation checked the parameter definitions, summary indicators, classification tables and worked case studies, including their original layout. The contradictions above prevent a sufficiently verified DHRAM implementation within this delivery.
    - Source-based hydrological alteration/risk classes are not measured biological status or legal compliance.
 
 **IHA source gap remains explicit.** Richter, B. D.; Baumgartner, J. V.; Powell, J.; Braun, D. P. (1996), *A method for assessing hydrologic alteration within ecosystems*, *Conservation Biology* 10(4), 1163–1174, is cited in the handover bibliography and both diagnostic discussions, but its full text was not supplied or verified during discovery. Obtain a lawful readable copy and the applicable official Nature Conservancy IHA manual, or establish sufficient authoritative manual coverage for the implemented 33-parameter profile and record the still-missing paper. Record source versions and precise definition/table/test crosswalks. Do not claim that a citation, old code, or these two papers alone establishes every IHA convention. Missing access blocks unsupported method claims, not unrelated foundation work. No source-completeness claim is made by publishing this vision.
 
-These papers inform verification of already-required diagnostics; they do not expand the commission to every method or application they discuss. If primary sources genuinely leave a consequential interpretation unresolved, record the operation and alternatives and seek an explicit decision rather than inventing a formula or silently retaining old behaviour.
+These papers inform IHA/IARI verification and the documented DHRAM omission; they do not expand the commission to every method or application they discuss. If primary sources genuinely leave a consequential interpretation unresolved, record the operation and alternatives and seek an explicit decision rather than inventing a formula or silently retaining old behaviour.
 
 ## Natural references are supplied, not automatically constructed
 
@@ -90,7 +98,7 @@ Required checks combine as follows: all supported passes yield complete pass; a 
 
 ## Required diagnostics and physical integration
 
-Re-establish all required IHA, IARI and DHRAM diagnostics with explicit source-defined profiles on supported dated data, independently of a simulator. Use current Taqsim results through an explicit physical/time/location boundary, not retired `Trace`, node or event imports. Reference and impacted inputs remain identifiable and compatible; diagnostic comparisons are not a general scenario-comparison engine.
+Re-establish all required IHA and IARI diagnostics with explicit source-defined profiles on supported dated data, independently of a simulator. Use current Taqsim results through an explicit physical/time/location boundary, not retired `Trace`, node or event imports. Reference and impacted inputs remain identifiable and compatible; diagnostic comparisons are not a general scenario-comparison engine.
 
 Independently verify parameter membership, means versus medians, rolling-window boundaries, leap/calendar treatment, pulse thresholds and runs, extrema ties, circular timing, rise/fall/reversal definitions, dispersion and coefficient-of-variation conventions, zero reference denominators, zero-width IQR and supplementary evidence. Historical code includes ad hoc degenerate-value handling and false-default supplementary flags; neither becomes a source rule through reuse. Unknown subdaily or cessation evidence must not silently become false. Preserve attributable unsupported outcomes when a source offers no justified operator. Do not add a legacy simplified threshold profile solely because it exists in deprecated code.
 
@@ -104,7 +112,7 @@ The new Fishy repository started from scaffold commit `619bf43e15aa4eed021cb3895
 
 Deliver maintained public-path tests and examples, with actual versus expected values, justified tolerances, exact software revisions, and a requirement → public operation/input → observable result → executed test crosswalk.
 
-- Demonstrate all three diagnostics on sufficient reference/impacted records with independently justified numerical expectations, source-table/example checks where available, and discriminating boundary/degenerate cases. A zero or constant series must retain its source-supported meaning rather than hide division failures.
+- Demonstrate IHA and IARI on sufficient reference/impacted records with independently justified numerical expectations, source-table/example checks where available, and discriminating boundary/degenerate cases. A zero or constant series must retain its source-supported meaning rather than hide division failures.
 - Demonstrate a real Taqsim-to-Fishy path with explicit location/view, interval-volume conversion and supplied-duty assessment, plus equivalent supported observation/import input without running Taqsim. Exercise live and supported saved results and their metadata/presence meanings.
 - Use supplied duties `[2, 3]` and daily delivery `[1.5, 3.5]` m³/s to obtain shortfalls `[0.5, 0]` and 43,200 m³, with no later-surplus cancellation. Preserve duty versions and distinguish scenario prediction from observed compliance. Include present zero, missing, outside-horizon and unsupported variants.
 - Exercise C1–C6 foundation semantics: prepared mappings and classification, source/scenario isolation, evidence/completeness, distinct physical and duty quantities, exact time/unit meaning and useful partial outputs. Record which route-specific cases remain owned by the method Efforts rather than claiming full Program acceptance here.
