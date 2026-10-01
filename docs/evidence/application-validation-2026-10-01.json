@@ -1,0 +1,426 @@
+{
+  "record_date": "2026-10-01",
+  "scope": "Selected frozen application result and independent review fields; not a reproduction harness. No simulations rerun for this documentation.",
+  "source_repository": "hydrosolutions/zarafshan-taqsim",
+  "source_paths_are_identifiers_not_checkout_links": true,
+  "tested_revisions": {
+    "taqsim": "54c00a8784704dd12ef74de38cd5bb881df30f6d",
+    "incidence": "665da4e0d81ab28921b8d5d2edbb9be27f4ec612",
+    "fishy": "881660e8901987d63d89caf61ef0d30991000301"
+  },
+  "extraction_note": "Selected fields retain original values. T08 cases retain selected fields only; T10 search_invocation_counts are lengths of the source searches lists. Historical pending-review executor status is superseded only by the separately identified completed review. No private absolute paths are copied.",
+  "evidence": {
+    "T03": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/coupled_basin_2026-09-30/RESULTS.json",
+        "source_sha256": "160f9ab561fcafacd244f3e5a3ffe70eed2bf3c7dd44aace358b893276cdd272",
+        "selected_fields": {
+          "status": "passed_declared_one_day_coupled_acceptance",
+          "temperature_scope": "External local mixing at real basin confluence plus Taqsim ProcessState import and explicit Fishy caller adapter; no native heat transport.",
+          "review_status": "Independent plan, implementation and final evidence review passed; all four local findings resolved."
+        }
+      },
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/coupled_basin_2026-09-30/results/flow_summary.json",
+        "source_sha256": "ed8abf8185bf4bb2f38ed3a9ffb3703a1e9eb9f56a6dd0fc5624eb21f3833ac4",
+        "selected_fields": {
+          "scope": "full 61-node 70-connection one-day repository model",
+          "status": "passed_flow_numerical_gate"
+        }
+      },
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/coupled_basin_2026-09-30/results/salt_summary.json",
+        "source_sha256": "723ddd1dcdf3c6f7d4cb4f04b3ba533975abebf5d2382704a389182bec209325",
+        "selected_fields": {
+          "global_salt_residual_count": 0,
+          "all_transfer_mass_counts_match_oracle": true,
+          "all_retained_mass_counts_match_oracle": true,
+          "saved_projection_and_assessment_unchanged": true,
+          "oracle_limit": "conditional on realized water and declared policy ordering; no field chemistry validation"
+        }
+      },
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/coupled_basin_2026-09-30/evidence_REVIEW.json",
+        "source_sha256": "b2bfb217675ac000a66938e3965f50b67700aaa6072a688b8e5760b3c23e14a0",
+        "selected_fields": {
+          "disposition": "passed_bounded_implementation_and_final_evidence_review",
+          "same_water_model_and_authoritative_log": true,
+          "limitations": [
+            "one day only",
+            "January1 zero irrigation demand",
+            "salt synthetic; mass oracle conditional on water",
+            "temperature externally imported local state; no native heat transport",
+            "reconstructed inventories not field observations"
+          ]
+        }
+      }
+    ],
+    "T05": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/application_stress_2026-10-01/RESULTS.json",
+        "source_sha256": "48efb690c4af7026152c6165f3d958d0857ce0591997f4e1c9c6bfd6d7e49df0",
+        "selected_fields": {
+          "status": "completed_with_findings",
+          "revisions": {
+            "incidence": "665da4e0d81ab28921b8d5d2edbb9be27f4ec612",
+            "taqsim": "54c00a8784704dd12ef74de38cd5bb881df30f6d",
+            "fishy": "881660e8901987d63d89caf61ef0d30991000301"
+          },
+          "taqsim": {
+            "canonical_records": 53,
+            "admission_counts": {
+              "passed": 52,
+              "exact_allocation_gate_failed": 1
+            },
+            "selection": "One largest admitted horizon per scenario;24matrix members distinct seed/multiplier;25grid candidates remain inside each optimization experiment, not headline independent tests. Earlier short pilots/repeats are supporting evidence only.",
+            "strict_exact_allocation_failure": "Native Akdarya capacity spilled 9340866872 L versus exact oracle 9340866873 L; 1 L retained; water and mass conservation passed."
+          }
+        }
+      },
+      {
+        "review_source_id": "docs/eflow_report/report/internal_audits/application_stress_2026-10-01/TAQSIM_INDEPENDENT_REVIEW.md",
+        "source_sha256": "bdc3fa117bfc54dcc700899650b1bc9b0fe5052ab3f7a75cf071edcdf041d088",
+        "content_in_excerpt": false
+      }
+    ],
+    "T06": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/branch_completion_2026-10-01/COMPONENT_RESULTS.json",
+        "source_sha256": "8c5dc942214d618e2003462a8af1a41cf1ea396b6c74d9d1cf021663de28be0d",
+        "selected_fields": {
+          "status": "passed",
+          "accepted_cells": 9,
+          "case_days": 387,
+          "known_mass_comparisons": 12322,
+          "unknown_mass_comparisons": 836,
+          "fishy_comparisons": 774
+        }
+      },
+      {
+        "review_source_id": "docs/eflow_report/report/internal_audits/branch_completion_2026-10-01/INDEPENDENT_COMPONENT_REVIEW.md",
+        "source_sha256": "33d98e6a1002a559eef8b42558add760d34129a7abe5a7e400f3f1a8479dae71",
+        "content_in_excerpt": false
+      }
+    ],
+    "T08": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/application_completion_2026-10-01/branch_transport/REVIEW_FULL_WORKFLOW_RAW.json",
+        "source_sha256": "97dbf0e4c0125170e440e9f7227c344240ccad549942dd40239342d35144c285",
+        "selected_fields": {
+          "status": "passed_all_eight_cases",
+          "cases": [
+            {
+              "case": "RES_Akdarya-baseline-1096",
+              "days": 1096,
+              "scalar_comparisons": 6576,
+              "fishy_raw_arithmetic_comparisons": 2192,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Akdarya-drought-recovery-1096",
+              "days": 1096,
+              "scalar_comparisons": 6576,
+              "fishy_raw_arithmetic_comparisons": 2192,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Akdarya-drought-recovery-30",
+              "days": 30,
+              "scalar_comparisons": 180,
+              "fishy_raw_arithmetic_comparisons": 60,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Akdarya-drought-recovery-92",
+              "days": 92,
+              "scalar_comparisons": 552,
+              "fishy_raw_arithmetic_comparisons": 184,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Kattakurgan-baseline-1096",
+              "days": 1096,
+              "scalar_comparisons": 6576,
+              "fishy_raw_arithmetic_comparisons": 2192,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Kattakurgan-drought-recovery-1096",
+              "days": 1096,
+              "scalar_comparisons": 6576,
+              "fishy_raw_arithmetic_comparisons": 2192,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Kattakurgan-drought-recovery-30",
+              "days": 30,
+              "scalar_comparisons": 180,
+              "fishy_raw_arithmetic_comparisons": 60,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            },
+            {
+              "case": "RES_Kattakurgan-drought-recovery-92",
+              "days": 92,
+              "scalar_comparisons": 552,
+              "fishy_raw_arithmetic_comparisons": 184,
+              "independent_saved_load": "exact",
+              "original_input_hashes": "exact"
+            }
+          ],
+          "native_executions_in_review": 0
+        }
+      },
+      {
+        "review_source_id": "docs/eflow_report/report/internal_audits/application_completion_2026-10-01/branch_transport/REVIEW_FULL_WORKFLOW.md",
+        "source_sha256": "5ce3372f0d7037718844350e41d61f0cb8613f5db69c74d6eed2022be679bcb5",
+        "content_in_excerpt": false
+      }
+    ],
+    "T09": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/decision_applications_2026-10-01/RESULTS.json",
+        "source_sha256": "4b42b36e754f0726854c5ae091cbc32008bc4661e045a2f6462f182ae2e8bcf0",
+        "selected_fields": {
+          "status": "passed_declared_application_scope_and_independent_review",
+          "tests": {
+            "recovery": {
+              "status": "passed",
+              "valid_prefixes": 10,
+              "native_refusals": 6,
+              "incremental_restart": false
+            },
+            "pulses": {
+              "status": "passed",
+              "comparisons": 256,
+              "prior_rows_closed": 224
+            },
+            "resolution": {
+              "status": "passed",
+              "joint_resolution_pairs": 3,
+              "known_exact_balances": 6223,
+              "stable_away_from_threshold": 180,
+              "threshold_intersecting_envelopes": 96,
+              "observed_classification_flips": 0
+            },
+            "isolation": {
+              "status": "passed",
+              "concurrent_replicas": 5,
+              "scientific_files_per_replica": 8,
+              "thread_safety_tested": false
+            }
+          },
+          "resource_qualification": "RSS values are sampled; sum of sampled child peaks is not a proven bound on continuous aggregate peak"
+        }
+      },
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/decision_applications_2026-10-01/resolution_isolation/RESULTS.json",
+        "source_sha256": "cf873afe3902c6c9450ab45a68ab02bbe32d7c6f4e7281c692f72d72f877d0d5",
+        "selected_fields": {
+          "native_cases": 17,
+          "counts": {
+            "comparisons": 4410,
+            "exact_known_balances": 6223,
+            "unknown_balances": 392,
+            "exact_delay_comparisons": 441,
+            "known_comparisons": 8044,
+            "unknown_comparisons": 776
+          },
+          "resolution": {
+            "classification_stable_outside_envelope": 180,
+            "interpretation": "Fixed engineering envelopes; no universal rounding proof and no inference of single-resolution causality.",
+            "known_mass_concentration_comparisons": 276,
+            "maximum_receiver_mass_difference_kg": "999999/6250000",
+            "maximum_water_difference_m3": "999999/1000000",
+            "status": "passed",
+            "threshold_flips": [],
+            "threshold_inside_envelope": 96,
+            "unknown_pairs": 84,
+            "water_comparisons": 1800
+          },
+          "fishy_caption_correction": {
+            "status": "passed",
+            "native_reruns": 0,
+            "same_findings_and_provenance": true,
+            "admission": "FISHY_V2_ADMISSION.json"
+          }
+        }
+      },
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/decision_applications_2026-10-01/resolution_isolation/independent_review.json",
+        "source_sha256": "ccdb4d32bdf55ddb41eaa543f983a0be8c3576d62beb7b2decb6020b995c19b1",
+        "selected_fields": {
+          "status": "passed",
+          "native_cases": 17,
+          "counts": {
+            "source_hash_comparisons": 51,
+            "known_local_water": 1764,
+            "known_local_chloride": 1452,
+            "known_local_sulphate": 1764,
+            "known_basin_water": 441,
+            "known_basin_chloride": 361,
+            "known_basin_sulphate": 441,
+            "delay_exact_known": 1251,
+            "fishy_unknown": 208,
+            "fishy_known": 674,
+            "policy_transfer_envelopes": 2646,
+            "policy_stock_envelopes": 1764,
+            "unknown_local_chloride": 312,
+            "unknown_basin_chloride": 80,
+            "delay_unknown": 72,
+            "wet_missing_chloride": 72,
+            "replica_bytes_equal": 40,
+            "overlapping_process_waves": 2
+          },
+          "resolution_counts": {
+            "water_comparisons": 1800,
+            "unknown_pairs": 84,
+            "known_pairs": 276,
+            "within_envelope": 96,
+            "stable_away": 180
+          },
+          "method": "Independent JSON-only review; no native rerun or implementer import. Reconstructed local/global balances from transfers and storage; raw source forcing, policy recurrence, delay, mg/L, replica bytes, overlap and engineering-envelope comparisons. Unknown balances counted separately.",
+          "limit": "Engineering envelopes are fixed acceptance criteria, not mathematical universal error proof. Joint water/mass resolution cannot identify separate causal contribution.",
+          "caption_followup": {
+            "status": "passed",
+            "corrected_rows": 882,
+            "source": "internal_audits/decision_applications_2026-10-01/resolution_isolation/postprocess_fishy_v2.py",
+            "source_sha256": "2e10b76214bfec027e81a0b7f602d705611fa9ed490c823364ebdef8ad5d0b42",
+            "original_scientific_fields_unchanged": true,
+            "replica_byte_equal_pairs": 5,
+            "native_reruns": 0
+          }
+        }
+      }
+    ],
+    "T10": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/application_completion_2026-10-01/optimization/RESULTS.json",
+        "source_sha256": "e1e1cce5810db7dc05f9b72030a5545de855ed4294302a752ec75e6bae442f77",
+        "selected_fields": {
+          "status": "complete",
+          "correctness": "passed",
+          "search_quality": "failed",
+          "scenarios": {
+            "baseline": {
+              "correctness": "passed",
+              "repeat_seed": "passed",
+              "search_quality": "failed",
+              "evaluations_checked": 1373,
+              "grid_candidates": 121,
+              "returned_solutions_rerun": 4,
+              "limitations": "continuous domain; grid exhaustive only at121declared alternatives; synthetic scarcity; reduced corridor; no global Pareto claim"
+            },
+            "drought": {
+              "correctness": "passed",
+              "repeat_seed": "passed",
+              "search_quality": "passed",
+              "evaluations_checked": 1465,
+              "grid_candidates": 121,
+              "returned_solutions_rerun": 96,
+              "limitations": "continuous domain; grid exhaustive only at121declared alternatives; synthetic scarcity; reduced corridor; no global Pareto claim"
+            }
+          },
+          "search_invocation_counts": {
+            "baseline": 4,
+            "drought": 4
+          }
+        }
+      },
+      {
+        "review_source_id": "docs/eflow_report/report/internal_audits/application_completion_2026-10-01/full_workflow/REVIEW_OPTIMIZATION.md",
+        "source_sha256": "be62026f90f46fe096da9fc6453bb3f6cfa128ecf137b3d84ca3e158095396eb",
+        "content_in_excerpt": false
+      }
+    ],
+    "T11": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/thermal_season_retry_2026-10-01/RESULTS.json",
+        "source_sha256": "34ab59f6ee14918671921947bcfd1278fd15cc2db116da6f2c8143482da7d3e0",
+        "selected_fields": {
+          "status": "blocked",
+          "elapsed_seconds": 7200.266926790995,
+          "last_completed_stage": "build",
+          "termination_stage": "native compiled model execution",
+          "water_result_saved": false,
+          "water_conservation_validation_reached": false,
+          "seasonal_temperature_run": false,
+          "seasonal_fishy_run": false,
+          "prior_7200_second_timeout_reproduced": true
+        }
+      },
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/thermal_season_retry_2026-10-01/failure_review.json",
+        "source_sha256": "e0b9599950563d23e6cdfb669c1d819102a65f919a066eca57814e4dd33e4566",
+        "selected_fields": {
+          "review_status": "confirmed_blocked_timeout",
+          "execution_passed": false,
+          "model_digest_same_as_prior": true,
+          "inference": "Native compiled execution call had not returned at timeout; Python transport postprocessing occurs after this call. Internal native bottleneck and simulated day reached are not established by this stack.",
+          "prior_timeout": {
+            "elapsed_seconds": 7200.132540250008,
+            "peak_rss_mib": 168.125,
+            "same_stop_reason": true,
+            "same_python_stack_boundary": true
+          }
+        }
+      }
+    ],
+    "T12": [
+      {
+        "source_id": "docs/eflow_report/report/internal_audits/decision_applications_2026-10-01/EXISTING_ISSUES.json",
+        "source_sha256": "ed355e3c01eff606b16614a55fd6f27a958c2f2409a48fb369d3b89d232aff25",
+        "selected_fields": {
+          "queried_date": "2026-10-01",
+          "repositories": {
+            "taqsim": [
+              {
+                "number": 48,
+                "state": "OPEN",
+                "title": "Make canonical quantized water-input construction discoverable and actionable",
+                "url": "https://github.com/hydrosolutions/taqsim/issues/48"
+              },
+              {
+                "number": 47,
+                "state": "OPEN",
+                "title": "Capacity overflow retains one quantum below the direct integer allocation",
+                "url": "https://github.com/hydrosolutions/taqsim/issues/47"
+              }
+            ],
+            "incidence": [
+              {
+                "number": 28,
+                "state": "OPEN",
+                "title": "Repeated ledger replay dominates native execution of a 92-day Taqsim basin case",
+                "url": "https://github.com/hydrosolutions/incidence/issues/28"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "archives": [
+    {
+      "filename": "decision_applications_2026-10-01.zip",
+      "sha256": "12c1fd86ca78aa7fdfffea3ec3138716b6cb41fd6e71cb18986c14cfec25749e",
+      "availability": "Separately retained developer evidence; not bundled or publicly hosted by this documentation."
+    },
+    {
+      "filename": "thermal_season_retry_timeout_2026-10-01.zip",
+      "sha256": "2726bb7c7519d1a47248fa84b592342426dae31bb68649b55418e765afe347cd",
+      "availability": "Separately retained developer evidence; not bundled or publicly hosted by this documentation."
+    },
+    {
+      "filename": "testing_closeout_2026-10-01.zip",
+      "sha256": "9b014b8ddaa0cf38965b73006936fdaf4d08680e010b2737e8b2bb1d65a71e83",
+      "availability": "Separately retained developer evidence; not bundled or publicly hosted by this documentation."
+    }
+  ]
+}
