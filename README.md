@@ -64,6 +64,9 @@ See [conservative lifecycle modelling](docs/conservative-lifecycles.md) and the
 [Conserved-transfer boundary proofs](docs/conserved-transfers.md) document the underlying
 Incidence coupling and exact-count interface.
 
+See the [dated application validation record](docs/application-validation-2026-10-01.md)
+for tested basin/reduced-system scopes, independent evidence and unresolved acceptance gates.
+
 ## Invariants that affect changes
 
 - Source data carries interval meaning, units, cadence, resolution, and original provenance.
