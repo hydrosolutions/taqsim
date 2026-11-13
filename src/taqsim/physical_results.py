@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal, localcontext
 from enum import StrEnum
@@ -166,6 +166,13 @@ class TransportResult:
         object.__setattr__(self, "balances", tuple(self.balances))
         object.__setattr__(self, "basin_balances", tuple(self.basin_balances))
         object.__setattr__(self, "process_balances", tuple(self.process_balances))
+        # Preserve the original account order (including duplicates) and basin-wide
+        # equality semantics, but inspect each balance once rather than once per sample.
+        basin_accounts = set(self.basin_balances)
+        failed_by_step: dict[int, list[tuple[Balance, bool]]] = {}
+        for balance in (*self.balances, *self.basin_balances, *self.process_balances):
+            if balance.status is BalanceState.FAILED:
+                failed_by_step.setdefault(balance.step, []).append((balance, balance in basin_accounts))
         for view in ("incoming", "outgoing", "storage"):
             rows = getattr(self, view)
             frozen = {}
@@ -175,22 +182,27 @@ class TransportResult:
                 for step, sample in enumerate(samples):
                     if sample.location != location or sample.step != step or set(sample.mass_counts) != names:
                         raise ValueError("physical series location, step or constituents differ")
-                frozen[location] = tuple(self._checked(sample) for sample in samples)
+                frozen[location] = tuple(
+                    self._checked(sample, failed_by_step.get(sample.step, ())) for sample in samples
+                )
             object.__setattr__(self, view, MappingProxyType(frozen))
         object.__setattr__(
-            self, "transfers", tuple(replace(item, sample=self._checked(item.sample)) for item in self.transfers)
+            self,
+            "transfers",
+            tuple(
+                replace(item, sample=self._checked(item.sample, failed_by_step.get(item.sample.step, ())))
+                for item in self.transfers
+            ),
         )
         object.__setattr__(self, "metadata", _freeze(self.metadata))
 
-    def _checked(self, sample: PhysicalSample) -> PhysicalSample:
+    def _checked(self, sample: PhysicalSample, failed_balances: Sequence[tuple[Balance, bool]]) -> PhysicalSample:
         quality = dict(sample.quality)
         reasons = dict(sample.reasons)
         water_quality = sample.water_quality
         water_reason = sample.water_reason
-        for balance in (*self.balances, *self.basin_balances, *self.process_balances):
-            if balance.step != sample.step or balance.status is not BalanceState.FAILED:
-                continue
-            if balance not in self.basin_balances and balance.location != sample.location:
+        for balance, basin_wide in failed_balances:
+            if not basin_wide and balance.location != sample.location:
                 continue
             if balance.substance == "water":
                 water_quality = QualityState.UNSUPPORTED
